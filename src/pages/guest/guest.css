@@ -1,0 +1,515 @@
+body{
+    margin: 0;
+    padding: 0;
+   
+}
+*{
+    /* border: 1px solid; */
+    font-family: "Nata Sans", sans-serif;    
+}
+.guest-nav{
+    display: flex;
+    align-items: center;  
+    position: sticky;
+    border:1px solid #31326F;
+}
+
+
+.header-item{
+    display: flex;
+    gap: 10px;
+    margin: 5px;
+    font-size: 1.2em;
+}
+.nav1{
+    display: flex;
+    justify-content: center;
+    gap: 50px;
+    font-size: 1.4em;
+    list-style: none;
+    margin-left: 150px;
+    flex: 1;
+   
+}
+.navItem{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: 0.3s ease-in-out;
+    cursor: pointer;
+}
+.navItem a{
+    color: #31326F;
+    text-decoration: none;
+}
+.navItem img{
+    transition: 0.2s ease-in-out;
+
+}
+.navItem:hover img, .navActive img{
+    transform: scale(1.2);
+}
+.navActive{
+        border-bottom:2px solid #31326F ;
+        font-weight: bolder;
+        
+}
+.navLogo{
+    margin-left: 10px;
+}
+.hamburgDiv{
+  margin: 10px;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+.registerButton{
+    padding: 10px;
+    border-radius: 50px;
+    transition:  0.5s ease-in-out;
+}
+.registerButtonItself{
+    background-color: transparent;
+    border: none;
+    color: #31326F;
+    font-weight: bold;
+    font-size: 1em;
+}
+
+.hamburgButton-guest{
+    width: 50px;  height:50px;
+    padding: 10px;
+    border-radius: 50px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    background-color: transparent;
+    border:0;
+    transition: 0.1s ease-in-out;
+}
+.registerButton:hover{
+    background-color: #31326F;
+}
+.registerButton:hover button{
+    color: white;
+
+}
+.hamburgButton-guest:hover{
+    background-color: #637ab93b;
+}
+
+.registerButton:hover a{
+    color: white;
+
+}
+
+.registrationButton{
+    text-decoration: none;
+}  
+.hamburgSelection button{
+    width: 100%;
+    border-radius: 5px;
+}
+.hamburgSelection button:hover{
+    background-color: #31326F;
+    color: white;
+}
+.searchBar{
+    /* border:1px solid #31326F; */
+    display: flex;
+    justify-content: right;
+    
+}
+
+.searchBar button{
+    color: aliceblue;
+    width: 40px;
+    height: 40px;
+    border-radius:10px;    
+    font-size: 1.3em;
+    background-color: transparent;
+    transition: 0.4s ease-in-out;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 3px;
+    border: 0;
+    background-color: #31326F ;
+}
+.searchBar button:hover{
+    transform: scale(1.1);
+}
+.searchBar button:hover svg{
+    fill: white;
+}
+.slide-wheel{
+    display: flex;
+    gap: 20px;
+    flex-direction: column;
+}
+
+.wheel-item p{
+    width: 95%;
+}
+#wheel-item-title{
+    margin-left: 7px;
+    transition: 0.3s ease-in-out;
+    margin-bottom: 20px;
+}
+#wheel-item-price{
+    text-align: right;
+    font-size: 1.4em;
+    transition: 0.3s ease-in-out;
+    margin-bottom: 20px;
+
+
+}
+#wheel-item-nightNumber{
+    text-align:left;
+    font-size: 1.4em;
+    margin-left: 5px;
+    margin-bottom: 10px;
+
+    transition: 0.3s ease-in-out;
+
+}
+#wheel-item-rating{
+    font-size: 1.6em;
+    margin-left: 5px;
+    color: white;
+    font-weight: bold;
+    font-family: "Nunito", sans-serif;
+    transition: 0.3s ease-in-out;
+    display: flex;
+    gap: 3px;
+}
+.items-container{
+    overflow: hidden;
+}
+
+.wheel-item{
+    margin: 20px;
+    min-width: 300px;
+    background-color: #637AB9;
+    width: 300px;
+    cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: -1px 10px 14px 0px rgba(0,0,0,0.27);
+    -webkit-box-shadow: -1px 10px 14px 0px rgba(0,0,0,0.27);
+    -moz-box-shadow: -1px 10px 14px 0px rgba(0,0,0,0.27);
+    transition: 0.2s ease-in-out;
+    color: white;
+    
+   
+}
+.wheel-item:hover{
+    transform: scale(1.2);
+    background: rgb(255, 255, 255); 
+    box-shadow: -1px 3px 140px -36px rgba(0,0,117,1);
+-webkit-box-shadow: -1px 3px 140px -36px rgba(0,0,117,1);
+-moz-box-shadow: -1px 3px 140px -36px rgba(0,0,117,1);
+}
+.wheel-item:hover #wheel-item-title,
+.wheel-item:hover #wheel-item-price,
+.wheel-item:hover #wheel-item-nightNumber{
+    text-align: center;
+    width: 100%;
+    font-weight: bold;
+    color: #31326F;
+    
+} 
+.wheel-item:hover #wheel-item-rating{
+    color: #31326F;
+    justify-content: center;
+    width: 100%;
+    
+}
+
+.wheel-item:hover #wheel-item-rating svg{
+    fill: #31326F;
+}
+.topBar-wheel{
+    display: flex;
+    height: auto;
+    
+}
+.item-title{
+    flex: 1;
+     display: flex;
+    justify-content: left;
+    align-items: center;
+    font-size: 2em;
+}
+.item-title a{
+    font-size: 1.5em;
+    padding: 5px;
+    color: #31326F;
+    text-decoration: none;
+    transition: 0.1s ease-in-out;
+}
+.item-title:hover{
+    font-weight: bold;
+}
+.item-title:active {
+    text-decoration: underline;
+}
+.wheel-item-title{
+    font-size: 100px;
+}
+.switchButton{
+    flex: 1;
+    display: flex;
+    justify-content: right;
+    align-items: center;
+
+}
+.switchButton button{
+    border-radius: 50%;
+    padding: 10px;
+    margin: 5px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: none;
+    background-color: #637AB9 ;
+    cursor: pointer;
+}
+.switchButton button:active{
+    background-color: #31326F;
+}
+
+.switchButton button svg{
+    fill: rgb(247, 247, 247) ;
+}
+
+.guest-loginModal {
+  border: none;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+
+  width: 90%;         /* take most of screen on small devices */
+  max-width: 500px;   /* don’t get too big on desktop */
+  max-height: 80vh;   /* prevent overflow vertically */
+  overflow-y: auto;   /* scroll inside modal if content too tall */
+  margin: auto;       /* center it */
+}
+
+.guest-loginModal::backdrop {
+  background: rgba(0,0,0,0.6); /* dark background */
+}
+
+.guest-loginModal:not([open]){
+    display: none;
+}
+.login-topbar span{
+    cursor: pointer;
+}
+.login-topbar{
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-bottom: 80px;
+}
+.login-topbar p{
+    width: 100%;
+    font-size: 1.8em;
+    color: #31326F;
+    font-weight: bold;
+}
+.login-topbar span{
+    font-size: 1.5em;
+    padding: 4px 13px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: rgb(206, 51, 51);
+}
+.login-topbar span:hover{
+    background-color: rgb(206, 51, 51);
+     color: white;
+}
+.login-fields{
+    display: flex;
+   justify-content: center;
+   margin-top: 50px;
+}
+.login-other{
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    gap: 15px;
+}
+
+.login-other button{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #31326F;
+    color: white;
+    padding: 5px;
+    gap: 55%;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: all 0.2s ease-in-out;
+    border: none;
+    box-shadow: 0 0 30px 0 rgba(117, 117, 117, 0.445);
+    padding: 10px;
+
+}
+
+.login-other button:hover{
+    background-color: #434497;
+
+    border-radius: 50px;
+    font-weight: bold;
+}
+.login-fields input[type ="email"],
+.login-fields input[type ="password"],
+.login-fields input[type ="text"]{
+    all: unset;
+    margin: 10px 0;
+    width: 90%;
+    padding: 10px;
+    font-size: 1em;
+    border: none;
+    border:3px solid #31326F;
+    border-radius: 5px;
+    
+}
+.showPassword-loginModal{
+    margin: 5px;
+    font-size: 1.1em;
+    text-align: right;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+}
+.showPassword-loginModal:hover{
+    font-weight: bold;
+    color: #31326F;
+}
+.passwordDiv-loginModal{
+    display: flex;
+}
+
+
+.loginButton-loginModal{
+    padding: 15px 40px;
+    width: 100%;
+    border-radius: 10px;
+    font-size: 1em;
+    border: 0;
+    background-color: #637AB9;
+    transition: all 0.4s ease-in-out;
+    cursor: pointer;
+    margin-bottom: 50px;
+    box-shadow: 0 10px 20px 5px rgba(107, 107, 107, 0.212);
+}
+.loginButton-loginModal:hover{
+    background-color: #31326F;
+    font-size: 1.5em;
+    font-weight: bold;
+}
+.loginButton-loginModal p {
+    color: white;
+    
+}
+.loginButton-loginModal:hover p{
+    font-weight: bold;
+} 
+.forgotPass{
+    color: #31326F;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+}
+.forgotPass:hover{
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+.top-Experience{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 30px;
+}
+.top-Experience h1{
+    margin-left: 30px;
+}
+
+.experience-Category{
+    display: flex;
+}
+.service-item{
+    cursor: pointer;
+    border-radius: 10px;
+    box-shadow: 0 0 10px 5px rgba(83, 83, 83, 0.274);
+    margin-left: 20px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.search-main-Modal{
+    position: fixed;
+    border: none;
+  border-radius: 12px;
+  padding: 20px;
+  background-color: white;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    left: 440px;
+    width: 1000px;
+    height: 550px;
+    
+}
+.search-input-div{
+    width: 100%;
+    height: auto;
+    display: flex;
+    justify-content: space-between;
+    border: 2px solid black;
+    border-radius: 50px;
+}
+.search-input-div input{
+    all: unset;
+    width: 90%;
+    height: 50px;
+    padding-left: 30px;
+    font-size: 1.8em;
+    margin-top: 5px;
+}
+.search-input-div button{
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 0;
+    cursor: pointer;
+    transition: all 0.2s ease-in;
+    background: 0;
+    margin:5px;
+}
+.search-input-div svg{
+    transition: all 0.2s ease-in;
+
+}
+.search-input-div button:hover{
+    background-color: #31326F;
+    box-shadow: 0 0 10px 5px rgba(128, 128, 128, 0.377);
+}
+.search-input-div button:hover svg{
+    fill: white;
+}
+.advance-Seaching-filterButton{
+    border-radius: 15px;
+    border: 0;
+    font-size: 1.2em;
+    padding: 10px 30px;
+    margin: 10px;
+}
+
+.advance-Seaching-category-group{
+    border: 1px solid;
+}

@@ -1,0 +1,161 @@
+{
+  "rooms":[{   
+    "id": "1",
+    "title": "Bright Quiet Room. Your own Open-Bathtub and WC",
+    "price": "3,212",
+    "nightNumber": "2",
+    "rating": "3.5",
+    "isFavorite": "False",
+    "roomThumbnail": "/homesImg/room1.avif"
+  },
+  {
+    "id": "2",
+    "title": "Modern Apartment near Eiffel Tower",
+    "price": "5,100",
+    "nightNumber": "3",
+    "rating": "4.7",
+    "isFavorite": "False",
+    "roomThumbnail": "/homesImg/room1.avif"
+  },
+  {
+    "id": "3",
+    "title": "Cozy Studio in Montmartre",
+    "price": "2,850",
+    "nightNumber": "1",
+    "rating": "4.2",
+    "isFavorite": "False",
+    "roomThumbnail": "/homesImg/room1.avif"
+  },
+  {
+    "id": "4",
+    "title": "Luxury Loft with City View",
+    "price": "7,400",
+    "nightNumber": "2",
+    "rating": "4.9",
+    "isFavorite": "False",
+    "roomThumbnail": "/homesImg/room1.avif"
+  },
+  {
+    "id": "5",
+    "title": "Quiet Guesthouse by the River",
+    "price": "3,900",
+    "nightNumber": "4",
+    "rating": "4.4",
+    "isFavorite": "False",
+    "roomThumbnail": "/homesImg/room1.avif"
+  },
+  {
+    "id": "6",
+    "title": "Stylish Room in Latin Quarter",
+    "price": "4,500",
+    "nightNumber": "2",
+    "rating": "4.1",
+    "isFavorite": "False",
+    "roomThumbnail": "/homesImg/room1.avif"
+  },
+  {
+    "id": "7",
+    "title": "Charming Attic Room with Skylight",
+    "price": "3,300",
+    "nightNumber": "1",
+    "rating": "3.8",
+    "isFavorite": "False",
+    "roomThumbnail": "/homesImg/room1.avif"
+  },
+  {
+    "id": "8",
+    "title": "Elegant Suite near Champs-Élysées",
+    "price": "8,200",
+    "nightNumber": "3",
+    "rating": "5.0",
+    "isFavorite": "False",
+    "roomThumbnail": "/homesImg/room1.avif"
+  },
+  {
+    "id": "9",
+    "title": "Budget-Friendly Hostel Bed",
+    "price": "1,200",
+    "nightNumber": "1",
+    "rating": "3.2",
+    "isFavorite": "False",
+    "roomThumbnail": "/homesImg/room1.avif"
+  },
+  {
+    "id": "10",
+    "title": "Romantic Getaway with Balcony",
+    "price": "6,000",
+    "nightNumber": "2",
+    "rating": "4.6",
+    "isFavorite": "False",
+    "roomThumbnail": "/homesImg/room1.avif"
+  }],
+  "services":[
+    {"id":"1"
+    
+    },
+    {
+      "id":"2"
+    }
+  ],
+  "experiences":[
+     {"id":"1"
+    
+    },
+    {
+      "id":"2"
+    }
+  ],
+  "category_services":[
+     {
+      "category_servicesID":"1",
+      "photo":"/static/services Photos/photography.png",
+      "Category_name":"Photography"
+    },
+    {
+      "category_servicesID":"2",
+      "photo":"/static/services Photos/chefs.png",
+      "Category_name":"Chefs"
+    },
+    {
+      "category_servicesID":"3",
+      "photo":"/static/services Photos/prepMeal.png",
+      "Category_name":"Prepared Meals"
+    },
+    {
+      "category_servicesID":"4",
+      "photo":"/static/services Photos/Massage.png",
+      "Category_name":"Massage"
+    },
+    {
+      "category_servicesID":"5",
+      "photo":"/static/services Photos/Training.png",
+      "Category_name":"Training"
+    },
+    {
+      "category_servicesID":"6",
+      "photo":"/static/services Photos/Makeup.png",
+      "Category_name":"Make up"
+    },
+    {
+      "category_servicesID":"7",
+      "photo":"/static/services Photos/Hair.png",
+      "Category_name":"Hair"
+    },
+    {
+      "category_servicesID":"8",
+      "photo":"/static/services Photos/Spa.png",
+      "Category_name":"Spa treatments"
+    },
+    {
+      "category_servicesID":"9",
+      "photo":"/static/services Photos/Catering.png",
+      "Category_name":"Catering"
+    },
+    {
+      "category_servicesID":"10",
+      "photo":"/static/services Photos/Nail.png",
+      "Category_name":"Nails"
+    }
+  ]
+  
+}
