@@ -4,12 +4,14 @@ import calendar from '/static/Calendar.png'
 import UpcomingBookings from './UpcomingBookings'
 import TodaysBooking from './TodaysBooking'
 
+
 const HostDashboard = () => {
   const [showBooking, setShowBooking] = useState("today")
 
+
+ 
   return (
     <div className="host-dashboard">
-      {/* --- Booking Switch Buttons --- */}
       <div className="dashboard-group">
         <button
           className={showBooking === "today" ? "today dashboardSelected" : "today"}

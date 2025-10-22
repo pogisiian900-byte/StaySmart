@@ -10,7 +10,7 @@ import Listings from "../../components/Host/Listings";
 import Bookings from "../../components/Host/Bookings";
 import Earnings from "../../components/Host/Earnings";
 import profile from '/static/me.png'
-function Host_Navigation({userData}){
+function Host_Navigation({hostId,userData}){
     const [open,setOpen] = useState(false);
     const [renderedPage, setRenderedPage] = useState("dashboard");
     const [selectedNav, setSelectedNav] = useState("dashboard")
@@ -34,7 +34,7 @@ function Host_Navigation({userData}){
               return <HostDashboard/>
 
             case "listings":
-                return <Listings/>
+                return <Listings hostId={hostId}/>
                 
             case "reservations":
                 return <Bookings/>

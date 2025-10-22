@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 const Earnings = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("transactions");
 
   const handleTabClick = (tab) => setActiveTab(tab);
 

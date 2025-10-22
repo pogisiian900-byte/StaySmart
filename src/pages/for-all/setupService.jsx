@@ -1,21 +1,36 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import house from '/static/3dHome.png';
 import exp from '/static/3dExp.png';
 import serv from '/static/3dService.webp';
-import { useNavigate } from 'react-router-dom';
-const SetupService = () => {
-  const [selected, setSelected] = useState("home");
-  
+import { useNavigate, useParams } from 'react-router-dom';
+const SetupService = ({useCase}) => {
+  const [selected, setSelected] = useState();
   const navigate = useNavigate();
+  const {hostId} = useParams();
+  
+  
   const handleNext = () => {
     if (!selected) return alert("Please select a category first!");
-    alert(`You selected: ${selected}`);
-    navigate(''+selected)
+  if(useCase == "getStarted"){
+    navigate(`../${selected}`)
+
+  }else{
+    navigate(`/host/${hostId}/getStarted/${selected}`);
+
+  }
   };
 
+  const HandleBack = () =>{
+     if(useCase == "getStarted"){
+  
+  }
+    navigate(`/host/${hostId}`);
+
+  
+  }
 
   return (
-    <div className="setupServiceHost">
+    <div className="setupServiceHost">~
       <div className="setupServiceHeader">
         <h1>What would you like to host?</h1>
         <p>Select the type of service you want to offer on your platform.</p>
@@ -54,7 +69,7 @@ const SetupService = () => {
       </div>
       <div className="service-button-group">
         
-      <button className="nextBtn" onClick={()=> navigate('/getStarted/host')}>
+      <button className="nextBtn" onClick={HandleBack}>
         Back
       </button>
       

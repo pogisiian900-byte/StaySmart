@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom';
 import getStartedICON from '/static/getStarted.gif'
 const GetStarted = () => {
         const[isGuest, setIsGuest] = useState(false);
-     const {createdAs} = useParams();
+     const {createdAs,hostId} = useParams();
     
      const navigate = useNavigate();
      

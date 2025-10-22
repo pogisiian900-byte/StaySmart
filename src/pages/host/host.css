@@ -361,8 +361,18 @@
   font-weight: 500;
   color: #555;
   transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
+.rating-listing{
+  color: yellow;
+  display: flex;
+  align-items: center;
+  justify-content: right;
+  gap: 5px;
 
+}
 .listing-actions button:hover {
   color: #ff385c;
 }
@@ -377,6 +387,338 @@
   border: 1px solid;
 
 }  
+.view-listing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  max-width: 1000px;
+  margin: 0 auto;
+  font-family: "Inter", sans-serif;
+  color: #222;
+}
+.view-listing-group{
+  display: flex;
+    gap: 10px;
+ 
+}
+
+.reservationBox {
+  border: 1px solid #ddd;
+  border-radius: 16px;
+  padding: 20px;
+  width: 350px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  background: white;
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  position: sticky;
+  top: 100px;
+}
+
+.promo-div{
+  border: 1px solid;
+  padding: 10px 10px;
+  border-radius: 10px;
+  display: flex;
+}
+.promo-div svg{
+  width: 30px;
+  height: 30px;
+}
+.price-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.price-header .price {
+  font-size: 24px;
+  font-weight: 600;
+  color: #222;
+}
+
+.check-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.date-input {
+  display: flex;
+  flex-direction: column;
+}
+
+.date-input label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.date-input input {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px 8px 0 0;
+  font-size: 14px;
+}
+
+.guest-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.guest-section label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.guest-section input {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.reserve-btn {
+  background-color: #ff385c;
+  color: white;
+  font-weight: 600;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.reserve-btn:hover {
+  background-color: #e31c5f;
+}
+
+.no-charge {
+  text-align: center;
+  color: #717171;
+  font-size: 13px;
+}
+
+/* HEADER */
+.listing-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.backButton-view,
+.listing-header button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.backButton-view:hover,
+.listing-header button:hover {
+  transform: scale(1.1);
+  color: #ff385c;
+}
+.shareListing-view{
+  display: flex;
+  font-size: 1em;
+  gap: 5px;
+}
+/* IMAGES */
+.image-group-container {
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 30px;
+}
+
+/* Main image takes left half */
+.main-image {
+  grid-row: 1 / span 2;
+  grid-column: 1 / 2;
+  overflow: hidden;
+}
+
+.main-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+/* Sub-images grid (right side) */
+.sub-images-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 6px;
+}
+
+.sub-images-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+}
+.discount-card{
+  display: flex;
+  justify-content: space-between;
+  align-content: center;
+  gap: 10px;
+}
+.changeDiscountButton{
+  border-radius: 15px;
+  padding: 0 20px;
+  border: 0;
+  background-color: #2a75c5;
+  color: white;
+}
+.changeDiscountButton:hover{
+  background-color: rgb(17, 19, 138);
+  font-weight: bold;
+}
+.addDiscount{
+  width: 100%;
+  padding: 10px;
+  font-size: 1.1em;
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background-color: #2a75c5;
+  color: white;
+  cursor: pointer;
+}
+.addDiscount:hover{
+   background-color: #007bff;
+}
+.editListing-dialog{
+  position: fixed;
+  top: 2%;
+  left: 20%;
+  width: 60%;
+  border: 0;
+  box-shadow: 0 0 40px 5px rgba(0, 0, 0, 0.178);
+  border-radius: 10px;
+}
+.confirm-btn{
+  width: 100%;
+  font-size: 1.3em;
+  padding:  10px 0;
+  margin: 10px 0;
+  border-radius: 20px;
+  background-color: #0e4177;
+  color: white;
+  border: 0;
+}
+.confirm-btn:hover{
+  background-color: #2a75c5;
+}
+.confirmUpdate-dialog {
+  position: fixed;
+  top: 40%;
+  left: 40%;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+}
+.confirm-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 10px;
+}
+.yes-btn {
+  background-color: #4caf50;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+}
+.no-btn {
+  background-color: #f44336;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+}
+
+.closeButton{
+  cursor: pointer;
+}
+.closeButton:hover{
+  color: red;
+}
+
+.editListing-div{
+  display: flex;
+   gap: 20px;
+   
+}
+.otherInfoDiv{
+  width: 100%;
+}
+/* CONTENT */
+.view-listing-content,
+.view-listing > div:not(.listing-header):not(.image-group-container) {
+  text-align: left;
+  width: 100%;
+  background: #fff;
+  border-radius: 16px;
+  padding: 25px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.08);
+}
+
+.view-listing h2 {
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.view-listing h3 {
+  font-size: 18px;
+  color: #666;
+  font-weight: 400;
+  margin-bottom: 15px;
+}
+
+.view-listing p {
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 6px 0;
+}
+
+/* MOBILE */
+@media (max-width: 768px) {
+  .image-group-container {
+    grid-template-columns: 1fr;
+  }
+
+  .main-image {
+    grid-row: auto;
+    grid-column: auto;
+  }
+
+  .sub-images-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+
 /* Back Button */
 .profile-backButton {
   position: absolute;
@@ -673,7 +1015,7 @@
   padding: 8px 16px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.3s;
+  transition: background 0.3s ease-in-out;
 }
 
 .earnings-tabs button.active {

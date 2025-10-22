@@ -8,51 +8,62 @@ const confirmationModal = ({openedAs,formData,onPrev}) => {
 
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const[ userUID, setUserUID] = useState(null);
 
+  const HandleSubmit = async () => {
+  try {
+    setIsSubmitting(true);
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      formData.emailAddress,
+      formData.password
+    );
 
-  const HandleSubmit = async () =>{
-      try{
-        setIsSubmitting(true)
-        const userCrendential = await createUserWithEmailAndPassword(auth, formData.emailAddress, formData.password);
+    const user = userCredential.user;
 
-        const user = userCrendential.user;
-          await setDoc(doc(db,"Users",user.uid),{
-            uid: user.uid,
-            firstName: formData.firstName,
-            lastName: formData.lastName,
-            middleName: formData.middleName,
-            phoneNumber: formData.phoneNumber,
-            emailAddress: formData.emailAddress,
-            role: formData.role,
-            barangay: formData.barangay,
-            birthday: formData.birthday,
-            city: formData.city,
-            province: formData.province,
-            street: formData.street,
-            zipCode: formData.zipCode,
-        });
-        if(openedAs === "host"){
-          await setDoc(doc(db,"Host",user.uid),{
-            userId: user.uid
-          });
-        }
-        alert("Account Created!");
-        handleReturntoLogin();
+    await setDoc(doc(db, "Users", user.uid), {
+      uid: user.uid,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      middleName: formData.middleName,
+      phoneNumber: formData.phoneNumber,
+      emailAddress: formData.emailAddress,
+      role: formData.role,
+      barangay: formData.barangay,
+      birthday: formData.birthday,
+      city: formData.city,
+      province: formData.province,
+      street: formData.street,
+      zipCode: formData.zipCode,
+    });
 
-      }catch(error){
-        console.error(error);
-        alert("Something went wrong, try again!");
-      }
-  };
-   const handleReturntoLogin = () =>{
-    if(openedAs === "host"){
-      navigate('/getStarted/host');
-    }else if(openedAs === "guest"){
-         navigate('/');
-    }else{
-      alert("ACCOUNT NOT FOUND | OR ERROR")
+    if (openedAs === "host") {
+      await setDoc(doc(db, "Host", user.uid), {
+        userId: user.uid,
+      });
     }
+
+    alert("Account Created!");
+    handleReturntoLogin(user.uid); // ✅ pass uid directly here
+  } catch (error) {
+    console.error(error);
+    alert("Something went wrong, try again!");
+  } finally {
+    setIsSubmitting(false);
   }
+};
+
+// ✅ Modify handleReturntoLogin to accept a uid argument
+const handleReturntoLogin = (uid) => {
+  if (openedAs === "host") {
+    navigate(`/getStarted/host/${uid}`);
+  } else if (openedAs === "guest") {
+    navigate('/');
+  } else {
+    alert("ACCOUNT NOT FOUND | OR ERROR");
+  }
+};
+
   return (
     <div className='confrimation-registration'>
         <h1>Account Confirmation:</h1>

@@ -47,7 +47,7 @@ function HostMain() {
 
   return (
     <div className="host-main">
-      <Host_Navigation userData = {userData} />
+      <Host_Navigation hostId={hostId} userData = {userData} />
      
     </div>
   );

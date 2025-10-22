@@ -16,6 +16,10 @@ import Admin_Main from './pages/admin/admin-Main.jsx';
 import { AuthProvider } from './layout/AuthContext.jsx';
 import Profile from './components/Profile.jsx';
 import HostSetupForm from './pages/for-all/HostSetupForm/HostSetupForm.jsx';
+import ViewListing from './components/Host/viewListing.jsx';
+import SelectListingItem from './components/SelectListingItem.jsx';
+import Guest_Main_NextPageOutlet from './pages/guest/GuestLayout.jsx';
+import GuestLayout from './pages/guest/GuestLayout.jsx';
 
 function App() {
   const router = createBrowserRouter(
@@ -34,34 +38,51 @@ function App() {
           }
         />
 
-        <Route
-          path="/guest/:guestId"
-          element={
-            <ProtectedRoute allowedRole="guest">
-              <GuestMainLogged />
-            </ProtectedRoute>
-          }
-        />
+     <Route
+        path="/guest/:guestId"
+        element={
+          <ProtectedRoute allowedRole="guest">
+            <GuestLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<GuestMainLogged />} /> 
+         <Route path="profile" element={<Profile />} />
+        <Route path="listing/:listingId" element={<SelectListingItem />} />
+      </Route>
 
-        <Route path="/getStarted/:createdAs">
-          <Route index element={<GetStarted />} />
-          <Route path="setupService" element={<SetupService />} />
-          <Route path="setupService/:serviceType" element={<HostSetupForm />} />
-        </Route>
+
+
+       <Route path="/getStarted/:createdAs/:hostId">
+              <Route index element={<GetStarted />} />
+
+              {/* Setup service selection */}
+              <Route path="setupService" element={<SetupService useCase={"getStarted"} />} />
+
+              {/* ✅ Create new listing */}
+              <Route path="setupService/:serviceType" element={<HostSetupForm />} />
+
+          
+          
+            </Route>
 
         <Route path="/host">
           <Route index element={<LoginPage_Host />} />
           <Route
             path=":hostId"
             element={
-                         <ProtectedRoute allowedRole="host">
+                <ProtectedRoute allowedRole="host">
                 <HostMain />
               </ProtectedRoute>
             }
           />
-            <Route path='/host/:hostId/profile' element={<Profile/>}/>
-
+           <Route path=":hostId/:listingId" element={<ViewListing />} />
+            <Route path=':hostId/startingListing' element={<SetupService/>}/>
+             <Route path=":hostId/getStarted/:serviceType" element={<HostSetupForm />} />
+              <Route path=":hostId/draft/:serviceType/:draftId" element={<HostSetupForm />} />
+            <Route path=':hostId/profile' element={<Profile/>}/>
         </Route>
+        
 
         <Route path="/admin" element={<Admin_Main />} />
         <Route path="*" element={<Error />} />

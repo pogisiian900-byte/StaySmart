@@ -1,22 +1,30 @@
-import "../guest/guest.css"
-import Guest_nav from './guest-navigation.jsx'
-import Footer from "../../components/Footer.jsx";
-import SearchModal from "../../components/searchModal.jsx";
-import { Navigate } from "react-router-dom";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "../../config/firebase.js";
-import { useEffect, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import React, { useRef } from "react";
+import Guest_LoginModal from "../guest/guest-loginModal";
+import { useNavigate } from "react-router-dom";
 
-function GuestMain(){
-   
-    return(
-        <div className="guest-main">
-            <Guest_nav/>
-            {/* <SearchModal/> */}
-            <br />
-            <Footer/>
-        </div>
-    );
-}
-export default GuestMain
+const GuestMain = () => {
+  const navigate = useNavigate();
+  const loginModalRef = useRef(null);
+
+  const openLogin = () => {
+    loginModalRef.current?.open(); // calls open() defined inside Guest_LoginModal
+  };
+
+  const closeLogin = () => {
+    loginModalRef.current?.close(); // optional if you want to close manually
+  };
+
+  return (
+    <div className="guest-main">
+      <h1>Hero Page na eto</h1>
+
+      {/* Button that triggers modal */}
+      <button onClick={openLogin}>Login as Guest</button>
+<button onClick={()=> navigate('/host')}>Become as Host</button>
+      {/* The modal itself */}
+      <Guest_LoginModal ref={loginModalRef} />
+    </div>
+  );
+};
+
+export default GuestMain;
