@@ -212,12 +212,32 @@ footer{
     display: flex;
     justify-content: center;
 }
+.bg-host-video {
+  position: absolute;   /* cover whole parent */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;          /* behind content */
+}
+.registration-video-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+
 .Registration-fieldsContainer{
     width: 100%;
     min-width: 500px;
     padding: 20px;
     justify-content: center;
 }
+
 .part1,.part2,.part3,.confrimation-registration{
     width: 100%;
     display: flex;
@@ -271,7 +291,7 @@ footer{
 }
 .regis-field-div.host input:focus{
     font-size: 1.2em;
-    background-color: #4FB7B3;
+    background-color: #31326F;
     color: white;
 }
 
@@ -283,7 +303,7 @@ footer{
 }
 .regis-field-div.host input:not(:placeholder-shown) {
         font-size: 1.2em;
-    background-color: #4FB7B3;
+    background-color: #31326F;
     color: white;
 }
 
@@ -292,6 +312,11 @@ footer{
     gap: 40%;
     transition: all 0.3s ease-in-out;
     margin-top: 10px;
+}
+.back-group-verify{
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .regis-button-next.guest button{
     width: 30%;
@@ -311,7 +336,7 @@ footer{
     border-radius: 20px;
     border: 0;
     transition: all 0.4s ease-in-out;
-    background-color: #1b706d;
+    background-color: #31326F;
     color: white;
     font-size: 1rem;
 }
@@ -322,11 +347,18 @@ footer{
 }
 .regis-button-next.host button:hover{
     box-shadow: 0 10px 30px 5px rgba(0, 0, 0, 0.342);
-    background-color: #328380;
+    background-color: #393b92;
 
      font-weight: bold;
 }
-.confrimation-registration-createButton,.confrimation-registration-Goback{
+.confrimation-registration-content{
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 30px ;
+}
+.confrimation-registration-createButton{
     width: 100%;
     padding: 15px;
     font-size: 1.1em;
@@ -334,11 +366,15 @@ footer{
     border: 0;
     cursor: pointer;
     transition: all 0.1s ease-in-out;
-
+}
+.confrimation-registration-Goback{
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
 }
 .confrimation-registration-createButton.host:hover{
     box-shadow: 0 10px 30px 5px rgba(0, 0, 0, 0.342);
-    background-color: #328380;
+    background-color: #31326F;
     color: white;
      font-weight: bold;
 }
@@ -350,7 +386,7 @@ footer{
 }
 .confrimation-registration-Goback:hover{
  box-shadow: 0 10px 30px 5px rgba(0, 0, 0, 0.342);
-    background-color: rgb(204, 45, 45);
+    background-color: #31326F;
     color: white;
      font-weight: bold;
 }

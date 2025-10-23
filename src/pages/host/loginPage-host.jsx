@@ -6,7 +6,6 @@ import Unlock from '/static/unlock.png';
 import Google from '/static/google.png';
 import Facebook from '/static/facebook.png';
 import Email from '/static/email.png';
-import background from '/static/greenhostBack.mp4';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { auth, db } from '../../config/firebase';
 import {
@@ -16,6 +15,7 @@ import {
   FacebookAuthProvider,
   signOut,
 } from 'firebase/auth';
+import background from '/static/blueBG.mp4'
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../layout/AuthContext';
 

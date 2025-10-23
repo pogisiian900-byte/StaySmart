@@ -16,7 +16,7 @@ const GuestMain = () => {
 
   return (
     <div className="guest-main">
-      <h1>Hero Page na eto</h1>
+      <h1>Hero Page in Progress</h1>
 
       {/* Button that triggers modal */}
       <button onClick={openLogin}>Login as Guest</button>

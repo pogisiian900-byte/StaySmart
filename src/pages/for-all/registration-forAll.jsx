@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import '../../index.css'
-import guestBack from '/static/blueBG.mp4'
-import hostBack from '/static/greenhostBack.mp4'
+import bgVideo from '/static/blueBG.mp4'
 import Part1 from './part1'
 import Part2 from './part2'
 import ConfirmationPart from './confirmation.jsx'
@@ -9,7 +8,7 @@ import { useParams } from 'react-router-dom'
 const Registration_forAll = () => {
 
     const {openedAs} = useParams();
-      const[step,setStep]= useState(1);
+      const[step,setStep]= useState(3);
   
       const[registrationData,setRegistrationData] = useState({
           firstName: "",
@@ -39,11 +38,11 @@ const Registration_forAll = () => {
       };
   return (
     <div className='registration-all-parent'>
-           <video  autoPlay loop muted playsInline className='bg-host-video'>
-                 <source src={openedAs === "guest" ? guestBack : hostBack} type="video/mp4"/>
-           </video>
+           <video autoPlay loop muted playsInline className="registration-video-bg">
+        <source src={bgVideo} type="video/mp4" />
+      </video>
   
-        <div className="Registration-fieldsContainer">
+        <div className="Registration-fieldsContainer"> {/* CARD*/}
             {step === 1 && <Part1 formData ={registrationData} onChange ={handleChange} onNext={nextStep} openedAs ={openedAs} />}
             {step === 2 && <Part2 formData ={registrationData} onChange ={handleChange} onNext={nextStep} onPrev={prevStep} openedAs ={openedAs} />}
             {step === 3 && <ConfirmationPart formData ={registrationData} onPrev={prevStep} openedAs ={openedAs}/>}

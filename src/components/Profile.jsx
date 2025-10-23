@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import me from '/static/me.png'
 import bgBlue from '/static/Bluebg.png'
-import bgGreen from '/static/greenBg.jpg'
 import { useNavigate, useParams } from 'react-router-dom'
 import { doc, getDoc } from "firebase/firestore";
 import { db } from ".././config/firebase";
@@ -53,7 +52,7 @@ const handleBack = ()=>{
 
       {/* Profile Header */}
       <div className="infoCard-profile-div">
-         <img src={user?.role == "host"? bgGreen:bgBlue} alt="Cover" className="background-profile" />
+         <img src={bgBlue} alt="Cover" className="background-profile" />
 
         
 

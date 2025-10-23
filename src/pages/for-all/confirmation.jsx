@@ -4,6 +4,7 @@ import { collection , addDoc, setDoc,doc } from 'firebase/firestore'
 import { auth } from '../../config/firebase'
 import { useNavigate } from 'react-router-dom'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
+import secureMail from '/static/secureMail.webp'
 const confirmationModal = ({openedAs,formData,onPrev}) => {
 
   const navigate = useNavigate();
@@ -66,17 +67,25 @@ const handleReturntoLogin = (uid) => {
 
   return (
     <div className='confrimation-registration'>
-        <h1>Account Confirmation:</h1>
-        <p><b>Full Name:</b> {formData.firstName} {formData.lastName} {formData.middleName}</p>
-        <p><b>Birthday: </b>{formData.birthday}</p>
-        <p><b>Email Address:</b> {formData.emailAddress}</p>
-        <p><b>Phone Number:</b> {formData.phoneNumber}</p>
-        <p><b>Role:</b> {formData.role}</p>
-        <p><b>Address:</b> Street of  {formData.street} | {formData.barangay}, {formData.city}, {formData.province} </p>
-        <p><b>Zip Code:</b> {formData.zipCode}</p>
+      <div className="back-group-verify">
 
-        <button onClick={HandleSubmit} disabled ={isSubmitting} className={`confrimation-registration-createButton ${openedAs}`}>Confirm & Create Account</button>
-        <button onClick={onPrev} className={`confrimation-registration-Goback`}>Go Back</button>
+        <button onClick={onPrev} className={`confrimation-registration-Goback`}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-icon lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+        </button>
+        <p>Go Back</p>
+      </div>
+
+      <div className="confrimation-registration-content">
+        <h1>Please verify {formData.emailAddress|| "No Email"}</h1>
+        <img className='verifyIcon' src={secureMail} alt="" />
+        <p>We just sent a verification code in your Email:</p>
+
+        <input type="number" className='verfication-code-field' placeholder='Enter sent 6 pin code '/>
+        <button className='resendButton-verify'>Resend Code</button>
+  
+      </div>
+      
+        <button onClick={HandleSubmit} disabled ={isSubmitting} className={`confrimation-registration-createButton ${openedAs}`}> Verify Code</button>
     </div>
   )
 }
