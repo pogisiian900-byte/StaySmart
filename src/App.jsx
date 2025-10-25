@@ -1,12 +1,13 @@
 import { Route, createBrowserRouter, createRoutesFromElements, RouterProvider } from 'react-router-dom';
 import './App.css';
 import './index.css';
+import '../src/pages/for-all/HostRegis.css'
 import RootLayout from './layout/RootLayout.jsx';
 import ProtectedRoute from './layout/ProtectedRoute.jsx';
 import PublicRoute from './layout/PublicRoute.jsx';
 import Error from './components/Error.jsx';
 import Registration_forAll from './pages/for-all/registration-forAll.jsx';
-import LoginPage_Host from './pages/host/loginPage-host.jsx';
+import LoginPage_Host from './pages/host/loginPage-all.jsx';
 import SetupService from './pages/for-all/setupService.jsx';
 import GetStarted from './pages/for-all/getStarted.jsx';
 import GuestMainLogged from './pages/guest/guest-MainLogged.jsx';
@@ -32,7 +33,7 @@ function App() {
           } />
 
         <Route
-          path="/register/:openedAs"
+          path="/register"
           element={
               <Registration_forAll />
           }
@@ -53,7 +54,7 @@ function App() {
 
 
 
-       <Route path="/getStarted/:createdAs/:hostId">
+       <Route path="/getStarted/:hostId">
               <Route index element={<GetStarted />} />
 
               {/* Setup service selection */}
@@ -66,10 +67,11 @@ function App() {
           
             </Route>
 
+          <Route path='/login' element={<LoginPage_Host />} />
         <Route path="/host">
-          <Route index element={<LoginPage_Host />} />
           <Route
             path=":hostId"
+            index
             element={
                 <ProtectedRoute allowedRole="host">
                 <HostMain />

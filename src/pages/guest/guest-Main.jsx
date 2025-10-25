@@ -19,8 +19,7 @@ const GuestMain = () => {
       <h1>Hero Page in Progress</h1>
 
       {/* Button that triggers modal */}
-      <button onClick={openLogin}>Login as Guest</button>
-<button onClick={()=> navigate('/host')}>Become as Host</button>
+<button onClick={()=> navigate('/login')}>Login</button>
       {/* The modal itself */}
       <Guest_LoginModal ref={loginModalRef} />
     </div>

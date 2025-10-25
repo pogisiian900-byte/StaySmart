@@ -7,8 +7,7 @@ import ConfirmationPart from './confirmation.jsx'
 import { useParams } from 'react-router-dom'
 const Registration_forAll = () => {
 
-    const {openedAs} = useParams();
-      const[step,setStep]= useState(3);
+      const[step,setStep]= useState(1);
   
       const[registrationData,setRegistrationData] = useState({
           firstName: "",
@@ -43,9 +42,9 @@ const Registration_forAll = () => {
       </video>
   
         <div className="Registration-fieldsContainer"> {/* CARD*/}
-            {step === 1 && <Part1 formData ={registrationData} onChange ={handleChange} onNext={nextStep} openedAs ={openedAs} />}
-            {step === 2 && <Part2 formData ={registrationData} onChange ={handleChange} onNext={nextStep} onPrev={prevStep} openedAs ={openedAs} />}
-            {step === 3 && <ConfirmationPart formData ={registrationData} onPrev={prevStep} openedAs ={openedAs}/>}
+            {step === 1 && <Part1 formData ={registrationData} onChange ={handleChange} onNext={nextStep}  />}
+            {step === 2 && <Part2 formData ={registrationData} onChange ={handleChange} onNext={nextStep} onPrev={prevStep}/>}
+            {step === 3 && <ConfirmationPart formData ={registrationData} onPrev={prevStep} />}
             
 
         </div>

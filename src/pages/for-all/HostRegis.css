@@ -1,0 +1,491 @@
+/* ===== Background Videos ===== */
+.bg-host-video,
+.registration-video-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bg-host-video {
+  z-index: -1;
+}
+
+.registration-video-bg {
+  z-index: -2;
+}
+
+.registration-video-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+
+.bg-host-video {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
+}
+
+/* ===== Main Containers ===== */
+.Registration-fieldsContainer {
+  width: 100%;
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.part1,
+.part2,
+.part3,
+.confrimation-registration {
+  width: 100%;
+  max-width: 1000px;
+  margin: 80px auto;
+  background-color: rgba(240, 248, 255, 0.555);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  border-radius: 20px;
+  box-shadow: 0 0 30px 10px rgba(71, 71, 71, 0.404);
+}
+
+.confrimation-registration {
+  width: 40%;
+}
+
+/* ===== Buttons & Selections ===== */
+.userSelection-buttons {
+  display: flex;
+  flex-direction: column;
+  justify-content: left;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.select-btn {
+  width: 95%;
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  padding: 5px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: 0.2s;
+  background-color: white;
+  border: 1px solid #1e293b;
+}
+
+.select-btn:hover {
+  transform: scale(1.05);
+}
+
+.select-btn p {
+  font-size: 1.5em;
+}
+
+.select-btn img {
+  width: 3em;
+  border-radius: 50%;
+  border: 1px solid #4d4d4d;
+}
+
+.select-btn.active {
+  border-color: #0077ff;
+  background-color: #eaf3ff;
+  color: #0056b3;
+  font-weight: bold;
+}
+
+/* ===== Error Styling ===== */
+.userSelection-buttons.error {
+  padding: 0.5rem;
+  border-radius: 10px;
+}
+
+.error-text {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: red;
+  text-align: center;
+  margin-top: 0.5rem;
+  font-size: 0.9em;
+  background-color: white;
+}
+
+/* ===== Form Layout ===== */
+.part1-container {
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.part1-personal,
+.part1-credentials {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 250px;
+}
+
+.part2 {
+  max-width: 500px;
+}
+
+.part3 {
+  max-width: 700px;
+  padding: 30px;
+}
+
+.regis-field-div {
+  display: flex;
+  flex-direction: column;
+}
+
+.regis-field-div label {
+  font-size: 1.1em;
+}
+
+.regis-field-div input,
+.regis-field-div select {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background-color: white;
+  margin: 10px 0;
+  transition: all 0.4s ease-in-out;
+  font-size: 1em;
+}
+.regis-field-div input{
+    width: 95%;
+}
+
+.regis-field-div input:focus,
+.regis-field-div input:not(:placeholder-shown) {
+  background-color: #31326f;
+  color: white;
+  font-size: 1.1em;
+}
+
+/* ===== Buttons ===== */
+.regis-button-next {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 30px;
+}
+
+.regis-button-next button {
+  width: 40%;
+  cursor: pointer;
+  padding: 15px;
+  border-radius: 20px;
+  border: none;
+  background-color: white;
+  color: black;
+  font-size: 1rem;
+  transition: all 0.3s ease-in-out;
+}
+
+.regis-button-next button:hover {
+  box-shadow: 0 10px 30px 5px rgba(0, 0, 0, 0.342);
+  background-color: #393b92;
+  color: white;
+  font-weight: bold;
+}
+
+.showPass-div {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.showPass-regis {
+  width: 30%;
+  padding: 5px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: 0.3s;
+}
+
+.showPass-regis:hover {
+  background-color: #393b92;
+  color: white;
+}
+
+/* ===== Verification & Confirmation ===== */
+.verfication-code-field {
+  width: 90%;
+  height: 40px;
+  text-align: center;
+  padding: 5px;
+  margin: 0 auto;
+  font-size: 1.1em;
+  border: none;
+  border-radius: 5px;
+}
+
+.resendButton-verify {
+  width: 40%;
+  font-size: 1em;
+  padding: 10px;
+  border: none;
+  border-radius: 20px;
+  margin: 10px auto;
+  background-color: #637ab9;
+  color: white;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.resendButton-verify:hover {
+  background-color: #31326f;
+  transform: scale(1.1);
+}
+
+.confrimation-registration-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+}
+
+.confrimation-registration-content img {
+  width: 12em;
+}
+
+.confrimation-registration-createButton {
+  width: 100%;
+  padding: 15px;
+  font-size: 1.1em;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.1s ease-in-out;
+}
+
+.confrimation-registration-createButton:hover {
+  background-color: #31326f;
+  color: white;
+  font-weight: bold;
+}
+.back-group-verify button{
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 0;
+    transition: 0.3s;
+}
+.back-group-verify button:hover{
+    background-color: #0056b3;
+    color: white;
+    box-shadow: 0 0 10px 5px rgba(39, 39, 39, 0.158);
+}
+
+/* ===== Dialog Styling ===== */
+.resend-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0;
+  border: none;
+  border-radius: 15px;
+  background-color: rgba(255, 255, 255, 1);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  z-index: 1000;
+}
+
+.resend-dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+.resend-dialog-content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+}
+
+.resend-dialog-content svg{
+    color: #31326F;
+}
+.resend-dialog h3 {
+  color: #31326F;
+  font-size: 1.5em;
+}
+
+.resend-dialog-ok {
+  background-color: #31326F;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.resend-dialog-ok:hover {
+  background-color: #4b4ec2;
+  transform: scale(1.05);
+}
+/* ===== Mobile Responsive Breakpoints ===== */
+
+/* Tablets (≤1024px) */
+@media (max-width: 1024px) {
+  .part1,
+  .part2,
+  .part3 {
+    max-width: 90%;
+    margin: 40px auto;
+  }
+
+  .confrimation-registration {
+    width: 60%;
+  }
+
+  .select-btn p {
+    font-size: 1.2em;
+  }
+
+  .select-btn img {
+    width: 2.5em;
+  }
+}
+
+/* Mobile (≤768px) */
+@media (max-width: 768px) {
+  .part1-container {
+    flex-direction: column;
+  }
+
+  .regis-button-next {
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+  }
+
+  .regis-button-next button {
+    width: 80%;
+  }
+
+  .confrimation-registration {
+    width: 80%;
+  }
+
+  .select-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .select-btn p {
+    font-size: 1.1em;
+  }
+
+  .Registration-fieldsContainer {
+    padding: 10px;
+  }
+
+  .verfication-code-field {
+    width: 100%;
+    margin: 0;
+  }
+   .resend-dialog {
+    width: 90%;
+    max-width: 350px;
+  }
+
+  .resend-dialog-content {
+    padding: 15px;
+  }
+
+  .resend-dialog h3 {
+    font-size: 1.3em;
+  }
+
+  .resend-dialog-ok {
+    width: 80%;
+    padding: 12px;
+    font-size: 1em;
+  }
+
+}
+
+/* Small Phones (≤480px) */
+@media (max-width: 480px) {
+
+
+  
+
+  .part1,
+  .part2,
+  .part3,
+  .confrimation-registration {
+    margin: 30px auto;
+    padding: 15px;
+    max-width: 95%;
+  }
+
+  .regis-field-div label {
+    font-size: 1em;
+  }
+
+  .regis-field-div input,
+  .regis-field-div select {
+    font-size: 0.9em;
+  }
+
+  .confrimation-registration-content img {
+    width: 8em;
+  }
+
+  .select-btn img {
+    width: 2em;
+  }
+
+  .select-btn p {
+    font-size: 1em;
+  }
+    .resend-dialog {
+    width: 95%;
+    max-width: 320px;
+    border-radius: 10px;
+  }
+
+  .resend-dialog-content {
+    padding: 10px;
+    gap: 0.8rem;
+  }
+
+  .resend-dialog h3 {
+    font-size: 1.1em;
+  }
+
+  .resend-dialog-ok {
+    width: 90%;
+    padding: 10px;
+    font-size: 0.95em;
+  }
+
+}
+

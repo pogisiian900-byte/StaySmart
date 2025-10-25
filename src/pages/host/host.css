@@ -98,8 +98,8 @@
 .login-host-submit {
   width: 100%;
   height: auto;
-  background-color: #4fb7b3;
-  color: white;
+  background-color: white;
+  color: black;
   padding: 10px;
   transition: all 0.3s ease-in-out;
   border: 0;
@@ -111,8 +111,8 @@
   font-size: 2em;
   font-weight: bold;
   box-shadow: 0 10px 30px 0 rgb(201, 201, 201);
-  color: #000000;
-  background-color: #a8fbd3;
+  color: #ffffff;
+  background-color: #31326F;
 }
 
 .login-other-host {
@@ -121,15 +121,14 @@
   text-align: center;
   gap: 10px;
   margin-top: 50px;
-  
 }
 
 .login-other-host button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #4fb7b3;
-  color: white;
+  background-color:w white;
+  color: rgb(75, 74, 74);
   padding: 20px;
   cursor: pointer;
   border-radius: 10px;
@@ -144,13 +143,13 @@
   height: 24px;
 }
 .login-other-host button:hover {
-  background-color: #a8fbd3;
-  color: black;
+  background-color: #31326F;
+  color: white;
   border-radius: 50px;
   font-weight: bold;
 }
 .login-other-host button:hover svg{
-  fill: black;
+
 }
 .dashboard-group {
   display: flex;
@@ -772,22 +771,7 @@
   border-radius: 50%;
   align-self: center;
 }
-.resendButton-verify{
-  width: 10px;
-  font-size: 1em;
-  padding:  10px 0;
-  width: 30%;
-  border: 0;
-  border-radius: 20px;
-  margin: 10px;
-  background-color: #637AB9;
-  color: white;
-  margin-left: 350px;
-}
-.resendButton-verify:hover{
-  background-color: #31326F;color: white;
-  
-}
+
 /* Edit button style */
 .edit-btn {
   background: rgba(255, 255, 255, 0.85);

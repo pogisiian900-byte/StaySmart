@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import provincesCities from "../../location/city_provinces.json";
 import barangays from "../../location/barangay.json";
 
-const Part2 = ({openedAs,formData,onChange,onNext,onPrev}) => {
+const Part2 = ({formData,onChange,onNext,onPrev}) => {
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
   const [selectedBarangay, setSelectedBarangay] = useState("");
@@ -28,7 +28,7 @@ const Part2 = ({openedAs,formData,onChange,onNext,onPrev}) => {
     <div className="part2">
       <h1>User Address (Part: 2 of 3)</h1>
       <form onSubmit ={handleSubmit}>
-      <div className={`regis-field-div ${openedAs}`}>
+      <div className={`regis-field-div `}>
         {/* Province */}
         <label>Province</label>
         <select
@@ -103,7 +103,7 @@ const Part2 = ({openedAs,formData,onChange,onNext,onPrev}) => {
         required />
       </div>
 
-      <div className={`regis-button-next ${openedAs}`}>
+      <div className={`regis-button-next `}>
         <button type='button' onClick={onPrev}>Go back</button>
         <button type='submit'>Next</button>
       </div>
