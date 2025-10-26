@@ -1,0 +1,183 @@
+/* ===== BASE STYLES ===== */
+.host-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  position: relative;
+  border: 0;
+
+}
+
+
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #333;
+  font-weight: 900;
+  cursor: pointer;
+  transition: color 0.3s ease;
+
+}
+
+.navItem:hover {
+  color: #31326F;
+}
+
+.navActive {
+  color: #31326F;
+  font-weight: bold;
+}
+
+.navItem a{
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+
+.searchBar button {
+  background: #31326F;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+}
+
+.host-hamburgDiv {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.notification-host-Button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.hamburgSelection-host {
+  position: absolute;
+  top: 65px;
+  right: 20px;
+  width: 200px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+}
+
+.hamburgSelection-host button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 1em;
+  padding: 8px;
+  border-radius: 5px;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.hamburgSelection-host button:hover {
+  background: #31326F;
+  color: white;
+}
+
+/* ====== RESPONSIVE ====== */
+
+/* Tablet and mobile */
+@media (max-width: 768px) {
+
+    .navLogo{
+        display: none;
+}
+  /* Hide text on main nav items but keep icons visible */
+  .navItem a span {
+    display: none;
+  }
+
+  /* Hide search bar (we’ll show it in hamburger instead) */
+  .searchBar {
+    display: none;
+  }
+
+  /* Hide full navigation */
+  .nav1 {
+    display: none;
+  }
+
+  /* Compact logo and header */
+  .host-nav {
+    justify-content: space-between;
+    padding: 8px 15px;
+  }
+
+  .navLogo img {
+    width: 100px;
+  }
+
+  /* Profile label hidden — only visible in hamburger */
+  .profileDiv button {
+    display: none;
+  }
+
+  /* Adjust layout of right section */
+  .host-hamburgDiv {
+    gap: 15px;
+  }
+
+  /* Dropdown (hamburger menu) */
+  .hamburgSelection-host {
+    position: absolute;
+    top: 55px;
+    right: 10px;
+    width: 180px;
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.2);
+    padding: 10px;
+  }
+
+  .hamburgSelection-host button {
+    border: none;
+    background: transparent;
+    text-align: left;
+    font-size: 1em;
+    padding: 10px;
+    border-radius: 5px;
+    transition: background 0.2s;
+  }
+
+  .hamburgSelection-host button:hover {
+    background: #31326F;
+    color: #fff;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 480px) {
+  .host-nav {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .navLogo img {
+    width: 85px;
+  }
+
+  .host-hamburgDiv {
+    gap: 10px;
+  }
+
+  .hamburgSelection-host {
+    width: 160px;
+    font-size: 0.9em;
+  }
+}

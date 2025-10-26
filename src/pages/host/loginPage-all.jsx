@@ -120,7 +120,6 @@ const LoginPage_Host = () => {
       }
     } catch (error) {
       console.error(error);
-      alert(`❌ Google login failed: ${error.message}`);
       await signOut(auth);
     }
   };

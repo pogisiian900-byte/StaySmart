@@ -111,27 +111,7 @@ body{
 }  
 
 
-.hamburgSelection {
-  position: absolute;
-  top: 60px;
-  right: 0;
-  background: #fff;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  min-width: 200px;
-  z-index: 10000;
-}
 
-.hamburgSelection button{
-    width: 100%;
-    border-radius: 5px;
-}
-.hamburgSelection button:hover{
-    background-color: #31326F;
-    color: white;
-}
 .searchBar{
     /* border:1px solid #31326F; */
     display: flex;

@@ -1,0 +1,354 @@
+/* --- Base Styles (Your Original Code) --- */
+
+.dashboard-group {
+  display: flex;
+  gap: 40px;
+  margin: 20px 20px;
+  flex-wrap: wrap; /* ✅ allow wrapping on smaller screens */
+}
+
+.today,
+.upcoming {
+  padding: 10px 40px;
+  font-size: 1em;
+  border-radius: 10px;
+  border: 2px solid #ccc;
+  background-color: #f0f0f0;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.today:hover,
+.upcoming:hover {
+  transform: scale(1.05);
+}
+
+.dashboardSelected {
+  background-color: #4a90e2;
+  color: white;
+  border-color: #4a90e2;
+  transform: scale(1.1);
+}
+
+/* Quick Stats Section */
+.quick-statistics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+/* Earnings Boxes */
+.earnings-item {
+  position: relative;
+  border: 1px solid #d1d5db;
+  display: flex;
+  gap: 30px;
+  align-items: center;
+  height: 100px;
+  margin: 10px;
+  border-radius: 10px;
+  padding: 10px 20px;
+  justify-content: space-between;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.earnings-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 14px rgba(49, 50, 111, 0.3);
+}
+
+.earnings-text {
+  font-size: 1.5rem;
+}
+
+.earnings-text p {
+  margin: 0;
+}
+
+.earnings-item img {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+}
+
+/* Overlay when hovered */
+.earnings-item::after {
+  content: "Click for more details";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.293);
+  color: #fff;
+  font-weight: 600;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  opacity: 0;
+  z-index: 2;
+  transition: opacity 0.3s ease;
+}
+
+.earnings-item:hover::after {
+  opacity: 1;
+}
+
+/* Booking Sections */
+.UpcomingBookings,
+.TodaysBooking {
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  margin: 16px;
+  padding: 16px;
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  height: 650px;
+  display: flex;
+  flex-direction: column;
+}
+
+.UpcomingBookings h1,
+.TodaysBooking h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 6px;
+}
+
+/* Scrollable container */
+.booking-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.booking-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.booking-list::-webkit-scrollbar-thumb {
+  background: #a5b4fc;
+  border-radius: 8px;
+}
+
+.booking-list::-webkit-scrollbar-thumb:hover {
+  background: #818cf8;
+}
+
+/* Booking Row */
+.booking-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #ffffff;
+  color: rgb(0, 0, 0);
+  padding: 14px 18px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.2s ease, background-color 0.3s ease;
+}
+
+.booking-row:hover {
+  background-color: #ffffff;
+  transform: translateY(-3px);
+}
+
+.booking-row:hover .booking-row__info,
+.booking-row:hover .booking-row__meta {
+  margin-left: 30px;
+  text-align: left;
+  color: #31326f;
+}
+
+/* Booking thumbnail */
+.booking-row__thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 1px solid #5656569d;
+  background-color: white;
+}
+
+/* Info section */
+.booking-row__info {
+  flex: 1;
+  text-align: center;
+}
+
+.booking-row__info p:first-child {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.booking-row__meta {
+  font-size: 14px;
+  color: #cbd5e1;
+  margin-top: 4px;
+}
+
+.booking-row__date {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.booking-row-group {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Hover "Show More" overlay */
+.booking-row::after {
+  content: "Click for Details";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #5a5a5a52;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: underline;
+  font-weight: 600;
+  font-size: 18px;
+  opacity: 0;
+  border-radius: 12px;
+  transition: opacity 0.3s ease;
+}
+
+.booking-row:hover::after {
+  opacity: 1;
+}
+
+/* --- ✅ Responsive Design --- */
+
+/* Tablet (Medium screens: 768px–1023px) */
+@media (max-width: 1023px) {
+  .quick-statistics {
+    grid-template-columns: 1fr; /* stack one per row */
+  }
+
+  .dashboard-group {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .today, .upcoming {
+    font-size: 0.95em;
+    padding: 8px 30px;
+  }
+
+  .earnings-item {
+    flex-direction: row;
+    height: auto;
+    padding: 15px;
+  }
+
+  .earnings-text {
+    font-size: 1.2rem;
+  }
+
+  .UpcomingBookings, .TodaysBooking {
+    height: auto;
+    margin: 10px;
+    padding: 12px;
+  }
+
+  .booking-row {
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
+  }
+
+  .booking-row__thumb {
+    width: 70px;
+    height: 70px;
+  }
+
+  .booking-row__info p:first-child {
+    font-size: 18px;
+  }
+}
+
+/* Mobile (Small screens: ≤767px) */
+@media (max-width: 767px) {
+  .quick-statistics {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-group {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .today, .upcoming {
+    width: 100%;
+    font-size: 0.9em;
+    padding: 8px 20px;
+  }
+
+  .earnings-item {
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
+    padding: 15px;
+  }
+
+  .earnings-item img {
+    width: 50px;
+    height: 50px;
+  }
+
+  .earnings-text {
+    font-size: 1.1rem;
+  }
+
+  .UpcomingBookings, .TodaysBooking {
+    height: auto;
+    margin: 8px;
+    padding: 10px;
+  }
+
+  .booking-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .booking-row__thumb {
+    width: 60px;
+    height: 60px;
+  }
+
+  .booking-row__info p:first-child {
+    font-size: 16px;
+  }
+
+  .booking-row__meta {
+    font-size: 13px;
+  }
+
+  .booking-row__date {
+    font-size: 14px;
+  }
+
+  .booking-row::after {
+    font-size: 14px;
+  }
+}

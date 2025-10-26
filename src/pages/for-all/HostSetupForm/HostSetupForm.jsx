@@ -1,8 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import house from "/static/3dHome.png";
-import exp from "/static/3dExp.png";
-import serv from "/static/3dService.webp";
 import { db } from "../../../config/firebase";
 import {
   collection,
@@ -12,6 +9,9 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import RoomSetup from "./RoomSetup";
+import ExperienceSetup from "./ExperienceSetup";
+import ServiceSetup from "./ServiceSetup";
 
 const HostSetupForm = () => {
   const { serviceType, hostId, draftId } = useParams();
@@ -19,7 +19,7 @@ const HostSetupForm = () => {
   const dialogRef = useRef(null);
   const isEditingDraft = Boolean(draftId);
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(2);
   const [photo, setPhoto] = useState(null);
   const [multiPhotos, setMultiPhotos] = useState([null, null, null, null]);
   const [showPhotoError, setShowPhotoError] = useState(false);
@@ -219,25 +219,11 @@ const HostSetupForm = () => {
   return (
     <div className="hostSetupForm">
       <div className="formContainer">
-     
-        <div className="formContainer-text">
-          <img
-            src={
-              serviceType === "room"
-                ? house
-                : serviceType === "experience"
-                ? exp
-                : serv
-            }
-            alt={serviceType}
-            width="150px"
-          />
-        </div>
 
         {/* ---------- STEP 1 ---------- */}
         {step === 1 && (
           <form onSubmit={nextStep} className="formStep">
-            <h2>Basic Information</h2>
+            <h2 className="form-main-title">Basic Information</h2>
 
             <label className="form-label">
               Title:
@@ -417,204 +403,38 @@ const HostSetupForm = () => {
         {/* ---------- STEP 2 ---------- */}
 {step === 2 && (
   <div className="formStep">
+            <h2 className="form-main-title">Listing Information</h2>
+
+   <form onSubmit={handleSubmit}>
+  {serviceType.includes("room") && (
+    <RoomSetup generalData={generalData} handleChange={handleChange} />
+  )}
+  {serviceType.includes("experience") && (
+    <ExperienceSetup generalData={generalData} handleChange={handleChange} />
+  )}
+  {serviceType.includes("service") && (
+    <ServiceSetup generalData={generalData} handleChange={handleChange} />
+  )}
+
+  <div className="formButtons">
+    <div className="form-button-group">
+
     <button className="saveDraftButton" type="button" onClick={handleSaveDraft}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-save-icon lucide-save"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>
-                  Save as Draft
-                </button>
-    <form onSubmit={handleSubmit}>
-
-      {/* ========== ROOM SETUP ========== */}
-      {serviceType === "room" && (
-        <>
-          <h2 className="form-title">Room Details</h2>
-
-      <label className="form-label">
-          Property Type:
-          <select
-            className="form-input"
-            onChange={(e) => handleChange("propertyType", e.target.value)}
-            required
-          >
-            <option value="">Select</option>
-            <option value="Apartment">Apartment</option>
-            <option value="Condo">Condo</option>
-            <option value="Villa">Villa</option>
-            <option value="House">House</option>
-            <option value="Studio">Studio</option>
-            <option value="Townhouse">Townhouse</option>
-          </select>
-        </label>
-
-
-          <label className="form-label">
-           Number Bedrooms:
-            <input
-              className="form-input"
-              type="number"
-              min="0"
-              onChange={(e) => handleChange("bedrooms", e.target.value)}
-              required
-            />
-          </label>
-
-          <label className="form-label">
-           Number Beds:
-            <input
-              className="form-input"
-              type="number"
-              min="0"
-              onChange={(e) => handleChange("beds", e.target.value)}
-              required
-            />
-          </label>
-
-          <label className="form-label">
-           Number Bathrooms:
-            <input
-              className="form-input"
-              type="number"
-              min="0"
-              onChange={(e) => handleChange("bathrooms", e.target.value)}
-              required
-            />
-          </label>
-
-          <label className="form-label">
-            Room Type:
-            <select
-              className="form-input"
-              onChange={(e) => handleChange("roomType", e.target.value)}
-              required
-            >
-              <option value="">Select</option>
-              <option value="entire home">Entire Home</option>
-              <option value="private room">Private Room</option>
-              <option value="shared room">Shared Room</option>
-            </select>
-          </label>
-        </>
-      )}
-
-      {/* ========== EXPERIENCE SETUP ========== */}
-      {serviceType === "experience" && (
-        <>
-          <h2 className="form-title">Experience Details</h2>
-
-          <label className="form-label">
-            Category:
-            <input
-              className="form-input"
-              type="text"
-              placeholder={
-                    serviceType === "room"
-                      ? "Ex: TV, WiFi, Air Conditioner"
-                      : serviceType === "service"
-                      ? "Ex: Shampoo, Towels, Massage Table"
-                      : serviceType === "experience"
-                      ? "Ex: Camera, Snacks, Safety Gear"
-                      : "Ex: TV, WiFi, Air Conditioner"
-                  }
-              onChange={(e) => handleChange("category", e.target.value)}
-              required
-            />
-          </label>
-
-          <label className="form-label">
-            Duration (hours):
-            <input
-              className="form-input"
-              type="number"
-              min="1"
-              onChange={(e) => handleChange("duration", e.target.value)}
-              required
-            />
-          </label>
-
-          <label className="form-label">
-            Group Size Limit:
-            <input
-              className="form-input"
-              type="number"
-              min="1"
-              onChange={(e) => handleChange("groupSizeLimit", e.target.value)}
-              required
-            />
-          </label>
-
-          <label className="form-label">
-            Meeting Point:
-            <input
-              className="form-input"
-              type="text"
-              placeholder="e.g. Bulacan Plaza or any landmark"
-              onChange={(e) => handleChange("meetingPoint", e.target.value)}
-              required
-            />
-          </label>
-        </>
-      )}
-
-      {/* ========== SERVICE SETUP ========== */}
-      {serviceType === "service" && (
-        <>
-          <h2 className="form-title">Service Details</h2>
-
-          <label className="form-label">
-            Service Category:
-            <input
-              className="form-input"
-              type="text"
-              placeholder="e.g. Cleaning, Car Wash, Haircut"
-              onChange={(e) => handleChange("serviceCategory", e.target.value)}
-              required
-            />
-          </label>
-
-          <label className="form-label">
-            Service Duration (hours):
-            <input
-              className="form-input"
-              type="number"
-              min="1"
-              onChange={(e) => handleChange("serviceDuration", e.target.value)}
-              required
-            />
-          </label>
-
-          <label className="form-label">
-            Availability Hours:
-            <input
-              className="form-input"
-              type="text"
-              placeholder="e.g. 9AM - 6PM"
-              onChange={(e) => handleChange("availabilityHours", e.target.value)}
-              required
-            />
-          </label>
-
-          <label className="form-label">
-            Service Area:
-            <input
-              className="form-input"
-              type="text"
-              placeholder="e.g. Within Bulacan or Metro Area"
-              onChange={(e) => handleChange("serviceArea", e.target.value)}
-              required
-            />
-          </label>
-        </>
-      )}
-
-      {/* BUTTONS */}
-      <div className="formButtons">
-        <button className="form-btn" onClick={prevStep} type="button">
-          Back
+       <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-save-icon lucide-save"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg>
+         Save as Draft
         </button>
-        <button className="form-btn primary" type="submit">
-          Finish
-        </button>
-      </div>
-    </form>
+    <button className="form-btn" onClick={prevStep} type="button">
+      <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-arrow-left-icon lucide-circle-arrow-left"><circle cx="12" cy="12" r="10"/><path d="m12 8-4 4 4 4"/><path d="M16 12H8"/></svg>
+      Back
+    </button>
+    </div>
+    <button className="form-btn primary" type="submit">
+      <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-check-icon lucide-circle-check"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+      Finish
+    </button>
+  </div>
+</form>
+
   </div>
 )}
 

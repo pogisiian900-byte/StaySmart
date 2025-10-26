@@ -109,7 +109,10 @@ const ConfirmationModal = ({ formData, onPrev }) => {
   return (
     <>
       <div className="confrimation-registration">
-        <div className="back-group-verify">
+       
+        {!emailSent ?(
+          
+         <div className="back-group-verify">
           <button onClick={onPrev} className="confrimation-registration-Goback">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -126,7 +129,10 @@ const ConfirmationModal = ({ formData, onPrev }) => {
               <path d="M19 12H5" />
             </svg>
           </button>
-        </div>
+        </div>):
+        (<>
+        </>)
+        } 
 
         <div className="confrimation-registration-content">
           <h1>Please verify {formData.emailAddress || 'your email'}</h1>

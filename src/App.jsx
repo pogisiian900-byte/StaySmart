@@ -2,6 +2,9 @@ import { Route, createBrowserRouter, createRoutesFromElements, RouterProvider } 
 import './App.css';
 import './index.css';
 import '../src/pages/for-all/HostRegis.css'
+import '../src/pages/for-all/HostSetupForm/HostSetupForm.css'
+import '../src/pages/host/host-nav.css'
+import '../src/pages/host/host-dashboard.css'
 import RootLayout from './layout/RootLayout.jsx';
 import ProtectedRoute from './layout/ProtectedRoute.jsx';
 import PublicRoute from './layout/PublicRoute.jsx';

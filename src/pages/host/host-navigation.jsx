@@ -1,156 +1,178 @@
-
-import { useState } from "react";
-import "../host/host.css"
-import Logo from '/static/logo.png'
-import { useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import "../host/host.css";
+import Logo from "/static/logo.png";
+import { useNavigate } from "react-router-dom";
 import { auth } from "../../config/firebase";
 import { signOut } from "firebase/auth";
 import HostDashboard from "../../components/Host/Dashboard";
 import Listings from "../../components/Host/Listings";
 import Bookings from "../../components/Host/Bookings";
 import Earnings from "../../components/Host/Earnings";
-import profile from '/static/me.png'
-function Host_Navigation({hostId,userData}){
-    const [open,setOpen] = useState(false);
-    const [renderedPage, setRenderedPage] = useState("dashboard");
-    const [selectedNav, setSelectedNav] = useState("dashboard")
-    const navigate = useNavigate();
 
-    const handleLogout = async () =>{
-            try {
-                await signOut(auth);
-                console.log("Host logged out");
-                navigate("/host",{replace: true});
-            }catch(err){
-                console.error("Logout failed:", err.message);
-            }
-        }
+function Host_Navigation({ hostId, userData }) {
+  const [open, setOpen] = useState(false);
+  const [renderedPage, setRenderedPage] = useState("dashboard");
+  const [selectedNav, setSelectedNav] = useState("dashboard");
+  const navigate = useNavigate();
+  const menuRef = useRef(null); // ⬅️ for detecting outside clicks
+  const buttonRef = useRef(null); // ⬅️ prevent immediate closing when clicking button
 
-        const renderingPages = () =>{
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      console.log("Host logged out");
+      navigate("/host", { replace: true });
+    } catch (err) {
+      console.error("Logout failed:", err.message);
+    }
+  };
 
+  // ✅ Close hamburger when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target) &&
+        !buttonRef.current.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    };
 
-            switch(renderedPage){
-            case "dashboard": 
-              return <HostDashboard/>
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
-            case "listings":
-                return <Listings hostId={hostId}/>
-                
-            case "reservations":
-                return <Bookings/>
-                
-            case "earnings": 
-                return <Earnings/>
-            
-            default:
-            
-            return <p>Page not Found</p>
-               
-            }
-            
-        }
-    return(
-        <>
-        <nav className="guest-nav"> 
-            <div className="navLogo">
-                <img src={Logo} alt=""width={"150px"} />
-            </div>
-            <div className="nav1">
-                <div className={selectedNav ==="dashboard"? "navItem navActive": "navItem"} 
-                onClick={()=> {
-                    setRenderedPage("dashboard")
-                    setSelectedNav("dashboard")
-                    }}>  
-                    <a href="#">Dashboard 🏠</a>
-                </div>
-                    <div className={selectedNav ==="listings"? "navItem navActive": "navItem"}  
-                    onClick={()=> {
-                        setRenderedPage("listings")
-                        setSelectedNav("listings")
-                        }}>    
-                    <a href="#">Listings 📦</a>
-                </div>
-                
-                <div className={selectedNav ==="reservations"? "navItem navActive": "navItem"}  
-                onClick={()=> {
-                    setRenderedPage("reservations")
-                    setSelectedNav("reservations");
+  const renderingPages = () => {
+    switch (renderedPage) {
+      case "dashboard":
+        return <HostDashboard />;
+      case "listings":
+        return <Listings hostId={hostId} />;
+      case "reservations":
+        return <Bookings />;
+      case "earnings":
+        return <Earnings />;
+      default:
+        return <p>Page not Found</p>;
+    }
+  };
 
-                }}>    
-                    <a href="#">Reservations 📅</a>
-                </div>
-                     <div className={selectedNav ==="earnings"? "navItem navActive": "navItem"}  
-                     onClick={()=> {
-                        setRenderedPage("earnings");
-                        setSelectedNav("earnings");
-                        }}>    
-                    <a href="#">Earnings 💵</a>
-                </div>
-                        
-                   
-            </div>
+  return (
+    <>
+      <nav className="host-nav">
+        <div className="navLogo">
+          <img src={Logo} alt="" width={"150px"} />
+        </div>
 
-            <div className="searchBar">
-            <button> 
-                <svg xmlns="http://www.w3.org/2000/svg" height="100px" viewBox="0 -960 960 960" width="100px" fill="aliceblue"><path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/></svg> 
-                </button>
-             </div>
-            <div className="host-hamburgDiv">
-               <button className="notification-host-Button">
-                <svg xmlns="http://www.w3.org/2000/svg" height="30px" viewBox="0 -960 960 960" width="30px" fill="#f2ff00ff"><path d="M160-200v-80h80v-280q0-83 50-147.5T420-792v-28q0-25 17.5-42.5T480-880q25 0 42.5 17.5T540-820v28q80 20 130 84.5T720-560v280h80v80H160Zm320-300Zm0 420q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80ZM320-280h320v-280q0-66-47-113t-113-47q-66 0-113 47t-47 113v280Z"/></svg>
-               </button>
-                
-               <div className="profileDiv" onClick={() =>navigate('profile')} >
-                <button
-                >
-                    Profile:  {userData.firstName||"None"}
-                    
-                </button>
-                <img src={profile} alt="" width={"50px"} />
-               </div>
-                <button  onClick={() => setOpen(!open)}
-                    style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                    }}
-                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#000000ff"><path d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z"/></svg>
-                </button>
-            </div>
-                  {open && (
+        {/* Main Navigation */}
         <div
-          className="hamburgSelection"
-          style={{
-            position: "absolute",
-            top: "60px",
-            right: 0,
-            background: "#fff",
-            boxShadow: "0 4px 8px rgba(0,0,0,0.2)",
-            borderRadius: "8px",
-            display: "flex",
-            flexDirection: "column",
-            minWidth: "200px",
-            padding: "10px",
-            zIndex: 999,
+          className={selectedNav === "dashboard" ? "navItem navActive" : "navItem"}
+          onClick={() => {
+            setRenderedPage("dashboard");
+            setSelectedNav("dashboard");
           }}
         >
-          <button title="chat with guests">Messages 💬</button>
-          <button title="Profile">Account Settings ⚙️</button>
-          <button title="booking updates| payout reminders">Notifications 🔔</button>
-          <button title="Contact admin">Help 📞</button>
-          <button title="Logging out as Host" onClick={handleLogout}>Logout 🚪</button>
+          <a href="#">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M8.707 1.5a1 1 0 0 0-1.414 0L.646 8.146a.5.5 0 0 0 .708.708L2 8.207V13.5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V8.207l.646.647a.5.5 0 0 0 .708-.708L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293zM13 7.207V13.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5V7.207l5-5z" />
+            </svg>
+            <span>Dashboard</span>
+          </a>
         </div>
-      )}
 
+        <div
+          className={selectedNav === "listings" ? "navItem navActive" : "navItem"}
+          onClick={() => {
+            setRenderedPage("listings");
+            setSelectedNav("listings");
+          }}
+        >
+          <a href="#">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/>
+              <path d="M12 22V12"/><polyline points="3.29 7 12 12 20.71 7"/><path d="m7.5 4.27 9 5.15"/>
+            </svg>
+            <span>Listings</span>
+          </a>
+        </div>
 
-            
-        </nav>
+        <div
+          className={selectedNav === "reservations" ? "navItem navActive" : "navItem"}
+          onClick={() => {
+            setRenderedPage("reservations");
+            setSelectedNav("reservations");
+          }}
+        >
+          <a href="#">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 2v4"/><path d="M16 2v4"/><path d="M21 17V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11Z"/><path d="M3 10h18"/><path d="M15 22v-4a2 2 0 0 1 2-2h4"/>
+            </svg>
+            <span>Reservations</span>
+          </a>
+        </div>
 
-    
-        <div className="host-main-page">{renderingPages()}</div>
-        </>
-    );
+        <div
+          className={selectedNav === "earnings" ? "navItem navActive" : "navItem"}
+          onClick={() => {
+            setRenderedPage("earnings");
+            setSelectedNav("earnings");
+          }}
+        >
+          <a href="#">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"/>
+              <path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"/>
+              <path d="m2 16 6 6"/><circle cx="16" cy="9" r="2.9"/><circle cx="6" cy="5" r="3"/>
+            </svg>
+            <span>Earnings</span>
+          </a>
+        </div>
+
+        {/* Hamburger button */}
+        <div className="host-hamburgDiv">
+          <button
+            ref={buttonRef}
+            onClick={() => setOpen(!open)}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#000000ff">
+              <path d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Dropdown Menu */}
+        {open && (
+          <div className="hamburgSelection-host" ref={menuRef}>
+            <div className="profileDiv">
+              <svg xmlns="http://www.w3.org/2000/svg" width="35" height="35" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                <path fillRule="evenodd" d="M8 9a5 5 0 0 0-5 5v1h10v-1a5 5 0 0 0-5-5Z" />
+              </svg>
+              <button onClick={() => navigate("profile")}>
+                {userData.firstName || "My Profile"}
+              </button>
+            </div>
+
+            <button>🔍 Search</button>
+            <button>🔔 Notifications</button>
+            <button>💬 Messages</button>
+            <button>⚙️ Account Settings</button>
+            <button onClick={handleLogout}>🚪 Logout</button>
+          </div>
+        )}
+      </nav>
+
+      <div className="host-main-page">{renderingPages()}</div>
+    </>
+  );
 }
 
 export default Host_Navigation;
