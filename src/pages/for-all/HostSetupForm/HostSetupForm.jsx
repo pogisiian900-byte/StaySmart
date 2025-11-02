@@ -8,6 +8,7 @@ import {
   getDoc,
   updateDoc,
   serverTimestamp,
+  deleteDoc
 } from "firebase/firestore";
 import RoomSetup from "./RoomSetup";
 import ExperienceSetup from "./ExperienceSetup";
@@ -18,8 +19,9 @@ const HostSetupForm = () => {
   const navigate = useNavigate();
   const dialogRef = useRef(null);
   const isEditingDraft = Boolean(draftId);
+  const [isDisabled, setIsDisabled] = useState(false);
 
-  const [step, setStep] = useState(2);
+  const [step, setStep] = useState(1);
   const [photo, setPhoto] = useState(null);
   const [multiPhotos, setMultiPhotos] = useState([null, null, null, null]);
   const [showPhotoError, setShowPhotoError] = useState(false);
@@ -199,6 +201,7 @@ const HostSetupForm = () => {
       setShowPhotoError(true);
       return;
     }
+    setIsDisabled(true);
 
     try {
       await addDoc(collection(db, "Listings"), {
@@ -208,6 +211,11 @@ const HostSetupForm = () => {
         photos: [photo, ...multiPhotos.filter(Boolean)],
         createdAt: serverTimestamp(),
       });
+
+       if (isEditingDraft) {
+      await deleteDoc(doc(db, "Drafts", draftId));
+      console.log(`Draft ${draftId} deleted successfully`);
+    }
 
       alert("Listing saved successfully!");
       navigate(`/host/${hostId}`);
@@ -291,7 +299,7 @@ const HostSetupForm = () => {
                     ? "Ex: Shampoo, Towels, Massage Table"
                     : serviceType === "experience"
                     ? "Ex: Camera, Snacks, Safety Gear"
-                    : "Service not Stated"
+                    : "Any Amenities your mutiple service should have?"
                 }
                 onChange={(e) => {
                   const amenitiesArray = e.target.value
@@ -428,7 +436,7 @@ const HostSetupForm = () => {
       Back
     </button>
     </div>
-    <button className="form-btn primary" type="submit">
+    <button className="form-btn primary" disabled={isDisabled} type="submit">
       <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-check-icon lucide-circle-check"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
       Finish
     </button>

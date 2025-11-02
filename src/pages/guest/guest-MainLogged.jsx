@@ -14,7 +14,7 @@ const GuestMainLogged = () => {
   const [listings, setListings] = useState([]);
   const [user] = useAuthState(auth);
   const navigate = useNavigate();
-
+  
   // 🔹 Fetch user role and data
   useEffect(() => {
     const fetchUserData = async () => {

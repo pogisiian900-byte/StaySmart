@@ -1,0 +1,523 @@
+/* === Slideshow Wheel === */
+.slide-wheel {
+  width: 100%;
+  max-width: 1400px;
+  margin: 40px auto;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+.topBar-wheel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 0 20px;
+}
+
+.topBar-wheel .item-title a {
+  text-decoration: none;
+  color: #222;
+  font-weight: 600;
+  font-size: 1.4rem;
+}
+
+.switchButton button {
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+ 
+}
+.switchButton button svg{
+    fill: #111;
+}
+.switchButton button:hover {
+  background-color: #31326F;
+  transform: scale(1.1);
+}
+
+.items-container {
+  overflow: hidden;
+  position: relative;
+}
+
+.items-group {
+  display: flex;
+  gap: 20px;
+  transition: transform 0.4s ease-in-out;
+  
+}
+
+.wheel-item {
+  min-width: 370px;
+  border-radius: 16px;
+  background-color: #fff;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.25s ease;
+}
+
+.wheel-item:hover {
+  transform: translateY(-4px);
+}
+
+.wheel-item img {
+  width: 100%;
+  height: 250px;
+  object-fit: cover;
+  border-bottom: 1px solid #eee;
+}
+
+.wheel-item h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #333;
+  margin: 10px 15px 5px;
+}
+
+.wheel-item p {
+  margin: 4px 15px;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+#wheel-item-price {
+  font-weight: 600;
+  color: #111;
+}
+
+#wheel-item-rating {
+  display: flex;
+  align-items: center;
+  color: #333;
+}
+
+.wheel-item button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background-color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.25s ease;
+}
+
+.wheel-item button:hover {
+  transform: scale(1.15);
+}
+
+.wheel-item button svg {
+  transition: fill 0.3s ease;
+}
+
+.wheel-item button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.home-container {
+  padding: 20px;
+}
+
+.loading-text,
+.noListings {
+  text-align: center;
+  font-size: 18px;
+  color: #555;
+}
+
+.allHomes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  margin-top: 30px;
+}
+
+.roomCard {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  cursor: pointer;
+}
+
+.roomCard:hover {
+  transform: scale(1.03);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+}
+
+.roomImageWrapper {
+  width: 100%;
+  height: 180px;
+  overflow: hidden;
+}
+
+.roomImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.roomCard:hover .roomImage {
+  transform: scale(1.05);
+}
+
+.roomInfo {
+  padding: 12px 16px 16px;
+}
+
+.roomTitle {
+  margin: 5px 0;
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #222;
+}
+
+.roomLocation {
+  color: #777;
+  font-size: 0.9em;
+  margin-bottom: 8px;
+}
+
+.roomPrice {
+  font-weight: 700;
+  color: #000;
+  font-size: 1em;
+}
+
+.perNight {
+  font-weight: 400;
+  color: #555;
+  font-size: 0.9em;
+}
+.roomImageWrapper {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  overflow: hidden;
+}
+
+.heartButton {
+  position: absolute;
+  top: 10px;
+  width: 35px;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 50%;
+  padding: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.heartButton svg {
+  color: #393939;
+  transition: color 0.2s ease;
+}
+
+.heartButton:hover svg {
+  color: #ff385c;
+}
+
+.heartButton.active {
+  background: #ff385c;
+}
+
+.heartButton.active svg {
+  color: white;
+}
+/* === Slideshow Wheel === */
+.slide-wheel {
+  width: 100%;
+  max-width: 1400px;
+  margin: 40px auto;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  padding: 0 10px;
+}
+
+.topBar-wheel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 0 10px;
+}
+
+.topBar-wheel .item-title a {
+  text-decoration: none;
+  color: #222;
+  font-weight: 600;
+  font-size: 1.3rem;
+}
+
+.switchButton button {
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.switchButton button svg {
+  fill: #111;
+}
+
+.switchButton button:hover {
+  background-color: #31326F;
+  transform: scale(1.1);
+}
+
+.items-container {
+  overflow: hidden;
+  position: relative;
+}
+
+.items-group {
+  display: flex;
+  gap: 20px;
+  transition: transform 0.4s ease-in-out;
+}
+
+.wheel-item {
+  flex: 0 0 370px;
+  border-radius: 16px;
+  background-color: #fff;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.25s ease;
+}
+
+.wheel-item:hover {
+  transform: translateY(-4px);
+}
+
+.wheel-item img {
+  width: 100%;
+  height: 250px;
+  object-fit: cover;
+  border-bottom: 1px solid #eee;
+}
+
+.wheel-item h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  margin: 10px 15px 5px;
+}
+
+.wheel-item p {
+  margin: 4px 15px;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+#wheel-item-price {
+  font-weight: 600;
+  color: #111;
+}
+
+/* === All Homes Section === */
+.allHomes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  margin-top: 30px;
+  padding: 0 10px;
+}
+
+.roomCard {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  cursor: pointer;
+}
+
+.roomCard:hover {
+  transform: scale(1.03);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+}
+
+.roomImageWrapper {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  overflow: hidden;
+}
+
+.roomImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.roomCard:hover .roomImage {
+  transform: scale(1.05);
+}
+
+.roomInfo {
+  padding: 12px 16px 16px;
+}
+
+.roomTitle {
+  margin: 5px 0;
+  font-size: 1.05em;
+  font-weight: 600;
+  color: #222;
+}
+
+.roomLocation {
+  color: #777;
+  font-size: 0.9em;
+  margin-bottom: 8px;
+}
+
+.roomPrice {
+  font-weight: 700;
+  color: #000;
+  font-size: 1em;
+}
+
+.perNight {
+  font-weight: 400;
+  color: #555;
+  font-size: 0.9em;
+}
+/* --- UNIFORM CENTERED WIDTH --- */
+.site-width {
+  width: 100%;
+  max-width: 1400px; /* same as .slide-wheel */
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding-left: 10px;  /* match existing small horizontal padding */
+  padding-right: 10px;
+}
+
+/* Apply it to the main blocks so they align exactly */
+.slide-wheel,
+.home-container,
+.items-container,
+.allHomes {
+  /* Use the utility class styles */
+  max-width: 1400px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+/* Ensure grid and items stretch to container width */
+.items-group,
+.allHomes {
+  width: 100%;
+}
+
+/* If you prefer a single classname in HTML, you can instead:
+   <div class="site-width slide-wheel"> and <div class="site-width home-container"> */
+/* Small extra polish for sticky/floating elements */
+.heartButton,
+.switchButton {
+  /* Keep them positioned relative to the container */
+  transform: translateZ(0);
+}
+.floating-buttons {
+  left: 0;
+  right: 0;
+  max-width: 1400px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+
+
+/* === RESPONSIVE DESIGN === */
+
+/* Tablets */
+@media (max-width: 1024px) {
+  .wheel-item {
+    flex: 0 0 300px;
+  }
+  .wheel-item img {
+    height: 220px;
+  }
+}
+
+/* Phones */
+@media (max-width: 768px) {
+  .topBar-wheel .item-title a {
+    font-size: 1.1rem;
+  }
+
+  .wheel-item {
+    flex: 0 0 240px;
+  }
+
+  .wheel-item img {
+    height: 200px;
+  }
+
+  .roomImageWrapper {
+    height: 160px;
+  }
+
+  .roomTitle {
+    font-size: 1em;
+  }
+}
+
+/* Small Phones */
+@media (max-width: 480px) {
+  .slide-wheel {
+    margin: 20px auto;
+  }
+
+  .items-group {
+    gap: 12px;
+  }
+
+  .wheel-item {
+    flex: 0 0 85%;
+  }
+
+  .allHomes {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .roomImageWrapper {
+    height: 150px;
+  }
+
+  .roomTitle {
+    font-size: 0.95em;
+  }
+
+  .roomPrice {
+    font-size: 0.9em;
+  }
+}

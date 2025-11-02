@@ -3,8 +3,11 @@ import './App.css';
 import './index.css';
 import '../src/pages/for-all/HostRegis.css'
 import '../src/pages/for-all/HostSetupForm/HostSetupForm.css'
-import '../src/pages/host/host-nav.css'
+import '../src/pages/host/navigations.css'
 import '../src/pages/host/host-dashboard.css'
+import '../src/pages/host/host-listing.css'
+import '../src/pages/guest/guest-viewListing.css'
+import '../src/pages/guest/guest-bookingConfirmation.css'
 import RootLayout from './layout/RootLayout.jsx';
 import ProtectedRoute from './layout/ProtectedRoute.jsx';
 import PublicRoute from './layout/PublicRoute.jsx';
@@ -24,6 +27,10 @@ import ViewListing from './components/Host/viewListing.jsx';
 import SelectListingItem from './components/SelectListingItem.jsx';
 import Guest_Main_NextPageOutlet from './pages/guest/GuestLayout.jsx';
 import GuestLayout from './pages/guest/GuestLayout.jsx';
+import SelectedListingBookingConfirmation from './components/SelectedListingBookingConfirmation.jsx';
+import ChatPage from './pages/for-all/messages/ChatPage.jsx';
+import GuestConvoList from './pages/for-all/messages/GuestConvoList.jsx';
+import HostConvoList from './pages/for-all/messages/HostConvoList.jsx';
 
 function App() {
   const router = createBrowserRouter(
@@ -43,19 +50,35 @@ function App() {
         />
 
      <Route
-        path="/guest/:guestId"
-        element={
-          <ProtectedRoute allowedRole="guest">
-            <GuestLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<GuestMainLogged />} /> 
-         <Route path="profile" element={<Profile />} />
-        <Route path="listing/:listingId" element={<SelectListingItem />} />
-      </Route>
+            path="/guest/:guestId"
+            element={
+              <ProtectedRoute allowedRole="guest">
+                <GuestLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<GuestMainLogged />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="listing/:listingId" element={<SelectListingItem />} />
+              <Route path="messages" element={<GuestConvoList />} />
+            {/* ✅ Fix here */}
+            <Route
+              path="chat/:conversationId"
+              element={
+                <ProtectedRoute allowedRole={["guest", "host"]}>
+                  <ChatPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="listing/:listingId/booking"
+              element={<SelectedListingBookingConfirmation />}
+            />
+          </Route>
 
 
+          
 
        <Route path="/getStarted/:hostId">
               <Route index element={<GetStarted />} />
@@ -71,22 +94,42 @@ function App() {
             </Route>
 
           <Route path='/login' element={<LoginPage_Host />} />
-        <Route path="/host">
-          <Route
-            path=":hostId"
-            index
-            element={
-                <ProtectedRoute allowedRole="host">
-                <HostMain />
-              </ProtectedRoute>
-            }
-          />
-           <Route path=":hostId/:listingId" element={<ViewListing />} />
-            <Route path=':hostId/startingListing' element={<SetupService/>}/>
-             <Route path=":hostId/getStarted/:serviceType" element={<HostSetupForm />} />
-              <Route path=":hostId/draft/:serviceType/:draftId" element={<HostSetupForm />} />
-            <Route path=':hostId/profile' element={<Profile/>}/>
-        </Route>
+      <Route path="/host">
+  <Route
+    path=":hostId"
+    index
+    element={
+      <ProtectedRoute allowedRole="host">
+        <HostMain />
+      </ProtectedRoute>
+    }
+  />
+
+  <Route path=":hostId/:listingId" element={<ViewListing />} />
+  <Route path=":hostId/startingListing" element={<SetupService />} />
+  <Route path=":hostId/getStarted/:serviceType" element={<HostSetupForm />} />
+  <Route path=":hostId/draft/:serviceType/:draftId" element={<HostSetupForm />} />
+  <Route path=":hostId/profile" element={<Profile />} />
+
+  {/* ✅ Host Messaging Routes */}
+  <Route
+    path=":hostId/messages"
+    element={
+      <ProtectedRoute allowedRole="host">
+        <HostConvoList />
+      </ProtectedRoute>
+    }
+  />
+  <Route
+    path=":hostId/chat/:conversationId"
+    element={
+      <ProtectedRoute allowedRole={["host", "guest"]}>
+        <ChatPage />
+      </ProtectedRoute>
+    }
+  />
+</Route>
+
         
 
         <Route path="/admin" element={<Admin_Main />} />

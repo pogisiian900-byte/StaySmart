@@ -1,10 +1,9 @@
 
 .hostSetupForm {
-  padding: 40px;
+  padding: 20px;
 }
 
 .formContainer {
-  width: 95%;
   background: white;
   border-radius: 20px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.348);

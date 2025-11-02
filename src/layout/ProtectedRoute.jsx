@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../layout/AuthContext"; 
+import { useAuth } from "../layout/AuthContext";
 import { db } from "../config/firebase";
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
@@ -37,7 +37,12 @@ function ProtectedRoute({ children, allowedRole }) {
     return <Navigate to="/" replace state={{ from: location }} />;
   }
 
-  if (allowedRole && role !== allowedRole) {
+  // ✅ FIX HERE: support both string or array
+  const isAllowed = Array.isArray(allowedRole)
+    ? allowedRole.includes(role)
+    : role === allowedRole;
+
+  if (allowedRole && !isAllowed) {
     return <Navigate to="/" replace />;
   }
 

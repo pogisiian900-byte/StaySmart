@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where,doc,deleteDoc } from "firebase/firestore";
 import { db } from "../../config/firebase";
 import nothing from "/static/no photo.webp";
 
@@ -16,8 +16,34 @@ const Listings = ({ hostId }) => {
      navigate(`draft/${serviceType}/${id}`)
     
   };
-  const handleDelete = (id, type) =>
-    console.log("Delete", type === "draft" ? "draft" : "listing", id);
+  const handleDelete = async (id, type) => {
+  try {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete this ${type === "draft" ? "draft" : "listing"}?`
+    );
+    if (!confirmDelete) return;
+
+    // Determine collection
+    const collectionName = type === "draft" ? "Drafts" : "Listings";
+
+    // Delete document from Firestore
+    await deleteDoc(doc(db, collectionName, id));
+
+    // Update local state so UI updates immediately
+    if (type === "draft") {
+      setDrafts((prev) => prev.filter((d) => d.id !== id));
+    } else {
+      setListings((prev) => prev.filter((l) => l.id !== id));
+    }
+
+    alert(`${type === "draft" ? "Draft" : "Listing"} deleted successfully!`);
+  } catch (error) {
+    console.error("Error deleting document:", error);
+    alert("Failed to delete. Please try again.");
+  }
+};
+
+
   const createNewListing = () => navigate("startingListing");
   const handleViewListing = (id) => navigate(id);
 
@@ -60,36 +86,68 @@ const Listings = ({ hostId }) => {
     }
   }, [hostId]);
 
-  // 🔹 Filter logic for listings
-  let displayedListings = listings;
-  if (filterType !== "all" && filterType !== "drafts") {
-    displayedListings = listings.filter(
-      (listing) =>
-        listing.serviceType?.toLowerCase() === filterType.toLowerCase()
-    );
-  }
+// ✅ Fixed: allow partial match (e.g., "room" inside "private room")
+let displayedListings = [];
+
+if (filterType === "all") {
+  displayedListings = listings;
+} else if (filterType === "drafts") {
+  displayedListings = [];
+} else {
+  displayedListings = listings.filter((listing) =>
+    listing.serviceType?.toLowerCase().includes(filterType.toLowerCase())
+  );
+}
+
+
 
   // 🔹 Navigation Bar
   const NavListing = () => (
     <div className="listingNav">
       <div className="listingIcon">
-        <p>My Listings</p>
       </div>
       <div className="listing-buttons">
-        <button onClick={() => setFilterType("all")}>All</button>
-        <button onClick={() => setFilterType("room")}>Room</button>
-        <button onClick={() => setFilterType("service")}>Service</button>
-        <button onClick={() => setFilterType("experience")}>Experience</button>
-        <button onClick={() => setFilterType("drafts")}>Drafts</button>
-        <button className="create-btn" onClick={createNewListing}>
-          + Create new Listing
-        </button>
-      </div>
+  <button
+    className={filterType === "all" ? "active" : ""}
+    onClick={() => setFilterType("all")}
+  >
+    All
+  </button>
+  <button
+    className={filterType === "room" ? "active" : ""}
+    onClick={() => setFilterType("room")}
+  >
+    Room
+  </button>
+  <button
+    className={filterType === "service" ? "active" : ""}
+    onClick={() => setFilterType("service")}
+  >
+    Service
+  </button>
+  <button
+    className={filterType === "experience" ? "active" : ""}
+    onClick={() => setFilterType("experience")}
+  >
+    Experience
+  </button>
+  <button
+    className={filterType === "drafts" ? "active" : ""}
+    onClick={() => setFilterType("drafts")}
+  >
+    Drafts
+  </button>
+
+  <button className="create-btn" onClick={createNewListing}>
+    + Create new Listing
+  </button>
+</div>
+
     </div>
   );
 
   return (
-    <div>
+    <div className="host-listing-main">
       <NavListing />
       <br />
 

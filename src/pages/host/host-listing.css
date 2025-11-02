@@ -1,0 +1,266 @@
+/* === Base Styles (Desktop) === */
+.listingNav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  background-color: #fff;
+  padding: 15px 25px;
+  border-radius: 15px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  flex-wrap: wrap;
+  
+}
+
+.listingIcon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.listingIcon p {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #333;
+}
+
+/* --- Navigation Buttons --- */
+.listingNav button {
+  background-color: transparent;
+  border: 1px solid #ddd;
+  color: #555;
+  font-weight: 500;
+  padding: 8px 25px;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: 0.3s ;
+  margin: 5px;
+}
+.host-listing-main h2{
+    display: none;
+}
+.listingNav button:hover {
+  border-color: #31326F;
+  color: #31326F;
+}
+
+.listingNav button:last-child {
+  background-color: #404179;
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  font-size: 1em;
+  border-radius: 50px;
+}
+
+.listingNav button:last-child:hover {
+  background-color: #31326F;
+  box-shadow: 0 0 10px 5px #4a4bab61;
+
+  
+}
+
+/* --- Listings Section --- */
+.listings-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 25px;
+  margin: 10px;
+  margin-top: 30px;
+}
+
+.listing-item {
+  background: #fff;
+  border-radius: 15px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+/* --- Active / Selected Filter --- */
+.listingNav button.active {
+  background-color: #111282;
+  color: #fff;
+  border: 1px solid #111282;
+  transform: scale(1.1);
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+}
+
+
+.listing-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+}
+
+.listing-item img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+}
+
+.listing-item p {
+  margin: 6px 15px;
+  font-size: 0.95rem;
+  color: #444;
+}
+
+.listing-item p:first-of-type {
+  margin-top: 12px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #222;
+}
+
+/* --- Listing Actions --- */
+.listing-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12px 15px 18px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+}
+
+.listing-actions button {
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #555;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rating-listing {
+  color: yellow;
+  display: flex;
+  align-items: center;
+  justify-content: right;
+  gap: 5px;
+}
+
+.listing-actions button:hover {
+  color: #ff385c;
+}
+
+.listing-actions button:nth-child(3):hover {
+  color: #d9534f;
+}
+
+/* === Responsive Design === */
+
+/* Tablets (≤1024px) */
+@media (max-width: 1024px) {
+  .listingNav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+    padding: 20px;
+  }
+
+  .listingIcon p {
+    font-size: 1.1rem;
+  }
+
+  .listingNav button {
+    padding: 8px 18px;
+    font-size: 0.95rem;
+  }
+
+  .listings-group {
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .listing-item img {
+    height: 180px;
+  }
+}
+
+/* Mobile (≤768px) */
+@media (max-width: 768px) {
+    .host-listing-main h2{
+        display: block;
+    font-size: 1.9em;
+    text-align: center;
+}
+  .listingNav {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .listingIcon {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .listingNav button {
+    width: 100%;
+    text-align: center;
+    padding: 10px;
+    border-radius: 8px;
+  }
+
+  .listings-group {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .listing-item img {
+    height: 180px;
+  }
+
+  .listing-item p {
+    font-size: 0.9rem;
+  }
+
+  .listing-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .listing-actions button {
+    font-size: 0.85rem;
+  }
+}
+
+/* Small Phones (≤480px) */
+@media (max-width: 480px) {
+  .listingNav {
+    padding: 12px;
+  }
+
+  .listingIcon p {
+    font-size: 1rem;
+  }
+
+  .listingNav button {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+  }
+
+  .listing-item img {
+    height: 160px;
+  }
+
+  .listings-group {
+    gap: 15px;
+  }
+
+  .listing-item p {
+    margin: 5px 10px;
+    font-size: 0.85rem;
+  }
+
+  .listing-actions {
+    padding: 6px 10px;
+  }
+
+  .rating-listing {
+    justify-content: flex-start;
+  }
+}

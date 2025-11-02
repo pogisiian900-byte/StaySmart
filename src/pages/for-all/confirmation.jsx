@@ -3,36 +3,44 @@ import { db } from '../../config/firebase.js'
 import { setDoc, doc } from 'firebase/firestore'
 import { auth } from '../../config/firebase'
 import { useNavigate } from 'react-router-dom'
-import {
-  createUserWithEmailAndPassword,
-  sendEmailVerification
-} from 'firebase/auth'
+import { createUserWithEmailAndPassword } from 'firebase/auth'
+import emailjs from 'emailjs-com'
 import secureMail from '/static/secureMail.webp'
 
 const ConfirmationModal = ({ formData, onPrev }) => {
   const navigate = useNavigate()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [user, setUser] = useState(null)
   const [emailSent, setEmailSent] = useState(false)
+  const [createdUser, setCreatedUser] = useState(null)
   const resendDialogRef = useRef(null)
 
-  // ✅ Create account + send verification link
+  // ✅ Create user + send EmailJS confirmation
   const handleSendVerification = async () => {
     try {
       setIsSubmitting(true)
 
+      await emailjs.send(
+        'service_endhho9', // ✅ your EmailJS Service ID
+        'template_q3raiys', // ✅ your EmailJS Template ID
+        templateParams,
+        'xFGnrqT_ZhFhJ5Y0n' // ✅ your EmailJS Public Key
+      )
+
+      setEmailSent(true)
+      alert('Verification email sent successfully!')
+      
       // ✅ Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         formData.emailAddress,
         formData.password
       )
-      const createdUser = userCredential.user
-      setUser(createdUser)
+      const user = userCredential.user
+      setCreatedUser(user)
 
       // ✅ Save user info in Firestore
-      await setDoc(doc(db, 'Users', createdUser.uid), {
-        uid: createdUser.uid,
+      await setDoc(doc(db, 'Users', user.uid), {
+        uid: user.uid,
         firstName: formData.firstName,
         lastName: formData.lastName,
         middleName: formData.middleName,
@@ -49,28 +57,24 @@ const ConfirmationModal = ({ formData, onPrev }) => {
 
       // ✅ Create Host record if applicable
       if (formData.role === 'host') {
-        await setDoc(doc(db, 'Host', createdUser.uid), {
-          userId: createdUser.uid
-        })
+        await setDoc(doc(db, 'Host', user.uid), { userId: user.uid })
       }
 
-      // ✅ Send email verification
-      const actionCodeSettings = {
-        url:
+      // ✅ Send custom EmailJS verification
+      const templateParams = {
+        to_name: `${formData.firstName} ${formData.lastName}`,
+        to_email: formData.emailAddress,
+        verify_link:
           formData.role === 'host'
-            ? `http://localhost:5173/getStarted/${createdUser.uid}`
-            : `http://localhost:5173/guest/${createdUser.uid}`,
-        handleCodeInApp: true
+            ? `http://localhost:5173/getStarted/${user.uid}`
+            : `http://localhost:5173/guest/${user.uid}`
       }
 
-      await sendEmailVerification(createdUser, actionCodeSettings)
-
-      setEmailSent(true)
-      alert('Account created! Verification link sent to your email.')
+      
     } catch (error) {
-      console.error('Error creating account:', error)
+      console.error('Error sending email:', error)
       if (error.code === 'auth/email-already-in-use') {
-        alert('This email is already registered. Try logging in instead.')
+        alert('This email is already registered. Please try logging in instead.')
       } else {
         alert('Something went wrong. Please try again.')
       }
@@ -79,28 +83,34 @@ const ConfirmationModal = ({ formData, onPrev }) => {
     }
   }
 
-  // ✅ Resend verification link
+  // ✅ Resend verification email
   const handleResendCode = async () => {
     try {
-      if (!user) {
-        alert('Please create your account first before resending.')
+      if (!createdUser) {
+        alert('Please send the first verification email before resending.')
         return
       }
 
-      const actionCodeSettings = {
-        url:
+      const templateParams = {
+        to_name: `${formData.firstName} ${formData.lastName}`,
+        to_email: formData.emailAddress,
+        verify_link:
           formData.role === 'host'
-            ? `http://localhost:5173/getStarted/${user.uid}`
-            : `http://localhost:5173/guest/${user.uid}`,
-        handleCodeInApp: true
+            ? `http://localhost:5173/getStarted/${createdUser.uid}`
+            : `http://localhost:5173/guest/${createdUser.uid}`
       }
 
-      await sendEmailVerification(user, actionCodeSettings)
-      console.log('Resent verification email to:', user.email)
+      await emailjs.send(
+        'service_endhho9',
+        'template_q3raiys',
+        templateParams,
+        'xFGnrqT_ZhFhJ5Y0n'
+      )
+
       resendDialogRef.current?.showModal()
     } catch (error) {
-      console.error('Resend error:', error)
-      alert('Failed to resend verification email.')
+      console.error('Error resending verification email:', error)
+      alert('Failed to resend verification email. Please try again.')
     }
   }
 
@@ -109,30 +119,26 @@ const ConfirmationModal = ({ formData, onPrev }) => {
   return (
     <>
       <div className="confrimation-registration">
-       
-        {!emailSent ?(
-          
-         <div className="back-group-verify">
-          <button onClick={onPrev} className="confrimation-registration-Goback">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m12 19-7-7 7-7" />
-              <path d="M19 12H5" />
-            </svg>
-          </button>
-        </div>):
-        (<>
-        </>)
-        } 
+        {!emailSent && (
+          <div className="back-group-verify">
+            <button onClick={onPrev} className="confrimation-registration-Goback">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m12 19-7-7 7-7" />
+                <path d="M19 12H5" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         <div className="confrimation-registration-content">
           <h1>Please verify {formData.emailAddress || 'your email'}</h1>
@@ -143,7 +149,6 @@ const ConfirmationModal = ({ formData, onPrev }) => {
               : 'Click the button below to send a verification link to your email.'}
           </p>
 
-          {/* ✅ Conditional rendering */}
           {!emailSent ? (
             <button
               type="button"
@@ -174,7 +179,7 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         </div>
       </div>
 
-      {/* ✅ Dialog modal */}
+      {/* ✅ Dialog modal for confirmation */}
       <dialog ref={resendDialogRef} className="resend-dialog">
         <div className="resend-dialog-content">
           <svg
@@ -188,10 +193,6 @@ const ConfirmationModal = ({ formData, onPrev }) => {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path
-              d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1
-              c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
-            />
             <path d="m9 12 2 2 4-4" />
           </svg>
           <h3>Verification Email Sent</h3>

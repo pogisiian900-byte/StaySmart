@@ -12,7 +12,7 @@ const Services = ({ serviceData, loading }) => {
       ) : serviceData && serviceData.length > 0 ? (
         <SlideshowWheel data={serviceData} useCase={"Services around your area:"} />
       ) : (
-        <p style={{ textAlign: "center" }}>No room listings found.</p>
+        <p style={{ textAlign: "center" }}>No Service listings found.</p>
       )}
     </div>
     </div>

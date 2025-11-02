@@ -161,9 +161,9 @@ function Host_Navigation({ hostId, userData }) {
               </button>
             </div>
 
-            <button>🔍 Search</button>
-            <button>🔔 Notifications</button>
-            <button>💬 Messages</button>
+
+
+          <button onClick={() => navigate(`/host/${hostId}/messages`)}>💬 Messages</button>
             <button>⚙️ Account Settings</button>
             <button onClick={handleLogout}>🚪 Logout</button>
           </div>
