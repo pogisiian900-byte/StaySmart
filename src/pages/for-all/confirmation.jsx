@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react'
 import { db } from '../../config/firebase.js'
 import { setDoc, doc } from 'firebase/firestore'
-import { auth } from '../../config/firebase'
+import { auth, app } from '../../config/firebase' // 🟩 Make sure `app` is exported from your firebase.js
+import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth' // 🟩 Import getAuth + signOut
 import { useNavigate } from 'react-router-dom'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
 import emailjs from 'emailjs-com'
 import secureMail from '/static/secureMail.webp'
 
@@ -19,19 +19,32 @@ const ConfirmationModal = ({ formData, onPrev }) => {
     try {
       setIsSubmitting(true)
 
+      // 🟩 Define templateParams BEFORE using it
+      const templateParams = {
+        to_name: `${formData.firstName} ${formData.lastName}`,
+        to_email: formData.emailAddress,
+        verify_link:
+          formData.role === 'host'
+            ? `https://staysmartlisting.netlify.app/getStarted`
+            : `https://staysmartlisting.netlify.app/guest`
+      }
+
       await emailjs.send(
-        'service_endhho9', // ✅ your EmailJS Service ID
-        'template_q3raiys', // ✅ your EmailJS Template ID
+        'service_endhho9',
+        'template_q3raiys',
         templateParams,
-        'xFGnrqT_ZhFhJ5Y0n' // ✅ your EmailJS Public Key
+        'xFGnrqT_ZhFhJ5Y0n'
       )
 
       setEmailSent(true)
       alert('Verification email sent successfully!')
-      
-      // ✅ Create user in Firebase Auth
+
+      // 🟩 Create a temporary auth instance (isolated)
+      const tempAuth = getAuth(app)
+
+      // 🟩 Create user WITHOUT affecting main auth session
       const userCredential = await createUserWithEmailAndPassword(
-        auth,
+        tempAuth,
         formData.emailAddress,
         formData.password
       )
@@ -60,17 +73,26 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         await setDoc(doc(db, 'Host', user.uid), { userId: user.uid })
       }
 
-      // ✅ Send custom EmailJS verification
-      const templateParams = {
+      // 🟩 Send EmailJS verification with actual user UID link
+      const verifyTemplateParams = {
         to_name: `${formData.firstName} ${formData.lastName}`,
         to_email: formData.emailAddress,
         verify_link:
           formData.role === 'host'
-            ? `http://localhost:5173/getStarted/${user.uid}`
-            : `http://localhost:5173/guest/${user.uid}`
+            ? `https://staysmartlisting.netlify.app/getStarted/${user.uid}`
+            : `https://staysmartlisting.netlify.app/guest/${user.uid}`
       }
 
-      
+      await emailjs.send(
+        'service_endhho9',
+        'template_q3raiys',
+        verifyTemplateParams,
+        'xFGnrqT_ZhFhJ5Y0n'
+      )
+
+      // 🟩 Sign out immediately so Firebase doesn’t auto-log in
+      await signOut(tempAuth)
+
     } catch (error) {
       console.error('Error sending email:', error)
       if (error.code === 'auth/email-already-in-use') {
@@ -96,8 +118,8 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         to_email: formData.emailAddress,
         verify_link:
           formData.role === 'host'
-            ? `http://localhost:5173/getStarted/${createdUser.uid}`
-            : `http://localhost:5173/guest/${createdUser.uid}`
+            ? `https://staysmartlisting.netlify.app/getStarted/${createdUser.uid}`
+            : `https://staysmartlisting.netlify.app/guest/${createdUser.uid}`
       }
 
       await emailjs.send(
