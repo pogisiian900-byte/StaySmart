@@ -1,0 +1,330 @@
+.convo-list-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  min-height: calc(100vh - 100px);
+  font-family: "Nata Sans", sans-serif;
+}
+
+/* Header */
+.convo-list-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e4e6eb;
+}
+
+.convo-back-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: #f0f2f5;
+  color: #31326F;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.convo-back-btn:hover {
+  background: linear-gradient(135deg, #31326F 0%, #637AB9 100%);
+  color: white;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(49, 50, 111, 0.2);
+}
+
+.convo-back-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.convo-header-content {
+  flex: 1;
+}
+
+.convo-header-content h1 {
+  margin: 0 0 8px 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #31326F;
+}
+
+.convo-header-content p {
+  margin: 0;
+  font-size: 1rem;
+  color: #717171;
+}
+
+/* Loading State */
+.convo-list-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 16px;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e4e6eb;
+  border-top-color: #31326F;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.convo-list-loading p {
+  color: #717171;
+  font-size: 0.9375rem;
+}
+
+/* Empty State */
+.convo-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 16px;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.convo-list-empty svg {
+  width: 80px;
+  height: 80px;
+  color: #cbd5e1;
+  margin-bottom: 8px;
+}
+
+.convo-list-empty h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #31326F;
+}
+
+.convo-list-empty p {
+  margin: 0;
+  font-size: 1rem;
+  color: #717171;
+  max-width: 400px;
+}
+
+/* Conversation List */
+.convo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.convo-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 16px;
+  border: 2px solid #e4e6eb;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.convo-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(135deg, #31326F 0%, #637AB9 100%);
+  transform: scaleY(0);
+  transition: transform 0.3s ease;
+}
+
+.convo-item:hover {
+  border-color: #31326F;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(49, 50, 111, 0.15);
+}
+
+.convo-item:hover::before {
+  transform: scaleY(1);
+}
+
+/* Avatar */
+.convo-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #31326F 0%, #637AB9 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(49, 50, 111, 0.2);
+}
+
+/* Content */
+.convo-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.convo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.convo-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #31326F;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.convo-time {
+  font-size: 0.8125rem;
+  color: #717171;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.convo-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.convo-last-message {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: #717171;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.convo-badge {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #637AB9 0%, #31326F 100%);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Arrow */
+.convo-arrow {
+  color: #cbd5e1;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.convo-arrow svg {
+  width: 20px;
+  height: 20px;
+}
+
+.convo-item:hover .convo-arrow {
+  color: #31326F;
+  transform: translateX(4px);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .convo-list-container {
+    padding: 16px;
+  }
+
+  .convo-back-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .convo-back-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .convo-header-content h1 {
+    font-size: 1.5rem;
+  }
+
+  .convo-item {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .convo-avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 1.125rem;
+  }
+
+  .convo-header h3 {
+    font-size: 1rem;
+  }
+
+  .convo-last-message {
+    font-size: 0.875rem;
+  }
+
+  .convo-badge {
+    font-size: 0.6875rem;
+    padding: 3px 8px;
+  }
+
+  .convo-preview {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .convo-list-container {
+    padding: 12px;
+  }
+
+  .convo-item {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .convo-avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
+  }
+
+  .convo-arrow {
+    display: none;
+  }
+}

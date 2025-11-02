@@ -5,6 +5,7 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { auth, db } from "../../config/firebase";
 import Footer from "../../components/Footer";
+import Loading from "../../components/Loading";
 
 const GuestMainLogged = () => {
   const { guestId } = useParams();
@@ -49,8 +50,8 @@ const GuestMainLogged = () => {
     fetchListings();
   }, []);
 
-  if (loading) return <p>Loading...</p>;
-  if (role && role !== "guest") return <p>Access denied.</p>;
+  if (loading) return <Loading fullScreen message="Loading your dashboard..." />;
+  if (role && role !== "guest") return <Loading fullScreen message="Access denied." />;
 
   // 🔹 Navigate to selected listing page
   const handleSelectListing = (listingId) => {

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../../config/firebase";
 import nothing from "/static/no photo.webp";
+import Loading from "../../components/Loading";
 
 const ViewListing = () => {
   const { hostId, listingId } = useParams();
@@ -133,9 +134,9 @@ const confirmUpdate = async () => {
 }, [listingId]);
 
 
-  if (loading) return <p>⏳ Loading listing details...</p>;
+  if (loading) return <Loading fullScreen message="Loading listing details..." />;
   if (!selectedListing)
-    return <p>❌ Listing not found. It may have been removed.</p>;
+    return <Loading fullScreen message="Listing not found. It may have been removed." />;
 
   // ✅ Cloudinary Upload
   const uploadImageToCloudinary = async (file) => {

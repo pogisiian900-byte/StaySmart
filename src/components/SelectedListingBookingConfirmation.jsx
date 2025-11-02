@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase'; 
 import '../pages/guest/guest-bookingConfirmation.css';
+import Loading from '../components/Loading';
 
 const SelectedListingBookingConfirmation = () => {
   const { listingId, guestId } = useParams();
@@ -15,7 +16,7 @@ const SelectedListingBookingConfirmation = () => {
   const [message, setMessage] = useState('');
 
   if (!bookingData) {
-    return <p>No booking data found. Please go back and select again.</p>;
+    return <Loading fullScreen message="No booking data found. Please go back and select again." />;
   }
 
   const { listing, checkIn, checkOut, guestCounts } = bookingData;
@@ -69,7 +70,7 @@ const SelectedListingBookingConfirmation = () => {
   };
 
   if (loadingGuest) {
-    return <p>Loading guest information...</p>;
+    return <Loading fullScreen message="Loading guest information..." />;
   }
 
   return (

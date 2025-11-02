@@ -18,6 +18,7 @@ import clock2 from "/static/selectionsIcon/clock.png";
 import meeting from "/static/selectionsIcon/land-plot.png";
 import category from "/static/selectionsIcon/sticker.png";
 import { createOrGetConversation } from "../pages/for-all/messages/createOrGetConversation";
+import Loading from "./Loading";
 const SelectListingItem = () => {
   const { listingId } = useParams();
   const [selectedListing, setSelectedListing] = useState(null);
@@ -174,8 +175,8 @@ useEffect(() => {
     }
   };
 
-  if (loading) return <p>⏳ Loading listing details...</p>;
-  if (!selectedListing) return <p>❌ Listing not found.</p>;
+  if (loading) return <Loading fullScreen message="Loading listing details..." />;
+  if (!selectedListing) return <Loading fullScreen message="Listing not found." />;
 
   const ListingHeader = () => (
     <div className="listing-header">
@@ -356,7 +357,7 @@ const handleAddGuest = (key) => {
       </button>
     </>
   ) : (
-    <p>Loading host info...</p>
+    <Loading message="Loading host info..." size="small" />
   )}
 </div>
 

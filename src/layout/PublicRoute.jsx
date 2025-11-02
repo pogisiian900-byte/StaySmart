@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../config/firebase";
 import { doc, getDoc } from "firebase/firestore";
+import Loading from "../components/Loading";
 
 const PublicRoute = ({ children }) => {
   const [user, loading] = useAuthState(auth);
@@ -31,7 +32,7 @@ const PublicRoute = ({ children }) => {
     fetchRole();
   }, [user]);
 
-  if (loading || fetching) return <p>Loading...</p>;
+  if (loading || fetching) return <Loading fullScreen message="Loading..." />;
 
   if (user) {
     if (role === "host") return <Navigate to={`/host/${user.uid}`} replace />;

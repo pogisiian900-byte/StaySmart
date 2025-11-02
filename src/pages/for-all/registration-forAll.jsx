@@ -24,7 +24,8 @@ const Registration_forAll = () => {
           zipCode: 0,
           role: "",
           uid: "",
-          favourites: []
+          favourites: [],
+          profilePicture: ""
       });
       const nextStep = () =>{ 
         setStep((prev) => prev + 1);

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import SlideshowWheel from "./sildeshowWheel";
 import { useParams, useNavigate } from "react-router-dom";
 import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
-import { db } from "../config/firebase"; // adjust path if needed
+import { db } from "../config/firebase";
+import Loading from "./Loading";
 
 const Home = ({ roomData, loading }) => {
   const { guestId } = useParams();
@@ -57,7 +58,7 @@ const Home = ({ roomData, loading }) => {
   return (
     <div className="home-container">
       {loading ? (
-        <p className="loading-text">Loading listings...</p>
+        <Loading message="Loading listings..." />
       ) : roomData && roomData.length > 0 ? (
         <>
           <SlideshowWheel data={roomData} useCase={"Stay around your area:"} />

@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../layout/AuthContext';
+import Loading from '../../components/Loading';
 
 const LoginPage_Host = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -37,7 +38,7 @@ const LoginPage_Host = () => {
     fetchRole();
   }, [user]);
 
-  if (loading || checkingRole) return <p>Loading...</p>;
+  if (loading || checkingRole) return <Loading fullScreen message="Loading..." />;
 
   // ✅ If already logged in, redirect by role
   if (user && role) {

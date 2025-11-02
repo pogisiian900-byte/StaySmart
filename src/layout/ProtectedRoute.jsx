@@ -3,6 +3,7 @@ import { useAuth } from "../layout/AuthContext";
 import { db } from "../config/firebase";
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
+import Loading from "../components/Loading";
 
 function ProtectedRoute({ children, allowedRole }) {
   const { user, loading } = useAuth();
@@ -31,7 +32,7 @@ function ProtectedRoute({ children, allowedRole }) {
     fetchUserRole();
   }, [user]);
 
-  if (loading || fetching) return <p>Loading...</p>;
+  if (loading || fetching) return <Loading fullScreen message="Loading..." />;
 
   if (!user) {
     return <Navigate to="/" replace state={{ from: location }} />;

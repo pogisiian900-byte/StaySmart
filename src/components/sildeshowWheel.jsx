@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
 import { db } from "../config/firebase";
-import '../pages/guest/guest-main-slide.css'
+import '../pages/guest/guest-main-slide.css';
+import Loading from './Loading';
 function SlideshowWheel({ data, useCase }) {
     const navigate = useNavigate();
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -62,7 +63,7 @@ function SlideshowWheel({ data, useCase }) {
   };
 
   if (!data || data.length === 0) {
-    return <p>Loading listings...</p>;
+    return <Loading message="Loading listings..." />;
   }
 
   const prevSlide = () => {

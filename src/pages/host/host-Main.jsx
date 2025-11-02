@@ -6,6 +6,7 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "../../config/firebase";
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
+import Loading from "../../components/Loading";
 
 function HostMain() {
   const { hostId } = useParams();
@@ -32,15 +33,14 @@ function HostMain() {
     fetchUser();
   }, [user]);
 
-  if (loading) return <p>Loading...</p>;
-
+  if (loading) return <Loading fullScreen message="Loading your dashboard..." />;
 
   if (role !== "host") {
-    return <p>Access denied</p>; // or redirect
+    return <Loading fullScreen message="Access denied" />;
   }
 
   if (user && hostId !== user.uid) {
-    return <p>Unauthorized: Wrong account</p>;
+    return <Loading fullScreen message="Unauthorized: Wrong account" />;
   }
 
 

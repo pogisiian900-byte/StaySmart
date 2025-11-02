@@ -1,12 +1,12 @@
 import React, { useState, useRef } from 'react'
 import { db } from '../../config/firebase.js'
 import { setDoc, doc } from 'firebase/firestore'
-import { auth, app } from '../../config/firebase' // 🟩 Make sure `app` is exported from your firebase.js
-import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth' // 🟩 Import getAuth + signOut
+import { auth } from '../../config/firebase'
 import { useNavigate } from 'react-router-dom'
+import { createUserWithEmailAndPassword } from 'firebase/auth'
 import emailjs from 'emailjs-com'
 import secureMail from '/static/secureMail.webp'
-
+import '../for-all/HostRegis.css'
 const ConfirmationModal = ({ formData, onPrev }) => {
   const navigate = useNavigate()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -19,38 +19,26 @@ const ConfirmationModal = ({ formData, onPrev }) => {
     try {
       setIsSubmitting(true)
 
-      // 🟩 Define templateParams BEFORE using it
-      const templateParams = {
-        to_name: `${formData.firstName} ${formData.lastName}`,
-        to_email: formData.emailAddress,
-        verify_link:
-          formData.role === 'host'
-            ? `https://staysmartlisting.netlify.app/getStarted`
-            : `https://staysmartlisting.netlify.app/guest`
-      }
-
       await emailjs.send(
-        'service_endhho9',
-        'template_q3raiys',
+        'service_endhho9', // ✅ your EmailJS Service ID
+        'template_q3raiys', // ✅ your EmailJS Template ID
         templateParams,
-        'xFGnrqT_ZhFhJ5Y0n'
+        'xFGnrqT_ZhFhJ5Y0n' // ✅ your EmailJS Public Key
       )
 
       setEmailSent(true)
       alert('Verification email sent successfully!')
-
-      // 🟩 Create a temporary auth instance (isolated)
-      const tempAuth = getAuth(app)
-
-      // 🟩 Create user WITHOUT affecting main auth session
+      
+      // ✅ Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(
-        tempAuth,
+        auth,
         formData.emailAddress,
         formData.password
       )
       const user = userCredential.user
       setCreatedUser(user)
 
+      
       // ✅ Save user info in Firestore
       await setDoc(doc(db, 'Users', user.uid), {
         uid: user.uid,
@@ -65,7 +53,9 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         city: formData.city,
         province: formData.province,
         street: formData.street,
-        zipCode: formData.zipCode
+        zipCode: formData.zipCode,
+        profilePicture: formData.profilePicture || null,
+        favourites: []
       })
 
       // ✅ Create Host record if applicable
@@ -73,8 +63,8 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         await setDoc(doc(db, 'Host', user.uid), { userId: user.uid })
       }
 
-      // 🟩 Send EmailJS verification with actual user UID link
-      const verifyTemplateParams = {
+      // ✅ Send custom EmailJS verification
+      const templateParams = {
         to_name: `${formData.firstName} ${formData.lastName}`,
         to_email: formData.emailAddress,
         verify_link:
@@ -83,16 +73,7 @@ const ConfirmationModal = ({ formData, onPrev }) => {
             : `https://staysmartlisting.netlify.app/guest/${user.uid}`
       }
 
-      await emailjs.send(
-        'service_endhho9',
-        'template_q3raiys',
-        verifyTemplateParams,
-        'xFGnrqT_ZhFhJ5Y0n'
-      )
-
-      // 🟩 Sign out immediately so Firebase doesn’t auto-log in
-      await signOut(tempAuth)
-
+      
     } catch (error) {
       console.error('Error sending email:', error)
       if (error.code === 'auth/email-already-in-use') {
@@ -102,6 +83,7 @@ const ConfirmationModal = ({ formData, onPrev }) => {
       }
     } finally {
       setIsSubmitting(false)
+      
     }
   }
 
@@ -119,7 +101,7 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         verify_link:
           formData.role === 'host'
             ? `https://staysmartlisting.netlify.app/getStarted/${createdUser.uid}`
-            : `https://staysmartlisting.netlify.app/guest/${createdUser.uid}`
+            : `https://staysmartlisting.netlify.app//guest/${createdUser.uid}`
       }
 
       await emailjs.send(

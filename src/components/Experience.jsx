@@ -3,6 +3,7 @@ import photography from '/static/services Photos/photography.png'
 import servicesData from '../data.json'
 import '../pages/guest/guest.css'
 import SlideshowWheel from './sildeshowWheel'
+import Loading from './Loading'
 const Experience = ({experienceData,loading}) => {
   const yourLocation = "Manila"; // is important for the number of available services their.
  
@@ -23,9 +24,7 @@ const Experience = ({experienceData,loading}) => {
 
           <div style={{ padding: "20px" }}>
       {loading ? (
-        <p style={{ textAlign: "center", fontSize: "18px" }}>
-          Loading listings...
-        </p>
+        <Loading message="Loading listings..." />
       ) : experienceData && experienceData.length > 0 ? (
         <SlideshowWheel data={experienceData} useCase={"Experience new things around your area:"} />
       ) : (
