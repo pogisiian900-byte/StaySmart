@@ -291,11 +291,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 5px;
 }
 
 .guest-info {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  text-align: left;
 }
 
 .guest-label {
@@ -402,6 +405,510 @@
 .selected-addFav:hover svg{
   stroke: red;
 }
+
+/* --- RATING SECTION --- */
+.commentSection {
+  width: 100%;
+  margin-top: 40px;
+  padding: 35px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.rating-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.rating-section-header h3 {
+  font-size: 1.8rem;
+  color: #222;
+  font-weight: 700;
+  margin: 0;
+}
+
+.overall-rating-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.overall-rating-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #393b92;
+}
+
+.overall-rating-summary .star-rating-display {
+  margin: 0;
+}
+
+.total-reviews {
+  color: #666;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+/* Rating Distribution */
+.rating-distribution {
+  background: #f9f9f9;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  border: 1px solid #e0e0e0;
+}
+
+.rating-distribution h4 {
+  font-size: 1.2rem;
+  color: #222;
+  margin: 0 0 15px 0;
+  font-weight: 600;
+}
+
+.rating-distribution-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rating-distribution-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rating-star-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 50px;
+}
+
+.star-number {
+  font-weight: 600;
+  color: #222;
+  font-size: 0.95rem;
+  width: 20px;
+  text-align: right;
+}
+
+.rating-star-label svg {
+  flex-shrink: 0;
+}
+
+.rating-bar-container {
+  flex: 1;
+  height: 24px;
+  background: #e8e8e8;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.rating-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #FFD700 0%, #ffed4e 100%);
+  border-radius: 12px;
+  transition: width 0.5s ease;
+  min-width: 2px;
+}
+
+.rating-count {
+  min-width: 40px;
+  text-align: right;
+  font-weight: 600;
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.commentSection h4 {
+  font-size: 1.3rem;
+  margin: 20px 0 15px;
+  color: #333;
+  font-weight: 600;
+}
+
+/* Star Rating Display */
+.star-rating-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.star-rating-display svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.rating-value {
+  margin-left: 8px;
+  font-weight: 600;
+  color: #555;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+/* Star Rating Input */
+.star-rating-input {
+  margin: 20px 0;
+}
+
+.stars-container {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.star-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.star-button:hover {
+  transform: scale(1.15);
+}
+
+.star-button .star-icon {
+  transition: all 0.2s;
+}
+
+.rating-feedback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rating-text {
+  color: #666;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.rating-emoji {
+  font-size: 1.2rem;
+}
+
+/* Rating Form Container */
+.rating-form-container {
+  margin-bottom: 35px;
+}
+
+.show-rating-form-btn {
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #393b92 0%, #5758a2 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s;
+}
+
+.show-rating-form-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(57, 59, 146, 0.3);
+}
+
+.show-rating-form-btn svg {
+  fill: currentColor;
+}
+
+/* Rating Form */
+.rating-form {
+  background: #f9f9f9;
+  padding: 25px;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+}
+
+.rating-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.rating-form-header h4 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: #222;
+}
+
+.close-form-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.close-form-btn:hover {
+  background: #e0e0e0;
+  color: #222;
+}
+
+.rating-input-section,
+.comment-input-section {
+  margin-bottom: 20px;
+}
+
+.rating-label,
+.comment-label {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+}
+
+.char-count {
+  text-align: right;
+  color: #999;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* Reviews Section */
+.reviews-section {
+  margin-top: 30px;
+}
+
+.reviews-title {
+  font-size: 1.4rem;
+  color: #222;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.reviews-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.review-item {
+  background: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #e8e8e8;
+  transition: all 0.2s;
+}
+
+.review-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-color: #d0d0d0;
+}
+
+.review-item.your-review {
+  border: 2px solid #393b92;
+  background: #f8f9ff;
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.reviewer-info {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+}
+
+.reviewer-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #393b92 0%, #5758a2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.reviewer-details {
+  flex: 1;
+}
+
+.reviewer-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #222;
+  font-size: 1rem;
+  margin-bottom: 6px;
+}
+
+.your-badge {
+  background: #393b92;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.review-rating {
+  margin-top: 4px;
+}
+
+.review-rating .star-rating-display {
+  margin-left: 0;
+}
+
+.review-date {
+  color: #888;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.review-comment {
+  color: #555;
+  line-height: 1.7;
+  font-size: 0.95rem;
+  margin-top: 12px;
+  white-space: pre-wrap;
+}
+
+.review-comment.empty {
+  color: #999;
+  font-style: italic;
+}
+
+.no-reviews {
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
+}
+
+.no-reviews p {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.login-prompt-card {
+  background: #f9f9f9;
+  padding: 25px;
+  border-radius: 12px;
+  text-align: center;
+  margin-bottom: 30px;
+  border: 1px solid #e0e0e0;
+}
+
+.login-prompt-card p {
+  color: #666;
+  margin: 0 0 15px 0;
+  font-size: 0.95rem;
+}
+
+.login-btn {
+  background: #393b92;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.login-btn:hover {
+  background: #4b4dc3;
+  transform: translateY(-1px);
+}
+
+.rating-comment-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-family: "Inter", sans-serif;
+  font-size: 0.95rem;
+  resize: vertical;
+  min-height: 120px;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.rating-comment-input:focus {
+  outline: none;
+  border-color: #393b92;
+  box-shadow: 0 0 0 3px rgba(57, 59, 146, 0.1);
+}
+
+.submit-rating-btn {
+  background: linear-gradient(135deg, #393b92 0%, #5758a2 100%);
+  color: white;
+  font-weight: 600;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.submit-rating-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(57, 59, 146, 0.3);
+}
+
+.submit-rating-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* -------------------
    🔹 RESPONSIVE STYLES
 -------------------- */
@@ -494,5 +1001,100 @@
   .guest-section input {
     font-size: 13px;
     padding: 8px;
+  }
+
+  .commentSection {
+    padding: 20px 15px;
+  }
+
+  .commentSection h3 {
+    font-size: 1.5rem;
+  }
+
+  .commentSection h4 {
+    font-size: 1.1rem;
+  }
+
+  .rating-item {
+    padding: 15px;
+  }
+
+  .rating-item-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .star-rating-display {
+    gap: 2px;
+  }
+
+  .star-rating-display svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .stars-container {
+    gap: 4px;
+  }
+
+  .star-button svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .rating-form {
+    padding: 15px;
+  }
+
+  .rating-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .overall-rating-summary {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .reviewer-info {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .review-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .rating-distribution {
+    padding: 15px;
+  }
+
+  .rating-distribution-item {
+    gap: 8px;
+  }
+
+  .rating-star-label {
+    min-width: 45px;
+  }
+
+  .star-number {
+    font-size: 0.85rem;
+    width: 18px;
+  }
+
+  .rating-star-label svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .rating-count {
+    min-width: 30px;
+    font-size: 0.85rem;
+  }
+
+  .rating-bar-container {
+    height: 20px;
   }
 }

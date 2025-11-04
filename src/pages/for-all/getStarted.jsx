@@ -57,45 +57,59 @@ const GetStarted = () => {
   return (
     <div className="getStartedHost">
       <div className="getStartedCard">
-        <img src={getStartedICON} alt="Get Started" className="getStartedImage" />
+        <div className="getStartedImage-container">
+          <img src={getStartedICON} alt="Get Started" className="getStartedImage" />
+        </div>
 
         <div className="getStartedCard-groupText">
           {checking ? (
             <>
+              <div className="loading-spinner-container">
+                <div className="loading-spinner"></div>
+              </div>
               <h1>Checking your verification status...</h1>
-              <p>Please wait a moment.</p>
+              <p>Please wait a moment while we verify your account.</p>
             </>
           ) : isVerified ? (
             <>
+              <div className="success-icon">✨</div>
               <h1>
-                Turn Your Business Idea <br /> Into Reality 🚀
+                Turn Your Business Idea <br /> Into Reality
               </h1>
-              <p>
-                Start setting up your hosting services and welcome your first guests.
+              <p className="subtitle-text">
+                Start setting up your hosting services and welcome your first guests. 
+                It only takes a few minutes to get started!
               </p>
 
               <div className="getStartedButtons">
                 <button className="btn-start" onClick={handleStarted}>
-                  Start Now
+                  <span>Start Now</span>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
                 </button>
                 <button className="btn-later" onClick={handleLater}>
-                  Maybe Later
+                  <span>Maybe Later</span>
                 </button>
               </div>
             </>
           ) : (
             <>
-              <h1>Please verify your email 🔒</h1>
-              <p>
-                Check your inbox for the verification link we sent.
+              <div className="verification-icon">🔒</div>
+              <h1>Please verify your email</h1>
+              <p className="subtitle-text">
+                We've sent a verification link to your email address.
                 <br />
-                Once verified, reload this page to continue.
+                Click the link to verify your account, then return here to continue.
               </p>
               <button
                 className="btn-start"
                 onClick={() => window.location.reload()}
               >
-                I’ve Verified My Email
+                <span>I've Verified My Email</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
               </button>
             </>
           )}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { db, auth} from "../config/firebase";
 import { useNavigate, useParams } from "react-router-dom";
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, Timestamp } from "firebase/firestore";
+import "../pages/guest/guest-viewListing.css";
 
 import nothing from "/static/no photo.webp";
 import pin from "/static/selectionsIcon/map-pinned.png";
@@ -34,6 +35,12 @@ const SelectListingItem = () => {
   const [favourites, setFavourites] = useState([]); // ✅ stores user's favourite IDs
   const [favLoading, setFavLoading] = useState(false); // for button spinner
   const guestId = auth.currentUser?.uid;
+  const [userRating, setUserRating] = useState(0); // User's current rating input (0-5)
+  const [hoveredRating, setHoveredRating] = useState(0); // For hover effect
+  const [comment, setComment] = useState(""); // User's comment
+  const [ratingLoading, setRatingLoading] = useState(false); // Loading state for rating submission
+  const [userRatings, setUserRatings] = useState([]); // All ratings for this listing
+  const [showRatingForm, setShowRatingForm] = useState(false); // Toggle rating form
  
 
     const handleMessageHost = async (hostId, guestId) => {
@@ -95,7 +102,32 @@ const handleCheckInChange = (e) => {
           ? data.serviceType
           : [data.serviceType];
 
-        setSelectedListing({ id: docSnap.id, ...data, serviceType });
+        // Ensure rating is a number (handle if it's stored as string or null)
+        const ratingValue = typeof data.rating === 'number' ? data.rating : 
+                          (data.rating ? parseFloat(data.rating) || 0 : 0);
+        
+        setSelectedListing({ 
+          id: docSnap.id, 
+          ...data, 
+          serviceType,
+          rating: ratingValue // Ensure rating is always a number
+        });
+        
+        // Fetch ratings if they exist
+        if (data.ratings && Array.isArray(data.ratings)) {
+          setUserRatings(data.ratings);
+          
+          // Pre-populate user's existing rating if they have one
+          if (guestId) {
+            const userRatingData = data.ratings.find(r => r.userId === guestId);
+            if (userRatingData) {
+              setUserRating(Number(userRatingData.rating) || 0);
+              setComment(userRatingData.comment || "");
+            }
+          }
+        } else {
+          setUserRatings([]);
+        }
 
         // ✅ Fetch host info using hostId
         if (data.hostId) {
@@ -140,6 +172,23 @@ useEffect(() => {
 
     fetchFavourites();
   }, [guestId]);
+
+  // Update form when user logs in/out or when ratings change
+  useEffect(() => {
+    if (guestId && userRatings.length > 0) {
+      const userRatingData = userRatings.find(r => r.userId === guestId);
+      if (userRatingData) {
+        setUserRating(userRatingData.rating);
+        setComment(userRatingData.comment || "");
+      } else {
+        setUserRating(0);
+        setComment("");
+      }
+    } else {
+      setUserRating(0);
+      setComment("");
+    }
+  }, [guestId, userRatings]);
 
   // ✅ toggleFavourite (your function integrated)
   const toggleFavourite = async (listingId, e) => {
@@ -198,7 +247,38 @@ useEffect(() => {
       </button>
       <div className="rightBookingGroup">
 
-      <button className="shareListing-view">
+      <button 
+        className="shareListing-view"
+        onClick={async () => {
+          const shareUrl = `https://staysmartlisting.netlify.app/guest/${guestId}/view-listing/${listingId}`;
+          const shareTitle = selectedListing?.title || 'Check out this listing';
+          const shareText = `${selectedListing?.description?.slice(0, 100)}...` || 'Found this great place on StaySmart!';
+          
+          try {
+            if (navigator.share) {
+              await navigator.share({
+                title: shareTitle,
+                text: shareText,
+                url: shareUrl
+              });
+            } else {
+              // Fallback for browsers that don't support Web Share API
+              await navigator.clipboard.writeText(shareUrl);
+              alert('Link copied to clipboard! You can now share it anywhere.');
+            }
+          } catch (error) {
+            console.error('Error sharing:', error);
+            // Fallback to copy to clipboard
+            try {
+              await navigator.clipboard.writeText(shareUrl);
+              alert('Link copied to clipboard! You can now share it anywhere.');
+            } catch (err) {
+              console.error('Error copying to clipboard:', err);
+              alert('Could not share at this time. Please try again.');
+            }
+          }
+        }}
+      >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="24"
@@ -265,6 +345,178 @@ useEffect(() => {
     </p>
   );
 
+  // Star Rating Display Component
+  const StarRatingDisplay = ({ rating = 0 }) => {
+    // Ensure rating is always a number
+    const numRating = typeof rating === 'number' ? rating : (parseFloat(rating) || 0);
+    const clampedRating = Math.max(0, Math.min(5, numRating)); // Clamp between 0-5
+    
+    const fullStars = Math.floor(clampedRating);
+    const hasHalfStar = clampedRating % 1 >= 0.5;
+    const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+    const gradientId = `half-star-${clampedRating}-${Math.random().toString(36).substr(2, 9)}`;
+
+    return (
+      <div className="star-rating-display">
+        {[...Array(fullStars)].map((_, i) => (
+          <svg
+            key={`full-${i}`}
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="#FFD700"
+            stroke="#FFD700"
+            strokeWidth="2"
+          >
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        ))}
+        {hasHalfStar && (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill={`url(#${gradientId})`}
+            stroke="#FFD700"
+            strokeWidth="2"
+          >
+            <defs>
+              <linearGradient id={gradientId}>
+                <stop offset="50%" stopColor="#FFD700" />
+                <stop offset="50%" stopColor="transparent" />
+              </linearGradient>
+            </defs>
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        )}
+        {[...Array(emptyStars)].map((_, i) => (
+          <svg
+            key={`empty-${i}`}
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#ddd"
+            strokeWidth="2"
+          >
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        ))}
+        <span className="rating-value">{clampedRating > 0 ? clampedRating.toFixed(1) : "No rating"}</span>
+      </div>
+    );
+  };
+
+  // Interactive Star Rating Input Component
+  const StarRatingInput = () => {
+    return (
+      <div className="star-rating-input">
+        <div className="stars-container">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <button
+              key={star}
+              type="button"
+              className="star-button"
+              onMouseEnter={() => setHoveredRating(star)}
+              onMouseLeave={() => setHoveredRating(0)}
+              onClick={() => setUserRating(star)}
+              aria-label={`Rate ${star} star${star !== 1 ? 's' : ''}`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill={star <= (hoveredRating || userRating) ? "#FFD700" : "none"}
+                stroke={star <= (hoveredRating || userRating) ? "#FFD700" : "#ddd"}
+                strokeWidth="2"
+                className="star-icon"
+              >
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            </button>
+          ))}
+        </div>
+        {userRating > 0 && (
+          <div className="rating-feedback">
+            <span className="rating-text">You selected {userRating} star{userRating !== 1 ? 's' : ''}</span>
+            <span className="rating-emoji">
+              {userRating === 5 ? '😍' : userRating === 4 ? '😊' : userRating === 3 ? '🙂' : userRating === 2 ? '😐' : '😞'}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Submit rating function
+  const handleSubmitRating = async () => {
+    if (!guestId) {
+      alert("Please log in to submit a rating");
+      return;
+    }
+
+    if (userRating === 0) {
+      alert("Please select a rating");
+      return;
+    }
+
+    setRatingLoading(true);
+    try {
+      const listingRef = doc(db, "Listings", listingId);
+      
+      // Check if user has already rated this listing
+      const existingRatingIndex = userRatings.findIndex(r => r.userId === guestId);
+      
+      const newRatingData = {
+        userId: guestId,
+        rating: userRating,
+        comment: comment.trim() || "",
+        timestamp: Timestamp.now(), // Use Timestamp.now() instead of serverTimestamp() for arrays
+        userName: auth.currentUser?.displayName || auth.currentUser?.email || "Anonymous"
+      };
+
+      let updatedRatings;
+      if (existingRatingIndex >= 0) {
+        // Update existing rating
+        updatedRatings = [...userRatings];
+        updatedRatings[existingRatingIndex] = newRatingData;
+      } else {
+        // Add new rating
+        updatedRatings = [...userRatings, newRatingData];
+      }
+
+      // Calculate average rating (ensure all ratings are numbers)
+      const averageRating = updatedRatings.length > 0 
+        ? Number((updatedRatings.reduce((sum, r) => sum + Number(r.rating || 0), 0) / updatedRatings.length).toFixed(1))
+        : Number(selectedListing.rating || 0); // Preserve existing rating if no ratings
+
+      // Update Firebase - rating must be a number
+      await updateDoc(listingRef, {
+        ratings: updatedRatings,
+        rating: Number(averageRating) // Explicitly ensure it's a number
+      });
+
+      // Update local state
+      setUserRatings(updatedRatings);
+      setSelectedListing(prev => ({ ...prev, rating: Number(averageRating) }));
+      setUserRating(0);
+      setComment("");
+      setHoveredRating(0);
+      setShowRatingForm(false);
+
+      alert("✅ Review submitted successfully!");
+    } catch (error) {
+      console.error("Error submitting rating:", error);
+      alert("❌ Failed to submit rating. Please try again.");
+    } finally {
+      setRatingLoading(false);
+    }
+  };
+
   const { serviceType } = selectedListing;
 
   const totalGuests = guestCounts.adults + guestCounts.children;
@@ -304,7 +556,38 @@ const handleAddGuest = (key) => {
           <path d="M19 12H5" />
         </svg>
       </button>
-      <button className="shareListing-view-mobile">
+      <button 
+        className="shareListing-view-mobile"
+        onClick={async () => {
+          const shareUrl = `${window.location.origin}/guest/${guestId}/view-listing/${listingId}`;
+          const shareTitle = selectedListing?.title || 'Check out this listing';
+          const shareText = `${selectedListing?.description?.slice(0, 100)}...` || 'Found this great place on StaySmart!';
+          
+          try {
+            if (navigator.share) {
+              await navigator.share({
+                title: shareTitle,
+                text: shareText,
+                url: shareUrl
+              });
+            } else {
+              // Fallback for browsers that don't support Web Share API
+              await navigator.clipboard.writeText(shareUrl);
+              alert('Link copied to clipboard! You can now share it anywhere.');
+            }
+          } catch (error) {
+            console.error('Error sharing:', error);
+            // Fallback to copy to clipboard
+            try {
+              await navigator.clipboard.writeText(shareUrl);
+              alert('Link copied to clipboard! You can now share it anywhere.');
+            } catch (err) {
+              console.error('Error copying to clipboard:', err);
+              alert('Could not share at this time. Please try again.');
+            }
+          }
+        }}
+      >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="24"
@@ -417,7 +700,11 @@ const handleAddGuest = (key) => {
             <InfoBlock src={pin} label="Location" value={selectedListing.location} />
             <InfoBlock src={price} label="Price" value={`₱${selectedListing.price}`} />
             <InfoBlock src={group} label="Maximum Guest" value={selectedListing.maxGuests} />
-            <InfoBlock src={rating} label="Rating" value={selectedListing.rating} />
+            <div className="infoBlockText">
+              <img src={rating} alt="" width={"35px"} />
+              <strong>Rating:</strong>
+              <StarRatingDisplay rating={selectedListing.rating || 0} />
+            </div>
           </div>
           <hr />
 
@@ -538,7 +825,7 @@ const handleAddGuest = (key) => {
       <div key={guest.key} className="guest-row">
         <div className="guest-info">
           <p className="guest-label">{guest.label}</p>
-          <p className="guest-desc">{guest.desc}</p>
+          <span className="guest-desc">{guest.desc}</span>
         </div>
         <div className="counter-controls">
           <button className="counter-button"
@@ -595,8 +882,181 @@ const handleAddGuest = (key) => {
         </div>
       </div>
       <div className="commentSection">
-        <p>rate here</p>
-        <p>coMMENTS</p>
+        <div className="rating-section-header">
+          <h3>Reviews & Ratings</h3>
+          <div className="overall-rating-summary">
+            <div className="overall-rating-value">
+              {selectedListing.rating ? Number(selectedListing.rating).toFixed(1) : "0.0"}
+            </div>
+            <StarRatingDisplay rating={Number(selectedListing.rating) || 0} />
+            <span className="total-reviews">({userRatings.length} {userRatings.length === 1 ? 'review' : 'reviews'})</span>
+          </div>
+        </div>
+
+        {/* Rating Distribution List */}
+        {userRatings.length > 0 && (
+          <div className="rating-distribution">
+            <h4>Rating Breakdown</h4>
+            <div className="rating-distribution-list">
+              {[5, 4, 3, 2, 1].map((starValue) => {
+                const count = userRatings.filter(r => Number(r.rating) === starValue).length;
+                const percentage = userRatings.length > 0 ? (count / userRatings.length) * 100 : 0;
+                
+                return (
+                  <div key={starValue} className="rating-distribution-item">
+                    <div className="rating-star-label">
+                      <span className="star-number">{starValue}</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#FFD700" stroke="#FFD700" strokeWidth="2">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                    </div>
+                    <div className="rating-bar-container">
+                      <div 
+                        className="rating-bar-fill" 
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
+                    <div className="rating-count">
+                      <span>{count}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        
+        {/* Rating Input Form - Always show if logged in */}
+        {guestId && (
+          <div className="rating-form-container">
+            {!showRatingForm ? (
+              <button 
+                className="show-rating-form-btn"
+                onClick={() => setShowRatingForm(true)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                {userRatings.find(r => r.userId === guestId) ? "Update Your Review" : "Write a Review"}
+              </button>
+            ) : (
+              <div className="rating-form">
+                <div className="rating-form-header">
+                  <h4>{userRatings.find(r => r.userId === guestId) ? "Update Your Review" : "Write a Review"}</h4>
+                  <button 
+                    className="close-form-btn"
+                    onClick={() => {
+                      setShowRatingForm(false);
+                      if (!userRatings.find(r => r.userId === guestId)) {
+                        setUserRating(0);
+                        setComment("");
+                      }
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+                
+                <div className="rating-input-section">
+                  <label className="rating-label">Your Rating *</label>
+                  <StarRatingInput />
+                </div>
+
+                <div className="comment-input-section">
+                  <label className="comment-label">Your Review</label>
+                  <textarea
+                    className="rating-comment-input"
+                    placeholder="Share your experience with this listing. What did you like? What could be improved?"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    rows="5"
+                    maxLength={500}
+                  />
+                  <div className="char-count">{comment.length}/500</div>
+                </div>
+
+                <button
+                  className="submit-rating-btn"
+                  onClick={handleSubmitRating}
+                  disabled={ratingLoading || userRating === 0}
+                >
+                  {ratingLoading ? (
+                    <>
+                      <span className="spinner"></span>
+                      Submitting...
+                    </>
+                  ) : (
+                    userRatings.find(r => r.userId === guestId) ? "Update Review" : "Submit Review"
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!guestId && (
+          <div className="login-prompt-card">
+            <p>Please log in to write a review</p>
+            <button className="login-btn" onClick={() => navigate("/login")}>
+              Log In
+            </button>
+          </div>
+        )}
+
+        {/* Existing Ratings Display */}
+        <div className="reviews-section">
+          {userRatings.length > 0 ? (
+            <>
+              <h4 className="reviews-title">All Reviews</h4>
+              <div className="reviews-list">
+                {userRatings.map((ratingData, index) => {
+                  const isCurrentUser = ratingData.userId === guestId;
+                  return (
+                    <div key={index} className={`review-item ${isCurrentUser ? 'your-review' : ''}`}>
+                      <div className="review-header">
+                        <div className="reviewer-info">
+                          <div className="reviewer-avatar">
+                            {(ratingData.userName || "A")[0].toUpperCase()}
+                          </div>
+                          <div className="reviewer-details">
+                            <strong className="reviewer-name">
+                              {ratingData.userName || "Anonymous"}
+                              {isCurrentUser && <span className="your-badge">You</span>}
+                            </strong>
+                            <div className="review-rating">
+                              <StarRatingDisplay rating={Number(ratingData.rating) || 0} />
+                            </div>
+                          </div>
+                        </div>
+                        {ratingData.timestamp && (
+                          <span className="review-date">
+                            {new Date(ratingData.timestamp?.seconds * 1000 || Date.now()).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </span>
+                        )}
+                      </div>
+                      {ratingData.comment ? (
+                        <p className="review-comment">{ratingData.comment}</p>
+                      ) : (
+                        <p className="review-comment empty">No comment provided</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="no-reviews">
+              <p>No reviews yet. Be the first to review this listing!</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

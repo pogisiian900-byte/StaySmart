@@ -1,7 +1,16 @@
 import React, { useState } from "react";
-import './calendar.css'
+import "./calendar.css";
 
-const ContinuousCalendar = ({ onClick }) => {
+const ContinuousCalendar = ({
+  onClick,
+  bookedDates = {},        // { dayNumber: "Status" } or { "2025-11-03": "Booked" } if you prefer date keys
+  monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ],
+  filters = [],             // e.g. ["Listing of Booked", "Name of Service"]
+  showFilters = false       // toggle dropdown visibility
+}) => {
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
@@ -9,18 +18,6 @@ const ContinuousCalendar = ({ onClick }) => {
 
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-
-  const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-
-  const bookedDates = {
-    3: "Booked",
-    7: "Available",
-    10: "Maintenance",
-    15: "Full",
-  };
 
   const handlePrev = () => {
     if (currentMonth === 0) {
@@ -49,7 +46,6 @@ const ContinuousCalendar = ({ onClick }) => {
     if (onClick) onClick(day, currentMonth + 1, currentYear);
   };
 
-  // Get the weekday for a given day in the current month
   const getDayOfWeek = (day) => new Date(currentYear, currentMonth, day).getDay();
 
   return (
@@ -61,21 +57,28 @@ const ContinuousCalendar = ({ onClick }) => {
           <button onClick={handleToday} className="today-btn">Today</button>
         </div>
 
-        <h2>{months[currentMonth]} {currentYear}</h2>
+        <h2>{monthNames[currentMonth]} {currentYear}</h2>
 
-        <div className="calendar-filters">
-          <select>
-            <option value="">Listing of Booked</option>
-            <option value="">Name of Service</option>
-          </select>
-          <button>Open Search</button>
-          <button>Edit</button>
-        </div>
+        {showFilters && (
+          <div className="calendar-filters">
+            <select>
+              <option value="">Select Filter</option>
+              {filters.map((f, idx) => (
+                <option key={idx} value={f}>{f}</option>
+              ))}
+            </select>
+            <button>Search</button>
+            <button>Edit</button>
+          </div>
+        )}
       </div>
 
       <div className="calendar-grid">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
-          <div key={d} className={`calendar-day-header ${hoveredDayIndex === i ? "hovered-column" : ""}`}>
+          <div
+            key={d}
+            className={`calendar-day-header ${hoveredDayIndex === i ? "hovered-column" : ""}`}
+          >
             {d}
           </div>
         ))}
@@ -92,7 +95,9 @@ const ContinuousCalendar = ({ onClick }) => {
             currentMonth === today.getMonth() &&
             currentYear === today.getFullYear();
 
-          const status = bookedDates[day];
+          // You can pass bookedDates as { day: "Status" } or by date string key
+          const key = `${currentYear}-${currentMonth + 1}-${day}`;
+          const status = bookedDates[day] || bookedDates[key];
 
           return (
             <div

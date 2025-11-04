@@ -227,11 +227,28 @@ const HostSetupForm = () => {
   return (
     <div className="hostSetupForm">
       <div className="formContainer">
+        {/* Progress Indicator */}
+        <div className="form-progress">
+          <div className="progress-steps">
+            <div className={`progress-step ${step >= 1 ? 'active' : ''}`}>
+              <div className="step-number">1</div>
+              <div className="step-label">Basic Info</div>
+            </div>
+            <div className={`progress-line ${step >= 2 ? 'active' : ''}`}></div>
+            <div className={`progress-step ${step >= 2 ? 'active' : ''}`}>
+              <div className="step-number">2</div>
+              <div className="step-label">Details</div>
+            </div>
+          </div>
+        </div>
 
         {/* ---------- STEP 1 ---------- */}
         {step === 1 && (
           <form onSubmit={nextStep} className="formStep">
-            <h2 className="form-main-title">Basic Information</h2>
+            <div className="form-header">
+              <h2 className="form-main-title">Basic Information</h2>
+              <p className="form-subtitle">Let's start with the essential details about your listing</p>
+            </div>
 
             <label className="form-label">
               Title:
@@ -411,7 +428,10 @@ const HostSetupForm = () => {
         {/* ---------- STEP 2 ---------- */}
 {step === 2 && (
   <div className="formStep">
-            <h2 className="form-main-title">Listing Information</h2>
+            <div className="form-header">
+              <h2 className="form-main-title">Listing Information</h2>
+              <p className="form-subtitle">Add specific details about your {serviceType}</p>
+            </div>
 
    <form onSubmit={handleSubmit}>
   {serviceType.includes("room") && (

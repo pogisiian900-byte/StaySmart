@@ -19,17 +19,7 @@ const ConfirmationModal = ({ formData, onPrev }) => {
     try {
       setIsSubmitting(true)
 
-      await emailjs.send(
-        'service_endhho9', // ✅ your EmailJS Service ID
-        'template_q3raiys', // ✅ your EmailJS Template ID
-        templateParams,
-        'xFGnrqT_ZhFhJ5Y0n' // ✅ your EmailJS Public Key
-      )
-
-      setEmailSent(true)
-      alert('Verification email sent successfully!')
-      
-      // ✅ Create user in Firebase Auth
+      // ✅ Create user in Firebase Auth first (needed for verification link)
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         formData.emailAddress,
@@ -63,7 +53,7 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         await setDoc(doc(db, 'Host', user.uid), { userId: user.uid })
       }
 
-      // ✅ Send custom EmailJS verification
+      // ✅ Send custom EmailJS verification (after user is created so we have user.uid)
       const templateParams = {
         to_name: `${formData.firstName} ${formData.lastName}`,
         to_email: formData.emailAddress,
@@ -73,6 +63,15 @@ const ConfirmationModal = ({ formData, onPrev }) => {
             : `https://staysmartlisting.netlify.app/guest/${user.uid}`
       }
 
+      await emailjs.send(
+        'service_endhho9', // ✅ your EmailJS Service ID
+        'template_q3raiys', // ✅ your EmailJS Template ID
+        templateParams,
+        'xFGnrqT_ZhFhJ5Y0n' // ✅ your EmailJS Public Key
+      )
+
+      setEmailSent(true)
+      alert('Verification email sent successfully!')
       
     } catch (error) {
       console.error('Error sending email:', error)
@@ -122,10 +121,14 @@ const ConfirmationModal = ({ formData, onPrev }) => {
 
   return (
     <>
-      <div className="confrimation-registration">
+      <div className="confirmation-registration">
         {!emailSent && (
           <div className="back-group-verify">
-            <button onClick={onPrev} className="confrimation-registration-Goback">
+            <button 
+              onClick={onPrev} 
+              className="confirmation-back-btn"
+              aria-label="Go back"
+            >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="20"
@@ -144,41 +147,119 @@ const ConfirmationModal = ({ formData, onPrev }) => {
           </div>
         )}
 
-        <div className="confrimation-registration-content">
-          <h1>Please verify {formData.emailAddress || 'your email'}</h1>
-          <img className="verifyIcon" src={secureMail} alt="Secure Mail Icon" />
-          <p>
-            {emailSent
-              ? 'We sent a verification link to your email. You can resend if needed.'
-              : 'Click the button below to send a verification link to your email.'}
-          </p>
+        <div className="confirmation-content">
+          <div className="confirmation-icon-wrapper">
+            <div className={`confirmation-icon-container ${emailSent ? 'email-sent' : ''}`}>
+              {emailSent ? (
+                <div className="checkmark-wrapper">
+                  <svg
+                    className="checkmark"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                </div>
+              ) : (
+                <img className="verify-icon" src={secureMail} alt="Secure Mail Icon" />
+              )}
+            </div>
+          </div>
 
-          {!emailSent ? (
-            <button
-              type="button"
-              onClick={handleSendVerification}
-              disabled={isSubmitting}
-              className="resendButton-verify"
-            >
-              {isSubmitting ? 'Sending...' : 'Send Verification Email'}
-            </button>
-          ) : (
-            <>
+          <div className="confirmation-text">
+            <h1 className="confirmation-title">
+              {emailSent 
+                ? `Check your email!` 
+                : `Verify your email address`}
+            </h1>
+            <p className="confirmation-subtitle">
+              {emailSent ? (
+                <>
+                  We've sent a verification link to{' '}
+                  <span className="email-highlight">{formData.emailAddress}</span>
+                  <br />
+                  Click the link in the email to complete your registration.
+                </>
+              ) : (
+                <>
+                  Please verify <span className="email-highlight">{formData.emailAddress || 'your email'}</span> to continue.
+                  <br />
+                  We'll send you a verification link shortly.
+                </>
+              )}
+            </p>
+          </div>
+
+          <div className="confirmation-actions">
+            {!emailSent ? (
               <button
                 type="button"
-                onClick={handleResendCode}
-                className="resendButton-verify"
+                onClick={handleSendVerification}
+                disabled={isSubmitting}
+                className="confirmation-primary-btn"
               >
-                Resend Email
+                {isSubmitting ? (
+                  <>
+                    <svg className="spinner" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" strokeDasharray="32" strokeDashoffset="32">
+                        <animate attributeName="stroke-dasharray" dur="2s" values="0 32;16 16;0 32;0 32" repeatCount="indefinite"/>
+                        <animate attributeName="stroke-dashoffset" dur="2s" values="0;-16;-32;-32" repeatCount="indefinite"/>
+                      </circle>
+                    </svg>
+                    Sending verification email...
+                  </>
+                ) : (
+                  <>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                      <polyline points="22,6 12,13 2,6" />
+                    </svg>
+                    Send Verification Email
+                  </>
+                )}
               </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  className="confirmation-secondary-btn"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="23 4 23 10 17 10" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                  Resend Email
+                </button>
 
-              <button
-                onClick={() => navigate('/')}
-                className="confrimation-registration-createButton"
-              >
-                Done
-              </button>
-            </>
+                <button
+                  onClick={() => navigate('/')}
+                  className="confirmation-primary-btn confirmation-done-btn"
+                >
+                  Continue to Home
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
+                </button>
+              </>
+            )}
+          </div>
+
+          {emailSent && (
+            <div className="confirmation-help-text">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4" />
+                <path d="M12 8h.01" />
+              </svg>
+              <span>Didn't receive the email? Check your spam folder or try resending.</span>
+            </div>
           )}
         </div>
       </div>
@@ -186,25 +267,27 @@ const ConfirmationModal = ({ formData, onPrev }) => {
       {/* ✅ Dialog modal for confirmation */}
       <dialog ref={resendDialogRef} className="resend-dialog">
         <div className="resend-dialog-content">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="50"
-            height="50"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m9 12 2 2 4-4" />
-          </svg>
-          <h3>Verification Email Sent</h3>
+          <div className="dialog-icon-success">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          </div>
+          <h3>Email Sent Successfully!</h3>
           <p>
-            A new verification link has been sent to <b>{formData.emailAddress}</b>
+            A new verification link has been sent to{' '}
+            <strong>{formData.emailAddress}</strong>
           </p>
           <button onClick={handleCloseDialog} className="resend-dialog-ok">
-            OK
+            Got it
           </button>
         </div>
       </dialog>

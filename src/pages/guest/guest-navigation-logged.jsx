@@ -7,7 +7,7 @@ import Work from "/static/work.png"
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../../config/firebase";
 import { signOut } from "firebase/auth";
-import { collectionGroup, getDocs } from "firebase/firestore";
+import { collectionGroup, getDocs, collection, query, where, onSnapshot, writeBatch, doc } from "firebase/firestore";
 
 // Component imports
 import HomePages from "../../components/Home.jsx";
@@ -22,6 +22,9 @@ function Guest_Logged_Navigation({ userData }) {
   const [open, setOpen] = useState(false);
   const [selectedNav, setSelectedNav] = useState("home");
   const [loading, setLoading] = useState(true);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
   const [allListing, setAllListing] = useState({
     room: [],
     service: [],
@@ -36,6 +39,8 @@ function Guest_Logged_Navigation({ userData }) {
   const navigate = useNavigate();
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
+  const notificationRef = useRef(null);
+  const notificationButtonRef = useRef(null);
 
   // ✅ Logout Handler
   const handleLogout = async () => {
@@ -95,11 +100,55 @@ function Guest_Logged_Navigation({ userData }) {
       ) {
         setOpen(false);
       }
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target) &&
+        !notificationButtonRef.current.contains(event.target)
+      ) {
+        setNotificationOpen(false);
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // ✅ Subscribe to notifications for guest
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const q = query(collection(db, 'Notifications'), where('recipientId', '==', uid));
+    const unsub = onSnapshot(q, (snap) => {
+      const list = [];
+      snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+      list.sort((a, b) => {
+        const toMs = (v) => (v?.toMillis ? v.toMillis() : (v?.seconds ? v.seconds * 1000 : (Date.parse(v) || 0)));
+        return toMs(b.createdAt) - toMs(a.createdAt);
+      });
+      setNotifications(list);
+      setUnreadCount(list.filter(n => !n.read).length);
+    });
+    return () => unsub();
+  }, []);
+
+  // ✅ Mark all as read when opened
+  const handleNotificationClick = async () => {
+    const nextOpen = !notificationOpen;
+    setNotificationOpen(nextOpen);
+    if (nextOpen) {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+      const unread = notifications.filter(n => !n.read);
+      if (unread.length === 0) return;
+      try {
+        const batch = writeBatch(db);
+        unread.forEach((n) => batch.update(doc(db, 'Notifications', n.id), { read: true }));
+        await batch.commit();
+      } catch (e) {
+        console.error('Failed to mark notifications read', e);
+      }
+    }
+  };
 
   // ✅ Render pages dynamically
   const renderPage = () => {
@@ -154,8 +203,49 @@ function Guest_Logged_Navigation({ userData }) {
           </a>
         </div>
 
-        {/* Hamburger Button */}
+        {/* Search, Notification & Hamburger Buttons */}
         <div className="host-hamburgDiv">
+          {/* Search Button */}
+          <button
+            onClick={() => {
+              const guestId = auth.currentUser?.uid;
+              if (guestId) navigate(`/guest/${guestId}/search`);
+            }}
+            className="search-button"
+            aria-label="Search"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+          </button>
+
+          {/* Notification Button */}
+          <button
+            ref={notificationButtonRef}
+            onClick={handleNotificationClick}
+            className="notification-button"
+            aria-label="Notifications"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+            )}
+          </button>
+
+          {/* Hamburger Button */}
           <button
             ref={buttonRef}
             onClick={() => setOpen(!open)}
@@ -166,6 +256,49 @@ function Guest_Logged_Navigation({ userData }) {
             </svg>
           </button>
         </div>
+
+        {/* Notification Dropdown */}
+        {notificationOpen && (
+          <div className="notification-dropdown" ref={notificationRef}>
+            <div className="notification-header">
+              <h3>Notifications</h3>
+              {unreadCount > 0 && (
+                <button className="mark-all-read">Mark all as read</button>
+              )}
+            </div>
+            <div className="notification-list">
+              {notifications.length === 0 && (
+                <div className="notification-item">
+                  <div className="notification-icon">🔔</div>
+                  <div className="notification-content">
+                    <p className="notification-title">No notifications</p>
+                    <p className="notification-time">—</p>
+                  </div>
+                </div>
+              )}
+              {notifications.map((n) => (
+                <div key={n.id} className={`notification-item ${!n.read ? 'unread' : ''}`} onClick={() => {
+                  if (n.conversationId) {
+                    const guestId = auth.currentUser?.uid;
+                    if (guestId) navigate(`/guest/${guestId}/chat/${n.conversationId}`)
+                  }
+                }}>
+                  <div className="notification-icon">🔔</div>
+                  <div className="notification-content">
+                    <p className="notification-title">{n.title || 'Notification'}</p>
+                    <p className="notification-time">{n.createdAt ? new Date(n.createdAt?.toMillis ? n.createdAt.toMillis() : n.createdAt).toLocaleString() : ''}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="notification-footer">
+              <button className="view-all-notifications" onClick={() => {
+                const guestId = auth.currentUser?.uid;
+                if (guestId) navigate(`/guest/${guestId}/notifications`)
+              }}>View All Notifications</button>
+            </div>
+          </div>
+        )}
 
         {/* Dropdown Menu */}
         {open && (
@@ -180,11 +313,11 @@ function Guest_Logged_Navigation({ userData }) {
               </button>
             </div>
 
-            <button>📅 Bookings</button>
+            <button onClick={() => navigate("bookings")}>📅 Bookings</button>
             <button>❤️ Favorites</button>
             <button onClick={()=> openMessages()}>💬 Messages</button>
             <button>⚙️ Account Settings</button>
-            <button>🔔 Notifications</button>
+            <button onClick={() => { handleNotificationClick(); setOpen(false); }}>🔔 Notifications {unreadCount > 0 && `(${unreadCount})`}</button>
             <button>📞 Help</button>
             <button onClick={handleLogout}>🚪 Logout</button>
           </div>

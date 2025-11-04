@@ -8,6 +8,7 @@ import '../src/pages/host/host-dashboard.css'
 import '../src/pages/host/host-listing.css'
 import '../src/pages/guest/guest-viewListing.css'
 import '../src/pages/guest/guest-bookingConfirmation.css'
+import './pages/booking-responsive.css'
 import RootLayout from './layout/RootLayout.jsx';
 import ProtectedRoute from './layout/ProtectedRoute.jsx';
 import PublicRoute from './layout/PublicRoute.jsx';
@@ -31,6 +32,11 @@ import SelectedListingBookingConfirmation from './components/SelectedListingBook
 import ChatPage from './pages/for-all/messages/ChatPage.jsx';
 import GuestConvoList from './pages/for-all/messages/GuestConvoList.jsx';
 import HostConvoList from './pages/for-all/messages/HostConvoList.jsx';
+import GuestBookings from './pages/guest/GuestBookings.jsx';
+import HostBookings from './pages/host/HostBookings.jsx';
+import GuestNotifications from './pages/guest/GuestNotifications.jsx';
+import HostNotifications from './pages/host/HostNotifications.jsx';
+import GuestSearch from './pages/guest/GuestSearch.jsx';
 
 function App() {
   const router = createBrowserRouter(
@@ -61,6 +67,9 @@ function App() {
             <Route path="profile" element={<Profile />} />
             <Route path="listing/:listingId" element={<SelectListingItem />} />
               <Route path="messages" element={<GuestConvoList />} />
+            <Route path="bookings" element={<GuestBookings />} />
+            <Route path="notifications" element={<GuestNotifications />} />
+            <Route path="search" element={<GuestSearch />} />
             {/* ✅ Fix here */}
             <Route
               path="chat/:conversationId"
@@ -110,6 +119,8 @@ function App() {
   <Route path=":hostId/getStarted/:serviceType" element={<HostSetupForm />} />
   <Route path=":hostId/draft/:serviceType/:draftId" element={<HostSetupForm />} />
   <Route path=":hostId/profile" element={<Profile />} />
+  <Route path=":hostId/bookings" element={<HostBookings />} />
+  <Route path=":hostId/notifications" element={<HostNotifications />} />
 
   {/* ✅ Host Messaging Routes */}
   <Route
@@ -132,6 +143,7 @@ function App() {
 
         
 
+  
         <Route path="/admin" element={<Admin_Main />} />
         <Route path="*" element={<Error />} />
       </Route>
