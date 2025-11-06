@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { db, auth} from "../config/firebase";
+import React, { useState, useEffect, useRef } from "react";
+import { db, auth} from "../../config/firebase";
 import { useNavigate, useParams } from "react-router-dom";
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, Timestamp } from "firebase/firestore";
-import "../pages/guest/guest-viewListing.css";
+
 
 import nothing from "/static/no photo.webp";
 import pin from "/static/selectionsIcon/map-pinned.png";
@@ -18,14 +18,15 @@ import clock from "/static/selectionsIcon/clock-fading.png";
 import clock2 from "/static/selectionsIcon/clock.png";
 import meeting from "/static/selectionsIcon/land-plot.png";
 import category from "/static/selectionsIcon/sticker.png";
-import { createOrGetConversation } from "../pages/for-all/messages/createOrGetConversation";
-import Loading from "./Loading";
-const SelectListingItem = () => {
+import Loading from "../../components/Loading";
+import ListingDetailDialog from "../../components/ListingDetailDialog";
+const SharedListing = () => {
   const { listingId } = useParams();
   const [selectedListing, setSelectedListing] = useState(null);
   const [hostOfListing, setHostofListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const loginModalRef = useRef(null);
   const [guestCounts, setGuestCounts] = useState({
   adults: 1,
   children: 0,
@@ -44,6 +45,10 @@ const SelectListingItem = () => {
  
 
     const handleMessageHost = async (hostId, guestId) => {
+      if (!guestId) {
+        loginModalRef.current?.open();
+        return;
+      }
       const conversationId = await createOrGetConversation(hostId, guestId);
       console.log("id used:"+ conversationId)
       navigate(`/guest/${guestId}/chat/${conversationId}`);
@@ -195,7 +200,7 @@ useEffect(() => {
     e.stopPropagation();
 
     if (!guestId) {
-      alert("Please log in to add favourites");
+      loginModalRef.current?.open();
       return;
     }
 
@@ -623,15 +628,15 @@ const handleAddGuest = (key) => {
         style={{ borderRadius: "50%" }}
         onError={(e) => (e.target.src = nothing)}
       />
-        <div className="hostProfile-text">
+        <div>
 
-      <p><strong>Host:</strong> {hostOfListing.firstName || "Unnamed Host"}</p>
-      <p><strong>Phone:</strong> {hostOfListing.phoneNumber || "N/A"}</p>
-      <p><strong>Email:</strong> {hostOfListing.emailAddress || "N/A"}</p>
+      <p className="hostProfile-text"><strong>Host:</strong> {hostOfListing.firstName || "Unnamed Host"}</p>
+      <p className="hostProfile-text"><strong>Phone:</strong> {hostOfListing.phoneNumber || "N/A"}</p>
+      <p className="hostProfile-text"><strong>Email:</strong> {hostOfListing.emailAddress || "N/A"}</p>
         </div>
       </div>
-    
      <button
+    
       className="messageHost"
       onClick={() => handleMessageHost(hostOfListing.id, guestId)}
      >
@@ -864,7 +869,11 @@ const handleAddGuest = (key) => {
 
                 <button
           className="reserve-btn"
-          onClick={() =>
+          onClick={() => {
+            if (!guestId) {
+              loginModalRef.current?.open();
+              return;
+            }
             navigate(`/guest/${guestId}/listing/${listingId}/booking`, {
               state: {
                 listing: selectedListing,
@@ -872,8 +881,8 @@ const handleAddGuest = (key) => {
                 checkOut,
                 guestCounts,
               },
-            })
-          }
+            });
+          }}
         >
           Reserve
         </button>
@@ -1058,8 +1067,9 @@ const handleAddGuest = (key) => {
           )}
         </div>
       </div>
+      <ListingDetailDialog title={"Login First"} content={"Please Login to Access this"} ref={loginModalRef} />
     </div>
   );
 };
 
-export default SelectListingItem;
+export default SharedListing;

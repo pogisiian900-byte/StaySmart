@@ -786,7 +786,7 @@ const handlePayPalCancel = () => {
       {/* Payment Method Dialog */}
       <PayPalScriptProvider 
         options={{ 
-          "client-id": import.meta.env.VITE_PAYPAL_CLIENT_ID || "test",
+          "client-id": import.meta.env.VITE_PAYPAL_CLIENT_ID || "AWzCyB0viVv8_sS4aT309bhLLTMGLBYXexAJmIHkbrmTKp0hswkl1OHImpQDOWBnRncPBd7Us4dkNGbi",
           currency: "PHP",
           intent: "capture"
         }}

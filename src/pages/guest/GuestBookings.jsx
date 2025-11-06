@@ -36,13 +36,22 @@ const GuestBookings = () => {
     const map = {}
     reservations.forEach((r) => {
       if (!r.checkIn || !r.checkOut) return
-      const start = new Date(r.checkIn)
-      const end = new Date(r.checkOut)
+      
+      // Normalize dates to midnight local time using date components
+      const startDate = new Date(r.checkIn)
+      const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
+      
+      const endDate = new Date(r.checkOut)
+      const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
+      // Note: end date is exclusive (check-out day is not included)
+      
       const label = (r.status || '').toString().toLowerCase()
       const statusLabel = label.charAt(0).toUpperCase() + label.slice(1) || 'Booked'
       const score = priority[statusLabel] || 0
       const dayMs = 86400000
-      for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
+      
+      // Loop from check-in to day before check-out (inclusive)
+      for (let t = start.getTime(); t < end.getTime(); t += dayMs) {
         const d = new Date(t)
         const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
         const existing = map[key]
@@ -56,11 +65,21 @@ const GuestBookings = () => {
 
   const filtered = useMemo(() => {
     if (!selectedDate) return reservations
-    const key = selectedDate.toDateString()
+    // Normalize selected date to midnight for comparison using date components
+    const selected = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+    
     return reservations.filter((r) => {
-      const start = new Date(r.checkIn)
-      const end = new Date(r.checkOut)
-      return new Date(key) >= start && new Date(key) <= end
+      if (!r.checkIn || !r.checkOut) return false
+      
+      // Normalize dates to midnight local time using date components
+      const startDate = new Date(r.checkIn)
+      const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
+      
+      const endDate = new Date(r.checkOut)
+      const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
+      // Exclude check-out date (guests check out on this day)
+      
+      return selected >= start && selected < end
     })
   }, [reservations, selectedDate])
 
@@ -115,7 +134,12 @@ const GuestBookings = () => {
       </div>
       <div>
         <h3 style={{ margin: '0 0 12px 0' }}>Calendar</h3>
-        <ContinuousCalendar onClick={handleCalendarClick} bookedDates={bookedDates} />
+        <ContinuousCalendar 
+          onClick={handleCalendarClick} 
+          bookedDates={bookedDates} 
+          selectedDate={selectedDate}
+          onBack={() => navigate(`/guest/${guestId}`)}
+        />
         {selectedDate && (
           <div style={{ marginTop: 8, color: '#666' }}>Selected: {selectedDate.toDateString()}</div>
         )}

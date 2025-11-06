@@ -269,7 +269,7 @@ function Guest_Logged_Navigation({ userData }) {
             <div className="notification-list">
               {notifications.length === 0 && (
                 <div className="notification-item">
-                  <div className="notification-icon">🔔</div>
+                  <div className="notification-icon">🔔 </div>
                   <div className="notification-content">
                     <p className="notification-title">No notifications</p>
                     <p className="notification-time">—</p>
@@ -313,13 +313,12 @@ function Guest_Logged_Navigation({ userData }) {
               </button>
             </div>
 
-            <button onClick={() => navigate("bookings")}>📅 Bookings</button>
-            <button>❤️ Favorites</button>
-            <button onClick={()=> openMessages()}>💬 Messages</button>
-            <button>⚙️ Account Settings</button>
-            <button onClick={() => { handleNotificationClick(); setOpen(false); }}>🔔 Notifications {unreadCount > 0 && `(${unreadCount})`}</button>
-            <button>📞 Help</button>
-            <button onClick={handleLogout}>🚪 Logout</button>
+            <button onClick={() => navigate("bookings")}>Bookings</button>
+            <button onClick={() => { navigate("favourites"); setOpen(false); }}>Favorites</button>
+            <button onClick={()=> openMessages()}>Messages</button>
+            <button>Account Settings</button>
+            <button onClick={() => { handleNotificationClick(); setOpen(false); }}>Notifications {unreadCount > 0 && `(${unreadCount})`}</button>
+            <button onClick={handleLogout}>Logout</button>
           </div>
         )}
       </nav>

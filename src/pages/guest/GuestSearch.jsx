@@ -225,7 +225,7 @@ const GuestSearch = () => {
                 transition: 'transform 0.2s, box-shadow 0.2s',
                 cursor: 'pointer'
               }}
-              onClick={() => navigate(`/guest/${guestId}/view-listing/${listing.id}`)}
+              onClick={() => navigate(`/guest/${guestId}/listing/${listing.id}`)}
             >
               {/* Listing Image */}
               <div style={{ 
@@ -315,4 +315,3 @@ const GuestSearch = () => {
 }
 
 export default GuestSearch
-

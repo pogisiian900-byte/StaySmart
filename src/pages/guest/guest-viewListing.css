@@ -344,36 +344,65 @@
   text-align: center;
   font-size: 1rem;
 }
-.hostProfile{
+.hostProfile {
   display: flex;
-  gap: 1em;
   justify-content: space-between;
-  width: 97%;
-  box-shadow: 0 0 5px 5px rgba(26, 28, 163, 0.278);
-  border-radius: 20px;
-  margin: 10px;
-   padding: 10px;
-}
-.hostProfile-group{
-  display: flex;
-  gap: 1em;
   align-items: center;
+  flex-wrap: wrap; /* allows stacking on small screens */
+  width: 95%;
+  margin: 10px auto;
+  padding: 15px 20px;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(26, 28, 163, 0.2);
+  background-color: #ffffff;
+  transition: box-shadow 0.3s ease;
 }
-.messageHost{
+
+.hostProfile:hover {
+  box-shadow: 0 4px 12px rgba(26, 28, 163, 0.3);
+}
+
+.hostProfile-group {
   display: flex;
-  justify-content: center;
-  padding: 10px;
-  align-self: center;
-  margin: 10px;
+  align-items: center;
+  gap: 1em;
+  flex: 1;
+  min-width: 250px;
+}
+
+.hostProfile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #393b92;
+}
+
+.hostProfile-info p {
+  margin: 3px 0;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.messageHost {
+  padding: 10px 20px;
   border-radius: 50px;
-  background-color: white;
-  transition: 0.3s;
+  border: 2px solid #393b92;
+  background-color: #fff;
+  color: #393b92;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
 }
-.messageHost:hover{
+
+.messageHost:hover {
   background-color: #393b92;
-  color: white;
-  transform: scale(1.1);
+  color: #fff;
+  transform: scale(1.05);
 }
+
+
 .favourite-btn {
   border: none;
   background: transparent;
@@ -948,6 +977,29 @@
 
 /* MOBILE (≤768px) */
 @media (max-width: 768px) {
+    .hostProfile {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    gap: 15px;
+  }
+
+  .hostProfile-group {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .hostProfile-avatar {
+    width: 90px;
+    height: 90px;
+  }
+
+  .messageHost {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+  }
+
   .listing-header {
     align-items: flex-start;
     gap: 10px;

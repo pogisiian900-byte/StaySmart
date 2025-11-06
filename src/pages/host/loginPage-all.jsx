@@ -44,7 +44,7 @@ const LoginPage_Host = () => {
   if (user && role) {
     if (role === 'host') return <Navigate to={`/host/${user.uid}`} replace />;
     if (role === 'guest') return <Navigate to={`/guest/${user.uid}`} replace />;
-    if (role === 'admin') return <Navigate to={`/admin/${user.uid}`} replace />;
+    if (role === 'admin') return <Navigate to="/admin" replace />;
   }
 
   // 🔑 Email login function (allows any role)
@@ -72,7 +72,7 @@ const LoginPage_Host = () => {
       } else if (userData.role === 'guest') {
         navigate(`/guest/${userData.uid}`, { replace: true });
       } else if (userData.role === 'admin') {
-        navigate(`/admin/${userData.uid}`, { replace: true });
+        navigate('/admin', { replace: true });
       } else {
         navigate('/', { replace: true });
       }
@@ -114,13 +114,20 @@ const LoginPage_Host = () => {
         } else if (userData.role === 'guest') {
           navigate(`/guest/${user.uid}`, { replace: true });
         } else if (userData.role === 'admin') {
-          navigate(`/admin/${user.uid}`, { replace: true });
+          navigate('/admin', { replace: true });
         } else {
           navigate('/', { replace: true });
         }
       }
     } catch (error) {
+      // Handle popup closed by user gracefully - don't show error or sign out
+      if (error.code === 'auth/popup-closed-by-user') {
+        // User closed the popup, silently return
+        return;
+      }
+      // For other errors, log and show message
       console.error(error);
+      alert(`❌ Login failed: ${error.message}`);
       await signOut(auth);
     }
   };

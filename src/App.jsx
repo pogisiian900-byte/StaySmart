@@ -37,6 +37,8 @@ import HostBookings from './pages/host/HostBookings.jsx';
 import GuestNotifications from './pages/guest/GuestNotifications.jsx';
 import HostNotifications from './pages/host/HostNotifications.jsx';
 import GuestSearch from './pages/guest/GuestSearch.jsx';
+import GuestFavourites from './pages/guest/GuestFavourites.jsx';
+import SharedListing from './pages/for-all/SharedListing.jsx';
 
 function App() {
   const router = createBrowserRouter(
@@ -55,6 +57,11 @@ function App() {
           }
         />
 
+          <Route  
+          path="/listing/:listingId"
+          element={
+              <SharedListing />
+          }/>
      <Route
             path="/guest/:guestId"
             element={
@@ -68,6 +75,7 @@ function App() {
             <Route path="listing/:listingId" element={<SelectListingItem />} />
               <Route path="messages" element={<GuestConvoList />} />
             <Route path="bookings" element={<GuestBookings />} />
+            <Route path="favourites" element={<GuestFavourites />} />
             <Route path="notifications" element={<GuestNotifications />} />
             <Route path="search" element={<GuestSearch />} />
             {/* ✅ Fix here */}
@@ -144,7 +152,11 @@ function App() {
         
 
   
-        <Route path="/admin" element={<Admin_Main />} />
+        <Route path="/admin" element={
+          <ProtectedRoute allowedRole="admin">
+            <Admin_Main />
+          </ProtectedRoute>
+        } />
         <Route path="*" element={<Error />} />
       </Route>
     )

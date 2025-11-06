@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useParams } from 'react-router-dom'
 import money from '/static/Money.png'
 import calendar from '/static/Calendar.png'
 import UpcomingBookings from './UpcomingBookings'
@@ -6,6 +7,7 @@ import TodaysBooking from './TodaysBooking'
 
 
 const HostDashboard = () => {
+  const { hostId } = useParams()
   const [showBooking, setShowBooking] = useState("today")
 
 
@@ -28,7 +30,7 @@ const HostDashboard = () => {
       </div>
 
       {/* --- Conditional Booking Display --- */}
-      {showBooking === "today" ? <TodaysBooking /> : <UpcomingBookings />}
+      {showBooking === "today" ? <TodaysBooking hostId={hostId} /> : <UpcomingBookings hostId={hostId} />}
 
       <hr className="divider" />
 
