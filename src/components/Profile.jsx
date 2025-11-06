@@ -3,8 +3,7 @@ import me from '/static/no photo.webp'
 import bgBlue from '/static/Bluebg.png'
 import { useNavigate, useParams } from 'react-router-dom'
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { db, storage } from ".././config/firebase";
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db } from ".././config/firebase";
 import "../pages/host/profile-new.css";
 import 'dialog-polyfill/dist/dialog-polyfill.css';
 import dialogPolyfill from 'dialog-polyfill';
@@ -113,24 +112,57 @@ const handleInputChange = (e) => {
   }));
 };
 
+// Cloudinary upload function
+const uploadImageToCloudinary = async (file) => {
+  const uploadPreset = "listing_uploads";
+  const cloudName = "ddckoojwo";
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", uploadPreset);
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || "Upload failed");
+  return data.secure_url;
+};
+
 const handleImageUpload = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    alert('Please select an image file');
+    return;
+  }
+
+  // Validate file size (max 5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Image size must be less than 5MB');
+    return;
+  }
+
   try {
     setIsSaving(true);
-    const userId = hostId || guestId;
-    const storageRef = ref(storage, `profilePictures/${userId}/${file.name}`);
-    await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(storageRef);
+    const url = await uploadImageToCloudinary(file);
     
     setEditedUser(prev => ({
       ...prev,
-      profilePicture: downloadURL
+      profilePicture: url
     }));
+    
+    alert('Profile picture uploaded successfully!');
   } catch (error) {
     console.error('Error uploading image:', error);
-    alert('Failed to upload image. Please try again.');
+    alert(`Failed to upload image: ${error.message || 'Please try again.'}`);
   } finally {
     setIsSaving(false);
   }

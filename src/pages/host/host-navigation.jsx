@@ -256,10 +256,23 @@ function Host_Navigation({ hostId, userData }) {
         {open && (
           <div className="hamburgSelection-host" ref={menuRef}>
             <div className="profileDiv">
-              <svg xmlns="http://www.w3.org/2000/svg" width="35" height="35" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-                <path fillRule="evenodd" d="M8 9a5 5 0 0 0-5 5v1h10v-1a5 5 0 0 0-5-5Z" />
-              </svg>
+              {userData?.profilePicture ? (
+                <img 
+                  src={userData.profilePicture} 
+                  alt="Profile" 
+                  style={{
+                    width: "35px",
+                    height: "35px",
+                    borderRadius: "50%",
+                    objectFit: "cover"
+                  }}
+                />
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="35" height="35" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                  <path fillRule="evenodd" d="M8 9a5 5 0 0 0-5 5v1h10v-1a5 5 0 0 0-5-5Z" />
+                </svg>
+              )}
               <button onClick={() => navigate("profile")}>
                 {userData.firstName || "My Profile"}
               </button>

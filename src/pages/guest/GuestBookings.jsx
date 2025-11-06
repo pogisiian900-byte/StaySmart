@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore'
+import { collection, onSnapshot, orderBy, query, where, updateDoc, doc, serverTimestamp, addDoc } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import ContinuousCalendar from '../../components/ContinuousCalendar'
 import Guest_Logged_Navigation from './guest-navigation-logged'
+import './guest-bookingConfirmation.css'
+import '../booking-responsive.css'
 
 const GuestBookings = () => {
   const { guestId } = useParams()
@@ -12,6 +14,7 @@ const GuestBookings = () => {
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedReservation, setSelectedReservation] = useState(null)
+  const [processingRefund, setProcessingRefund] = useState(false)
 
   useEffect(() => {
     if (!guestId) return
@@ -88,12 +91,115 @@ const GuestBookings = () => {
     setSelectedDate(d)
   }
 
+  const handleRequestRefund = async () => {
+    if (!selectedReservation) return
+
+    const status = (selectedReservation.status || '').toLowerCase()
+    if (status !== 'confirmed' && status !== 'pending') {
+      alert('Refunds can only be requested for confirmed or pending reservations.')
+      return
+    }
+
+    const checkInDate = new Date(selectedReservation.checkIn)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    checkInDate.setHours(0, 0, 0, 0)
+
+    // Check if check-in date has passed
+    if (checkInDate < today) {
+      alert('Refunds cannot be requested for reservations that have already started.')
+      return
+    }
+
+    const confirmRefund = window.confirm(
+      `Are you sure you want to request a refund for this reservation?\n\n` +
+      `Listing: ${selectedReservation.listingTitle}\n` +
+      `Amount: ₱${selectedReservation?.pricing?.total || 0}\n\n` +
+      `The refund will be processed and your reservation will be cancelled.`
+    )
+
+    if (!confirmRefund) return
+
+    try {
+      setProcessingRefund(true)
+      const reservationRef = doc(db, 'Reservation', selectedReservation.id)
+
+      // Update reservation status to refunded
+      await updateDoc(reservationRef, {
+        status: 'refunded',
+        refundRequestedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      })
+
+      // Create refund record
+      const refundRecord = {
+        reservationId: selectedReservation.id,
+        guestId: guestId,
+        hostId: selectedReservation.hostId,
+        listingId: selectedReservation.listingId,
+        listingTitle: selectedReservation.listingTitle,
+        amount: selectedReservation?.pricing?.total || 0,
+        currency: selectedReservation?.pricing?.currency || 'PHP',
+        paymentMethod: selectedReservation?.paymentSummary?.methodType || 'unknown',
+        transactionId: selectedReservation?.paymentSummary?.transactionId || null,
+        status: 'pending',
+        requestedAt: serverTimestamp(),
+        createdAt: serverTimestamp()
+      }
+
+      await addDoc(collection(db, 'Refunds'), refundRecord)
+
+      // Create notification for host
+      if (selectedReservation.hostId) {
+        const notification = {
+          type: 'refund_requested',
+          hostId: selectedReservation.hostId,
+          guestId: guestId,
+          reservationId: selectedReservation.id,
+          title: 'Refund Requested',
+          body: `Guest has requested a refund for reservation: ${selectedReservation.listingTitle}. Amount: ₱${selectedReservation?.pricing?.total || 0}`,
+          read: false,
+          createdAt: serverTimestamp()
+        }
+        await addDoc(collection(db, 'Notifications'), notification)
+      }
+
+      alert('Refund request submitted successfully! Your reservation has been cancelled and the refund is being processed.')
+      setSelectedReservation(null)
+    } catch (error) {
+      console.error('Error processing refund:', error)
+      alert('Failed to process refund request. Please try again.')
+    } finally {
+      setProcessingRefund(false)
+    }
+  }
+
   if (loading) {
     return <div style={{ padding: 20 }}>Loading your bookings...</div>
   }
 
   return (
     <>
+      {/* Back Button */}
+      <div style={{ padding: '20px 20px 0 20px' }}>
+        <button className="back-btn" onClick={() => navigate(`/guest/${guestId}`)} title="Go back">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="30"
+            height="30"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m12 19-7-7 7-7" />
+            <path d="M19 12H5" />
+          </svg>
+          <span className="back-btn-text">Back</span>
+        </button>
+      </div>
     <div className="bookings-layout">
       <div>
         <div className="bookings-header">
@@ -133,7 +239,6 @@ const GuestBookings = () => {
         </div>
       </div>
       <div>
-        <h3 style={{ margin: '0 0 12px 0' }}>Calendar</h3>
         <ContinuousCalendar 
           onClick={handleCalendarClick} 
           bookedDates={bookedDates} 
@@ -171,10 +276,26 @@ const GuestBookings = () => {
                   {selectedReservation.guestMessage && (
                     <div style={{ marginTop: 4 }}><b>Message:</b> {selectedReservation.guestMessage}</div>
                   )}
+                  {selectedReservation?.paymentSummary?.transactionId && (
+                    <div style={{ marginTop: 4 }}><b>Transaction ID:</b> {selectedReservation.paymentSummary.transactionId}</div>
+                  )}
                 </div>
               </div>
             </div>
             <div className="modal-footer">
+              {(selectedReservation.status?.toLowerCase() === 'confirmed' || selectedReservation.status?.toLowerCase() === 'pending') && (
+                <button 
+                  className="btn btn-danger" 
+                  onClick={handleRequestRefund}
+                  disabled={processingRefund}
+                  style={{ 
+                    cursor: processingRefund ? 'not-allowed' : 'pointer',
+                    opacity: processingRefund ? 0.6 : 1
+                  }}
+                >
+                  {processingRefund ? 'Processing...' : 'Request Refund'}
+                </button>
+              )}
               <button className="btn btn-ghost" onClick={() => setSelectedReservation(null)}>Close</button>
             </div>
           </div>
