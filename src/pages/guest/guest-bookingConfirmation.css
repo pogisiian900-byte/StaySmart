@@ -49,6 +49,7 @@
 }
 
 .booking-step1,
+.booking-step-promo,
 .payment-step2,
 .messageHost-step3,
 .confirmation-step4 {
@@ -246,17 +247,335 @@
   cursor: not-allowed;
 }
 
-/* === Right Side (Invoice) === */
-.booking-invoice {
+/* === Right Side (Invoice) - Receipt Style === */
+.booking-invoice.receipt-style {
   flex: 1;
-  border: 1px solid #ddd;
-  border-radius: 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
   background: #fff;
-  padding: 15px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  padding: 0;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   height: fit-content;
+  font-family: 'Courier New', 'Monaco', monospace;
+  max-width: 400px;
+  margin: 0 auto;
 }
 
+/* Receipt Header */
+.receipt-header {
+  padding: 24px 20px;
+  text-align: center;
+  background: linear-gradient(135deg, #393b92 0%, #5758a2 100%);
+  color: white;
+  border-radius: 6px 6px 0 0;
+}
+
+.receipt-logo h2 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  font-family: 'Courier New', 'Monaco', monospace;
+}
+
+.receipt-tagline {
+  margin: 4px 0 0 0;
+  font-size: 0.85rem;
+  opacity: 0.9;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.receipt-date {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.receipt-date p {
+  margin: 4px 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.receipt-time {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+/* Receipt Dividers */
+.receipt-divider-top,
+.receipt-divider-bottom {
+  height: 20px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 8px,
+    #e5e7eb 8px,
+    #e5e7eb 12px
+  );
+  margin: 0;
+}
+
+.receipt-dots {
+  height: 100%;
+  width: 100%;
+}
+
+.receipt-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 16px 0;
+  border: none;
+}
+
+.receipt-divider-bold {
+  height: 2px;
+  background: #1f2937;
+  margin: 20px 0 16px;
+  border: none;
+}
+
+/* Receipt Body */
+.receipt-body {
+  padding: 20px;
+}
+
+.receipt-section {
+  margin-bottom: 16px;
+}
+
+.receipt-listing-image {
+  width: 100%;
+  height: 180px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  border: 2px solid #e5e7eb;
+}
+
+.receipt-listing-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.receipt-listing-title {
+  margin: 0 0 16px 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1f2937;
+  text-align: center;
+  line-height: 1.4;
+  font-family: 'Courier New', 'Monaco', monospace;
+}
+
+.receipt-booking-dates {
+  background: #f9fafb;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.receipt-date-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.9rem;
+}
+
+.receipt-label {
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.receipt-value {
+  color: #1f2937;
+  font-weight: 700;
+}
+
+/* Discount Badge */
+.receipt-discount-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 2px solid #10b981;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 16px 0;
+}
+
+.receipt-discount-badge svg {
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+.discount-badge-title {
+  margin: 0;
+  color: #065f46;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+}
+
+.discount-badge-code {
+  margin: 4px 0 0 0;
+  color: #047857;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Receipt Items */
+.receipt-items {
+  margin: 20px 0;
+}
+
+.receipt-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px dashed #d1d5db;
+  font-size: 0.9rem;
+}
+
+.receipt-item:last-of-type {
+  border-bottom: none;
+}
+
+.receipt-item-details {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.receipt-item-name {
+  color: #374151;
+  font-weight: 500;
+}
+
+.receipt-item-qty {
+  color: #9ca3af;
+  font-size: 0.85rem;
+}
+
+.receipt-item-price {
+  color: #1f2937;
+  font-weight: 700;
+  text-align: right;
+  min-width: 100px;
+}
+
+.receipt-item-total {
+  font-weight: 700;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px dashed #d1d5db;
+}
+
+.receipt-item-discount {
+  background: #f0fdf4;
+  padding: 10px;
+  border-radius: 6px;
+  margin: 8px 0;
+  border: none;
+}
+
+.receipt-item-discount .receipt-item-name {
+  color: #065f46;
+  font-weight: 700;
+}
+
+.receipt-item-discount .discount-amount {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.receipt-item-subtotal {
+  font-weight: 700;
+  padding-top: 12px;
+  border-top: 2px solid #e5e7eb;
+  border-bottom: 1px dashed #d1d5db;
+  font-size: 1rem;
+}
+
+.receipt-item-subtotal .receipt-item-name {
+  color: #1f2937;
+}
+
+.receipt-item-subtotal .receipt-item-price {
+  color: #065f46;
+  font-size: 1.1rem;
+}
+
+/* Total Section */
+.receipt-total-section {
+  margin: 20px 0;
+  padding: 16px;
+  background: #f9fafb;
+  border: 2px solid #1f2937;
+  border-radius: 8px;
+}
+
+.receipt-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.receipt-total-label {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1f2937;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.receipt-total-amount {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #393b92;
+  letter-spacing: 1px;
+}
+
+.receipt-savings {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.receipt-savings-text {
+  margin: 0;
+  color: #10b981;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+/* Receipt Footer */
+.receipt-footer {
+  text-align: center;
+  padding: 20px 0 0;
+  margin-top: 20px;
+  border-top: 1px dashed #d1d5db;
+}
+
+.receipt-footer-text {
+  margin: 0 0 8px 0;
+  color: #393b92;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+}
+
+.receipt-footer-note {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+/* Legacy invoice styles (for backward compatibility) */
 .invoice-photo {
   width: 100%;
   border-radius: 10px;
@@ -265,6 +584,42 @@
 
 .invoice-details {
   font-size: 0.95em;
+}
+
+.invoice-promo-section {
+  margin: 15px 0;
+}
+
+.invoice-promo-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 2px solid #393b92;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #393b92 0%, #5758a2 100%);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.invoice-promo-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(57, 59, 146, 0.3);
+  background: linear-gradient(135deg, #4b4dc3 0%, #6b6dd2 100%);
+}
+
+.invoice-promo-btn svg {
+  flex-shrink: 0;
+}
+
+.invoice-promo-applied {
+  text-align: center;
+  font-weight: 500;
 }
 
 /* === RESPONSIVENESS === */
@@ -320,6 +675,30 @@
 
   .invoice-details {
     font-size: 0.9em;
+  }
+
+  .booking-invoice.receipt-style {
+    max-width: 100%;
+  }
+
+  .receipt-header {
+    padding: 20px 16px;
+  }
+
+  .receipt-logo h2 {
+    font-size: 1.5rem;
+  }
+
+  .receipt-body {
+    padding: 16px;
+  }
+
+  .receipt-listing-image {
+    height: 150px;
+  }
+
+  .receipt-total-amount {
+    font-size: 1.3rem;
   }
 
   .confirm-btn {

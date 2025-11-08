@@ -18,7 +18,7 @@ const confirmDialogRef = useRef(null);
 const [updating, setUpdating] = useState(false);
 
   
-const [generalData, setGeneralData] = useState({
+  const [generalData, setGeneralData] = useState({
     title: "",
     description: "",
     price: "",
@@ -41,13 +41,44 @@ const [generalData, setGeneralData] = useState({
     rating: 0,
     discount: 0
   });
+  
+  // 🔹 Promo/Discount States
+  const [discountData, setDiscountData] = useState({
+    discount: 0,
+    promoCode: "",
+    startDate: "",
+    endDate: "",
+    description: ""
+  });
+  const [savingDiscount, setSavingDiscount] = useState(false);
+  
   // 🔹 Dialog Refs
   const editDialogRef = useRef(null);
   const discountDialogRef = useRef(null);
 
   // 🔹 Handlers for dialog open/close
   const handleEdit = () => editDialogRef.current?.showModal();
-  const handleDiscount = () => discountDialogRef.current?.showModal();
+  const handleDiscount = () => {
+    // Pre-populate discount data if exists
+    if (selectedListing?.discount) {
+      setDiscountData({
+        discount: selectedListing.discount || 0,
+        promoCode: selectedListing.promoCode || "",
+        startDate: selectedListing.discountStartDate || "",
+        endDate: selectedListing.discountEndDate || "",
+        description: selectedListing.discountDescription || ""
+      });
+    } else {
+      setDiscountData({
+        discount: 0,
+        promoCode: "",
+        startDate: "",
+        endDate: "",
+        description: ""
+      });
+    }
+    discountDialogRef.current?.showModal();
+  };
   const closeEditDialog = () => editDialogRef.current?.close();
   const closeDiscountDialog = () => discountDialogRef.current?.close();
 
@@ -120,6 +151,17 @@ const confirmUpdate = async () => {
           rating: listingData.rating || 0,
           discount: listingData.discount || 0
         });
+        
+        // Set discount data if exists
+        if (listingData.discount) {
+          setDiscountData({
+            discount: listingData.discount || 0,
+            promoCode: listingData.promoCode || "",
+            startDate: listingData.discountStartDate || "",
+            endDate: listingData.discountEndDate || "",
+            description: listingData.discountDescription || ""
+          });
+        }
       } else {
         console.log("No such listing found!");
       }
@@ -200,6 +242,98 @@ const confirmUpdate = async () => {
 
   const handleChange = (field, value) => {
     setGeneralData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // 🔹 Handle discount data change
+  const handleDiscountChange = (field, value) => {
+    setDiscountData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // 🔹 Save/Update discount
+  const handleSaveDiscount = async () => {
+    if (!discountData.discount || discountData.discount <= 0 || discountData.discount > 100) {
+      alert("Please enter a valid discount percentage (1-100%)");
+      return;
+    }
+
+    setSavingDiscount(true);
+    try {
+      const docRef = doc(db, "Listings", listingId);
+      await updateDoc(docRef, {
+        discount: Number(discountData.discount),
+        promoCode: discountData.promoCode.trim() || null,
+        discountStartDate: discountData.startDate || null,
+        discountEndDate: discountData.endDate || null,
+        discountDescription: discountData.description.trim() || null,
+        discountUpdatedAt: new Date()
+      });
+
+      // Update local state
+      setSelectedListing((prev) => ({
+        ...prev,
+        discount: Number(discountData.discount),
+        promoCode: discountData.promoCode.trim() || null,
+        discountStartDate: discountData.startDate || null,
+        discountEndDate: discountData.endDate || null,
+        discountDescription: discountData.description.trim() || null
+      }));
+
+      setGeneralData((prev) => ({ ...prev, discount: Number(discountData.discount) }));
+
+      alert("✅ Discount saved successfully!");
+      closeDiscountDialog();
+    } catch (error) {
+      console.error("Error saving discount:", error);
+      alert("❌ Failed to save discount. Please try again.");
+    } finally {
+      setSavingDiscount(false);
+    }
+  };
+
+  // 🔹 Remove discount
+  const handleRemoveDiscount = async () => {
+    if (!window.confirm("Are you sure you want to remove this discount?")) {
+      return;
+    }
+
+    setSavingDiscount(true);
+    try {
+      const docRef = doc(db, "Listings", listingId);
+      await updateDoc(docRef, {
+        discount: 0,
+        promoCode: null,
+        discountStartDate: null,
+        discountEndDate: null,
+        discountDescription: null
+      });
+
+      // Update local state
+      setSelectedListing((prev) => ({
+        ...prev,
+        discount: 0,
+        promoCode: null,
+        discountStartDate: null,
+        discountEndDate: null,
+        discountDescription: null
+      }));
+
+      setGeneralData((prev) => ({ ...prev, discount: 0 }));
+      setDiscountData({
+        discount: 0,
+        promoCode: "",
+        startDate: "",
+        endDate: "",
+        description: ""
+      });
+
+      alert("✅ Discount removed successfully!");
+      closeDiscountDialog();
+    } catch (error) {
+      console.error("Error removing discount:", error);
+      alert("❌ Failed to remove discount. Please try again.");
+    } finally {
+      setSavingDiscount(false);
+    }
   };
 
   const ListingHeader = () => (
@@ -324,16 +458,39 @@ const confirmUpdate = async () => {
       </div>
     {selectedListing.discount ? (
       <div className="discount-card">
-        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-badge-percent-icon lucide-badge-percent"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m15 9-6 6"/><path d="M9 9h.01"/><path d="M15 15h.01"/></svg>
-        <p>Discount: {selectedListing.discount}%</p> 
-            <button className="changeDiscountButton">Change</button>
+        <div className="discount-info">
+          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/>
+            <path d="m15 9-6 6"/>
+            <path d="M9 9h.01"/>
+            <path d="M15 15h.01"/>
+          </svg>
+          <div>
+            <p><strong>Discount: {selectedListing.discount}%</strong></p>
+            {selectedListing.promoCode && <p className="promo-code-display">Promo Code: {selectedListing.promoCode}</p>}
+            {selectedListing.discountStartDate && selectedListing.discountEndDate && (
+              <p className="promo-dates">
+                Valid: {selectedListing.discountStartDate instanceof Date 
+                  ? selectedListing.discountStartDate.toLocaleDateString() 
+                  : new Date(selectedListing.discountStartDate).toLocaleDateString()} - {selectedListing.discountEndDate instanceof Date 
+                  ? selectedListing.discountEndDate.toLocaleDateString() 
+                  : new Date(selectedListing.discountEndDate).toLocaleDateString()}
+              </p>
+            )}
+          </div>
+        </div>
+        <button className="changeDiscountButton" onClick={handleDiscount}>Change</button>
       </div>
       
     ) : (
       <div className="discount-card">
       <button className="addDiscount" onClick={handleDiscount}>
-        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-badge-dollar-sign-icon lucide-badge-dollar-sign"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
-        Add Discount</button>
+        <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/>
+          <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/>
+          <path d="M12 18V6"/>
+        </svg>
+        Add Promo/Discount</button>
       </div>
     )}
     {/* 🔹 EDIT LISTING DIALOG */}
@@ -684,11 +841,137 @@ const confirmUpdate = async () => {
 
 
 
-      {/* 🔹 ADD DISCOUNT DIALOG */}
+      {/* 🔹 ADD/EDIT DISCOUNT DIALOG */}
       <dialog ref={discountDialogRef} className="addDiscount-dialog">
-        <h3>Add Discount {listingId} </h3>
+        <span className="closeButton" onClick={closeDiscountDialog}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 6 6 18"/>
+            <path d="m6 6 12 12"/>
+          </svg>
+        </span>
+
+        <h3>{selectedListing?.discount ? "Edit Promo/Discount" : "Add Promo/Discount"}</h3>
+        
+        <div className="discount-dialog-content">
+          <div className="discount-form-group">
+            <label className="form-label">
+              Discount Percentage (%):
+              <input
+                className="form-input"
+                type="number"
+                min="1"
+                max="100"
+                value={discountData.discount}
+                onChange={(e) => handleDiscountChange("discount", e.target.value)}
+                placeholder="e.g., 10, 20, 50"
+              />
+              <small>Enter a value between 1 and 100</small>
+            </label>
+          </div>
+
+          <div className="discount-form-group">
+            <label className="form-label">
+              Promo Code (Optional):
+              <input
+                className="form-input"
+                type="text"
+                value={discountData.promoCode}
+                onChange={(e) => handleDiscountChange("promoCode", e.target.value.toUpperCase())}
+                placeholder="e.g., SAVE10, SUMMER20"
+                maxLength="20"
+              />
+              <small>Leave empty if you want to apply discount automatically</small>
+            </label>
+          </div>
+
+          <div className="discount-form-group">
+            <label className="form-label">
+              Start Date (Optional):
+              <input
+                className="form-input"
+                type="date"
+                value={discountData.startDate}
+                onChange={(e) => handleDiscountChange("startDate", e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+              />
+              <small>When the discount should start</small>
+            </label>
+          </div>
+
+          <div className="discount-form-group">
+            <label className="form-label">
+              End Date (Optional):
+              <input
+                className="form-input"
+                type="date"
+                value={discountData.endDate}
+                onChange={(e) => handleDiscountChange("endDate", e.target.value)}
+                min={discountData.startDate || new Date().toISOString().split('T')[0]}
+              />
+              <small>When the discount should end</small>
+            </label>
+          </div>
+
+          <div className="discount-form-group">
+            <label className="form-label">
+              Description (Optional):
+              <textarea
+                className="form-input"
+                value={discountData.description}
+                onChange={(e) => handleDiscountChange("description", e.target.value)}
+                placeholder="e.g., Summer special discount, First-time customer offer"
+                rows="3"
+                maxLength="200"
+              />
+              <small>{discountData.description.length}/200 characters</small>
+            </label>
+          </div>
+
+          <div className="discount-preview">
+            <h4>Preview:</h4>
+            <div className="preview-card">
+              <p><strong>Discount: {discountData.discount || 0}%</strong></p>
+              {discountData.promoCode && <p>Promo Code: <strong>{discountData.promoCode}</strong></p>}
+              {discountData.startDate && discountData.endDate && (
+                <p>Valid: {new Date(discountData.startDate).toLocaleDateString()} - {new Date(discountData.endDate).toLocaleDateString()}</p>
+              )}
+              {discountData.description && <p className="preview-description">{discountData.description}</p>}
+              {selectedListing?.price && discountData.discount > 0 && (
+                <p className="preview-price">
+                  Original: ₱{selectedListing.price} → Discounted: ₱{Math.round(selectedListing.price * (1 - discountData.discount / 100))}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="discount-dialog-buttons">
+            <button
+              className="save-discount-btn"
+              onClick={handleSaveDiscount}
+              disabled={savingDiscount || !discountData.discount || discountData.discount <= 0 || discountData.discount > 100}
+            >
+              {savingDiscount ? "Saving..." : selectedListing?.discount ? "Update Discount" : "Save Discount"}
+            </button>
             
-        <button onClick={closeDiscountDialog}>Close</button>
+            {selectedListing?.discount && (
+              <button
+                className="remove-discount-btn"
+                onClick={handleRemoveDiscount}
+                disabled={savingDiscount}
+              >
+                Remove Discount
+              </button>
+            )}
+            
+            <button
+              className="cancel-discount-btn"
+              onClick={closeDiscountDialog}
+              disabled={savingDiscount}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </dialog>
     </div>
   );

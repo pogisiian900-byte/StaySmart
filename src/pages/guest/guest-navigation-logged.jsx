@@ -8,6 +8,8 @@ import { useNavigate } from "react-router-dom";
 import { auth, db } from "../../config/firebase";
 import { signOut } from "firebase/auth";
 import { collectionGroup, getDocs, collection, query, where, onSnapshot, writeBatch, doc } from "firebase/firestore";
+import 'dialog-polyfill/dist/dialog-polyfill.css';
+import dialogPolyfill from 'dialog-polyfill';
 
 // Component imports
 import HomePages from "../../components/Home.jsx";
@@ -41,15 +43,48 @@ function Guest_Logged_Navigation({ userData }) {
   const buttonRef = useRef(null);
   const notificationRef = useRef(null);
   const notificationButtonRef = useRef(null);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const logoutDialogRef = useRef(null);
+
+  // Register dialog polyfill
+  useEffect(() => {
+    if (logoutDialogRef.current && !logoutDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(logoutDialogRef.current);
+    }
+  }, []);
+
+  const showLogoutConfirmation = () => {
+    setShowLogoutDialog(true);
+    if (logoutDialogRef.current) {
+      try {
+        if (typeof logoutDialogRef.current.showModal === 'function') {
+          logoutDialogRef.current.showModal();
+        } else {
+          dialogPolyfill.registerDialog(logoutDialogRef.current);
+          logoutDialogRef.current.showModal();
+        }
+      } catch (err) {
+        console.error('Error showing logout dialog:', err);
+        logoutDialogRef.current.style.display = 'block';
+      }
+    }
+  };
+
+  const handleCloseLogoutDialog = () => {
+    setShowLogoutDialog(false);
+    logoutDialogRef.current?.close();
+  };
 
   // ✅ Logout Handler
   const handleLogout = async () => {
     try {
+      handleCloseLogoutDialog();
       await signOut(auth);
       console.log("Guest logged out");
       navigate("/", { replace: true });
     } catch (err) {
       console.error("Logout failed:", err.message);
+      alert('Failed to logout. Please try again.');
     }
   };
 
@@ -116,37 +151,102 @@ function Guest_Logged_Navigation({ userData }) {
   // ✅ Subscribe to notifications for guest
   useEffect(() => {
     const uid = auth.currentUser?.uid;
-    if (!uid) return;
+    console.log('🔔 GuestNav: useEffect triggered, uid:', uid);
+    
+    if (!uid) {
+      console.log('⚠️ GuestNav: No uid, returning early');
+      return;
+    }
+    
     const q = query(collection(db, 'Notifications'), where('recipientId', '==', uid));
-    const unsub = onSnapshot(q, (snap) => {
-      const list = [];
-      snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-      list.sort((a, b) => {
-        const toMs = (v) => (v?.toMillis ? v.toMillis() : (v?.seconds ? v.seconds * 1000 : (Date.parse(v) || 0)));
-        return toMs(b.createdAt) - toMs(a.createdAt);
-      });
-      setNotifications(list);
-      setUnreadCount(list.filter(n => !n.read).length);
-    });
-    return () => unsub();
+    console.log('🔔 GuestNav: Setting up Firestore listener for uid:', uid);
+    
+    const unsub = onSnapshot(
+      q, 
+      (snap) => {
+        console.log('🔔 GuestNav: Snapshot received!');
+        console.log('🔔 GuestNav: Snapshot size:', snap.size);
+        console.log('🔔 GuestNav: Snapshot empty:', snap.empty);
+        
+        try {
+          const list = [];
+          snap.forEach((d) => {
+            try {
+              const data = d.data();
+              console.log('🔔 GuestNav: Document ID:', d.id);
+              console.log('🔔 GuestNav: Document data:', data);
+              console.log('🔔 GuestNav: recipientId in doc:', data.recipientId);
+              console.log('🔔 GuestNav: uid from auth:', uid);
+              console.log('🔔 GuestNav: recipientId matches?', data.recipientId === uid);
+              list.push({ id: d.id, ...data });
+            } catch (err) {
+              console.error('❌ GuestNav: Error processing notification document:', err);
+            }
+          });
+          
+          console.log('🔔 GuestNav: Total notifications found:', list.length);
+          console.log('🔔 GuestNav: Notifications list:', list);
+          
+          list.sort((a, b) => {
+            try {
+              const toMs = (v) => (v?.toMillis ? v.toMillis() : (v?.seconds ? v.seconds * 1000 : (Date.parse(v) || 0)));
+              return toMs(b.createdAt) - toMs(a.createdAt);
+            } catch (err) {
+              console.error('❌ GuestNav: Error sorting:', err);
+              return 0;
+            }
+          });
+          
+          const unread = list.filter(n => !n.read);
+          console.log('🔔 GuestNav: Unread notifications:', unread.length);
+          console.log('🔔 GuestNav: Setting notifications state with', list.length, 'items');
+          console.log('🔔 GuestNav: Setting unread count to', unread.length);
+          
+          setNotifications(list);
+          setUnreadCount(unread.length);
+        } catch (error) {
+          console.error('❌ GuestNav: Error processing notifications:', error);
+        }
+      },
+      (error) => {
+        console.error('❌ GuestNav: Firestore snapshot error:', error);
+        console.error('❌ GuestNav: Error code:', error.code);
+        console.error('❌ GuestNav: Error message:', error.message);
+      }
+    );
+    
+    return () => {
+      console.log('🔔 GuestNav: Cleaning up listener');
+      if (unsub) unsub();
+    };
   }, []);
 
   // ✅ Mark all as read when opened
   const handleNotificationClick = async () => {
-    const nextOpen = !notificationOpen;
-    setNotificationOpen(nextOpen);
-    if (nextOpen) {
-      const uid = auth.currentUser?.uid;
-      if (!uid) return;
-      const unread = notifications.filter(n => !n.read);
-      if (unread.length === 0) return;
-      try {
-        const batch = writeBatch(db);
-        unread.forEach((n) => batch.update(doc(db, 'Notifications', n.id), { read: true }));
-        await batch.commit();
-      } catch (e) {
-        console.error('Failed to mark notifications read', e);
+    try {
+      const nextOpen = !notificationOpen;
+      setNotificationOpen(nextOpen);
+      if (nextOpen) {
+        const uid = auth.currentUser?.uid;
+        if (!uid) return;
+        const unread = notifications.filter(n => !n.read);
+        if (unread.length === 0) return;
+        try {
+          const batch = writeBatch(db);
+          unread.forEach((n) => {
+            try {
+              batch.update(doc(db, 'Notifications', n.id), { read: true });
+            } catch (err) {
+              console.error('Error adding notification to batch:', err);
+            }
+          });
+          await batch.commit();
+        } catch (e) {
+          console.error('Failed to mark notifications read', e);
+        }
       }
+    } catch (error) {
+      console.error('Error in handleNotificationClick:', error);
     }
   };
 
@@ -278,14 +378,22 @@ function Guest_Logged_Navigation({ userData }) {
               )}
               {notifications.map((n) => (
                 <div key={n.id} className={`notification-item ${!n.read ? 'unread' : ''}`} onClick={() => {
+                  const guestId = auth.currentUser?.uid;
+                  if (!guestId) return;
+                  
                   if (n.conversationId) {
-                    const guestId = auth.currentUser?.uid;
-                    if (guestId) navigate(`/guest/${guestId}/chat/${n.conversationId}`)
+                    navigate(`/guest/${guestId}/chat/${n.conversationId}`)
+                  } else if (n.reservationId) {
+                    // Navigate to bookings page when clicking on booking-related notifications
+                    navigate(`/guest/${guestId}/bookings`)
+                  } else if (n.listingId) {
+                    navigate(`/guest/${guestId}/listing/${n.listingId}`)
                   }
                 }}>
                   <div className="notification-icon">🔔</div>
                   <div className="notification-content">
                     <p className="notification-title">{n.title || 'Notification'}</p>
+                    {n.message && <p className="notification-message" style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{n.message}</p>}
                     <p className="notification-time">{n.createdAt ? new Date(n.createdAt?.toMillis ? n.createdAt.toMillis() : n.createdAt).toLocaleString() : ''}</p>
                   </div>
                 </div>
@@ -331,13 +439,82 @@ function Guest_Logged_Navigation({ userData }) {
             <button onClick={()=> openMessages()}>Messages</button>
             <button>Account Settings</button>
             <button onClick={() => { handleNotificationClick(); setOpen(false); }}>Notifications {unreadCount > 0 && `(${unreadCount})`}</button>
-            <button onClick={handleLogout}>Logout</button>
+            <button onClick={showLogoutConfirmation}>Logout</button>
           </div>
         )}
       </nav>
 
       {/* Page Content */}
       <div className="guest-main-page">{renderPage()}</div>
+
+      {/* Logout Confirmation Dialog */}
+      {showLogoutDialog && (
+        <dialog ref={logoutDialogRef} className="logout-confirmation-dialog" style={{ maxWidth: '500px', width: '90%', border: 'none', borderRadius: '16px', padding: 0, boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' }}>
+          <style>
+            {`.logout-confirmation-dialog::backdrop {
+              background: rgba(0, 0, 0, 0.5);
+              backdrop-filter: blur(4px);
+            }`}
+          </style>
+          <div style={{ padding: '30px', textAlign: 'center' }}>
+            <div style={{ fontSize: '48px', marginBottom: '20px' }}>🚪</div>
+            <h2 style={{ margin: '0 0 15px 0', fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
+              Confirm Logout
+            </h2>
+            <p style={{ margin: '0 0 30px 0', fontSize: '16px', color: '#6b7280', lineHeight: '1.5' }}>
+              Are you sure you want to logout? You will need to login again to access your account.
+            </p>
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+              <button
+                onClick={handleCloseLogoutDialog}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
+                  background: 'white',
+                  color: '#374151',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#f9fafb';
+                  e.target.style.borderColor = '#d1d5db';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'white';
+                  e.target.style.borderColor = '#e5e7eb';
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#31326F',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#252550';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = '#31326F';
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
     </>
   );
 }

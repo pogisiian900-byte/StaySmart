@@ -582,7 +582,7 @@
 .payment-method-card-profile {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
   background: linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%);
   border: 2px solid #e0e0e0;
   border-radius: 16px;
@@ -594,6 +594,7 @@
   flex-shrink: 0;
   width: 32px;
   height: 32px;
+  margin-right: 4px;
 }
 
 .payment-method-info-profile {
@@ -601,6 +602,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
 .payment-method-type {
@@ -615,6 +617,9 @@
   font-weight: 600;
   color: #393b92;
   margin: 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  padding-left: 0;
 }
 
 .payment-method-name {
@@ -627,6 +632,58 @@
   font-size: 0.85rem;
   color: #888;
   margin: 0;
+}
+
+.payment-method-sandbox-badge {
+  font-size: 0.75rem;
+  color: #f59e0b;
+  background: #fef3c7;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin: 4px 0 0 0;
+  display: inline-block;
+  font-weight: 600;
+}
+
+.payment-method-date {
+  font-size: 0.8rem;
+  color: #999;
+  margin: 4px 0 0 0;
+}
+
+.payment-method-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.manage-paypal-btn-profile {
+  width: 100%;
+  padding: 12px 24px;
+  font-size: 1rem;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #0070ba 0%, #009cde 100%);
+  color: white;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 112, 186, 0.3);
+}
+
+.manage-paypal-btn-profile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 112, 186, 0.4);
+}
+
+.manage-paypal-btn-profile svg {
+  width: 18px;
+  height: 18px;
 }
 
 .change-payment-btn-profile {

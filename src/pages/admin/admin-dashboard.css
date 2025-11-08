@@ -57,7 +57,7 @@
 }
 
 .admin-nav-button-group button.admin-nav-selected {
-  background-color: #4a90e2;
+  background-color: #31326F;
   color: white;
 }
 
@@ -238,7 +238,7 @@
 }
 
 .admin-kpi-icon svg {
-  color: #4a90e2;
+  color: #31326F;
 }
 
 .admin-kpi-content {
@@ -396,7 +396,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #4a90e2;
+  background: #31326F;
   color: white;
   display: flex;
   align-items: center;

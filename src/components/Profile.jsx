@@ -2,12 +2,14 @@ import React, { useEffect, useState, useRef } from 'react'
 import me from '/static/no photo.webp'
 import bgBlue from '/static/Bluebg.png'
 import { useNavigate, useParams } from 'react-router-dom'
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from ".././config/firebase";
 import "../pages/host/profile-new.css";
 import 'dialog-polyfill/dist/dialog-polyfill.css';
 import dialogPolyfill from 'dialog-polyfill';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
+import PayPal from './paypal';
+import SlideshowWheel from './sildeshowWheel';
 const Profile = () => {
 const { hostId, guestId } = useParams();
 const [user, setUser] = useState(null);
@@ -16,6 +18,9 @@ const [editedUser, setEditedUser] = useState(null);
 const [isSaving, setIsSaving] = useState(false);
 const [paymentMethod, setPaymentMethod] = useState(null);
 const [paymentMethodType, setPaymentMethodType] = useState('card');
+const [showPayPalDialog, setShowPayPalDialog] = useState(false);
+const [recentBookings, setRecentBookings] = useState([]);
+const [loadingBookings, setLoadingBookings] = useState(true);
 const navigate = useNavigate();
 const dialogRef = useRef(null);
 const fileInputRef = useRef(null);
@@ -30,6 +35,66 @@ const [paymentForm, setPaymentForm] = useState({
   billingAddress: ''
 });
 
+
+const loadRecentBookings = async () => {
+  if (!guestId) return;
+  
+  try {
+    setLoadingBookings(true);
+    const reservationsQuery = query(
+      collection(db, 'Reservation'),
+      where('guestId', '==', guestId)
+    );
+    const reservationsSnapshot = await getDocs(reservationsQuery);
+    
+    const bookings = [];
+    const seenListingIds = new Set(); // Track listing IDs to avoid duplicates
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    for (const reservationDoc of reservationsSnapshot.docs) {
+      const reservation = { id: reservationDoc.id, ...reservationDoc.data() };
+      
+      // Filter by status (confirmed or pending) and date (last 30 days)
+      const status = (reservation.status || '').toLowerCase();
+      if (status !== 'confirmed' && status !== 'pending') continue;
+      
+      const createdAt = reservation.createdAt?.toDate ? reservation.createdAt.toDate() : new Date(reservation.createdAt);
+      if (createdAt < thirtyDaysAgo) continue;
+      
+      // Fetch the listing details
+      if (reservation.listingId) {
+        // Skip if we've already added this listing
+        if (seenListingIds.has(reservation.listingId)) continue;
+        
+        try {
+          const listingRef = doc(db, 'Listings', reservation.listingId);
+          const listingDoc = await getDoc(listingRef);
+          
+          if (listingDoc.exists()) {
+            const listingData = { id: listingDoc.id, ...listingDoc.data() };
+            bookings.push({
+              ...listingData,
+              bookingDate: createdAt,
+              reservationId: reservation.id
+            });
+            seenListingIds.add(reservation.listingId); // Mark as seen
+          }
+        } catch (error) {
+          console.error('Error fetching listing:', error);
+        }
+      }
+    }
+    
+    // Sort by booking date (most recent first) and limit to 10
+    bookings.sort((a, b) => b.bookingDate - a.bookingDate);
+    setRecentBookings(bookings.slice(0, 10));
+  } catch (error) {
+    console.error('Error loading recent bookings:', error);
+  } finally {
+    setLoadingBookings(false);
+  }
+};
 
 useEffect(() => {
   // Register dialog polyfills when component mounts
@@ -70,6 +135,12 @@ useEffect(() => {
   fetchUserData();
 }, [hostId, guestId]);
 
+// Separate useEffect for loading recent bookings
+useEffect(() => {
+  if (guestId) {
+    loadRecentBookings();
+  }
+}, [guestId]);
 
 const handleBack = ()=>{
   if(user?.role == "host"){
@@ -330,13 +401,25 @@ const handlePayPalSuccess = async (data, actions) => {
     const userId = hostId || guestId;
     const userRef = doc(db, 'Users', userId);
     
+    // Always using sandbox environment
     const paymentData = {
       type: 'paypal',
       paypalEmail: details.payer.email_address,
       payerId: details.payer.payer_id,
       payerName: `${details.payer.name.given_name} ${details.payer.name.surname}`,
       transactionId: details.id,
-      status: details.status
+      status: details.status,
+      // PayPal Sandbox tracking (always sandbox)
+      environment: 'sandbox',
+      sandboxAccountId: details.payer.payer_id,
+      sandboxEmail: details.payer.email_address,
+      connectedAt: new Date().toISOString(),
+      // Additional PayPal account info
+      accountId: details.payer.payer_id,
+      accountStatus: details.status,
+      // Store order details for reference
+      orderId: details.id,
+      intent: details.intent || 'CAPTURE'
     };
 
     await updateDoc(userRef, {
@@ -347,7 +430,7 @@ const handlePayPalSuccess = async (data, actions) => {
     setPaymentMethodType('paypal');
     setUser(prev => ({ ...prev, paymentMethod: paymentData }));
     handleClosePaymentDialog();
-    alert('PayPal payment method connected successfully!');
+    alert('PayPal account connected successfully!');
   } catch (error) {
     console.error('Error saving PayPal payment method:', error);
     alert('Failed to save PayPal payment method. Please try again.');
@@ -605,6 +688,11 @@ const handlePayPalCancel = () => {
                       <p className="payment-method-type">PayPal Account</p>
                       <p className="payment-method-detail">{paymentMethod.paypalEmail}</p>
                       <p className="payment-method-name">{paymentMethod.payerName}</p>
+                      {paymentMethod.connectedAt && (
+                        <p className="payment-method-date">
+                          Connected: {new Date(paymentMethod.connectedAt).toLocaleDateString()}
+                        </p>
+                      )}
                     </div>
                   </>
                 ) : (
@@ -622,9 +710,19 @@ const handlePayPalCancel = () => {
                   </>
                 )}
               </div>
-              <button className="change-payment-btn-profile" onClick={handleOpenPaymentDialog}>
-                Change Payment Method
-              </button>
+              <div className="payment-method-actions">
+                {paymentMethod.type === 'paypal' && (
+                  <button className="manage-paypal-btn-profile" onClick={() => setShowPayPalDialog(true)}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    Manage PayPal
+                  </button>
+                )}
+                <button className="change-payment-btn-profile" onClick={handleOpenPaymentDialog}>
+                  Change Payment Method
+                </button>
+              </div>
             </div>
           ) : (
             <div className="no-payment-method-profile">
@@ -656,6 +754,56 @@ const handlePayPalCancel = () => {
           </div>
         </div>
       </div>
+
+      {/* Recently Booked Section - Only for Guests */}
+      {guestId && user?.role === 'guest' && (
+        <div style={{ 
+          marginTop: '40px', 
+          padding: '0 20px',
+          maxWidth: '100%'
+        }}>
+          <div style={{ marginBottom: '24px' }}>
+            <h2 style={{ 
+              fontSize: '24px', 
+              fontWeight: '700', 
+              color: '#1f2937',
+              margin: 0
+            }}>
+              {loadingBookings ? 'Loading...' : recentBookings.length > 0 
+                ? `Recently Booked (${recentBookings.length})` 
+                : 'Recently Booked'}
+            </h2>
+            {recentBookings.length === 0 && !loadingBookings && (
+              <p style={{ 
+                fontSize: '14px', 
+                color: '#6b7280', 
+                marginTop: '8px' 
+              }}>
+                You don't have any recent bookings. Start exploring and book your next stay!
+              </p>
+            )}
+          </div>
+          
+          {loadingBookings ? (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: '40px 20px',
+              color: '#6b7280'
+            }}>
+              Loading your bookings...
+            </div>
+          ) : recentBookings.length > 0 ? (
+            <div style={{ padding: "20px 0" }}>
+              <SlideshowWheel 
+                data={recentBookings} 
+                useCase={`Recently Booked (${recentBookings.length})`} 
+              />
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* Edit Profile Dialog */}
       <dialog ref={dialogRef} className="edit-profile-dialog">
@@ -964,6 +1112,16 @@ const handlePayPalCancel = () => {
           </div>
         </dialog>
       </PayPalScriptProvider>
+
+      {/* PayPal Management Dialog */}
+      {showPayPalDialog && paymentMethod?.type === 'paypal' && (
+        <PayPal
+          userId={hostId || guestId}
+          userRole={user?.role}
+          paymentMethod={paymentMethod}
+          onClose={() => setShowPayPalDialog(false)}
+        />
+      )}
     </div>
   )
 }

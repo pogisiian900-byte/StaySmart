@@ -367,6 +367,296 @@
   overflow: hidden;
 }
 
+/* Promo Code Button */
+.chat-promo-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.chat-promo-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.4);
+}
+
+.chat-promo-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Promo Code Message */
+.promo-code-message {
+  background: white;
+  border-radius: 16px;
+  border: 2px solid #e4e6eb;
+  overflow: hidden;
+  max-width: 320px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.promo-mine {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #10b981;
+}
+
+.promo-listing-image {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  display: block;
+}
+
+.promo-code-content {
+  padding: 12px;
+}
+
+.promo-code-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.promo-code-badge svg {
+  width: 16px;
+  height: 16px;
+}
+
+.promo-listing-title {
+  margin: 8px 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #31326F;
+  line-height: 1.3;
+}
+
+.promo-code-text {
+  margin: 8px 0;
+  font-size: 0.875rem;
+  color: #717171;
+}
+
+.promo-code-text strong {
+  color: #10b981;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.promo-use-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #31326F 0%, #637AB9 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.promo-use-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(49, 50, 111, 0.3);
+}
+
+.promo-time {
+  font-size: 0.6875rem;
+  opacity: 0.7;
+  padding: 4px 12px 8px;
+  display: block;
+}
+
+/* Promo Code Dialog */
+.promo-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.promo-dialog-content {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.promo-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e4e6eb;
+}
+
+.promo-dialog-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #31326F;
+}
+
+.promo-dialog-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #717171;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.promo-dialog-close:hover {
+  background: #f0f2f5;
+  color: #31326F;
+}
+
+.promo-dialog-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.no-promo-message {
+  text-align: center;
+  color: #717171;
+  padding: 40px 20px;
+  font-size: 0.9375rem;
+}
+
+.promo-listings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.promo-listing-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid #e4e6eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.promo-listing-item:hover {
+  border-color: #31326F;
+  background: #f9fafb;
+}
+
+.promo-listing-item.selected {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.promo-listing-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.promo-listing-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.promo-listing-info h4 {
+  margin: 0 0 8px 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #31326F;
+  line-height: 1.3;
+}
+
+.promo-listing-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.promo-code-preview {
+  font-size: 0.875rem;
+  color: #717171;
+}
+
+.promo-code-preview strong {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.promo-discount-preview {
+  font-size: 0.875rem;
+  color: #10b981;
+  font-weight: 700;
+}
+
+.promo-dialog-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e4e6eb;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.promo-send-btn {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.promo-send-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.promo-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .chat-window-container {
@@ -405,11 +695,29 @@
     max-width: 85%;
   }
 
+  .promo-code-message {
+    max-width: 280px;
+  }
+
   .chat-input-form {
     padding: 12px 16px;
   }
 
   .chat-input-container {
     padding: 6px 12px;
+  }
+
+  .promo-dialog-overlay {
+    padding: 10px;
+  }
+
+  .promo-dialog-content {
+    max-height: 90vh;
+  }
+
+  .promo-dialog-header,
+  .promo-dialog-body,
+  .promo-dialog-footer {
+    padding: 16px;
   }
 }

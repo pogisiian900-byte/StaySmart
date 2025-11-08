@@ -122,7 +122,7 @@ const Admin_MainContent = () => {
     // For now, we'll use a simple distribution
     // In a real app, this would come from subscription data
     return [
-      { name: 'Elite', count: 1, color: '#4a90e2' },
+      { name: 'Elite', count: 1, color: '#31326F' },
       { name: 'Starter', count: hosts.length - 1 || 1, color: '#10b981' }
     ]
   }, [hosts])
@@ -230,8 +230,8 @@ const Admin_MainContent = () => {
             <svg width="100%" height="200" viewBox="0 0 600 200">
               <defs>
                 <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#4a90e2" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="#4a90e2" stopOpacity="0" />
+                  <stop offset="0%" stopColor="#31326F" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#31326F" stopOpacity="0" />
                 </linearGradient>
               </defs>
               {/* Y-axis */}
@@ -257,9 +257,9 @@ const Admin_MainContent = () => {
                 return (
                   <g key={index}>
                     {nextX && (
-                      <line x1={x} y1={y} x2={nextX} y2={nextY} stroke="#4a90e2" strokeWidth="2" />
+                      <line x1={x} y1={y} x2={nextX} y2={nextY} stroke="#31326F" strokeWidth="2" />
                     )}
-                    <circle cx={x} cy={y} r="4" fill="#4a90e2" />
+                    <circle cx={x} cy={y} r="4" fill="#31326F" />
                     <text x={x} y="195" textAnchor="middle" fontSize="10" fill="#6b7280">
                       {data.month.split(' ')[0]}
                     </text>

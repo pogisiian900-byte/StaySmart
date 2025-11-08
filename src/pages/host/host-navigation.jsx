@@ -9,6 +9,8 @@ import HostDashboard from "../../components/Host/Dashboard";
 import Listings from "../../components/Host/Listings";
 import Bookings from "../../pages/host/HostBookings";
 import Earnings from "../../components/Host/Earnings";
+import 'dialog-polyfill/dist/dialog-polyfill.css';
+import dialogPolyfill from 'dialog-polyfill';
 
 function Host_Navigation({ hostId, userData }) {
   const [open, setOpen] = useState(false);
@@ -17,19 +19,52 @@ function Host_Navigation({ hostId, userData }) {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const logoutDialogRef = useRef(null);
   const navigate = useNavigate();
   const menuRef = useRef(null); // ⬅️ for detecting outside clicks
   const buttonRef = useRef(null); // ⬅️ prevent immediate closing when clicking button
   const notificationRef = useRef(null);
   const notificationButtonRef = useRef(null);
 
+  // Register dialog polyfill
+  useEffect(() => {
+    if (logoutDialogRef.current && !logoutDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(logoutDialogRef.current);
+    }
+  }, []);
+
+  const showLogoutConfirmation = () => {
+    setShowLogoutDialog(true);
+    if (logoutDialogRef.current) {
+      try {
+        if (typeof logoutDialogRef.current.showModal === 'function') {
+          logoutDialogRef.current.showModal();
+        } else {
+          dialogPolyfill.registerDialog(logoutDialogRef.current);
+          logoutDialogRef.current.showModal();
+        }
+      } catch (err) {
+        console.error('Error showing logout dialog:', err);
+        logoutDialogRef.current.style.display = 'block';
+      }
+    }
+  };
+
+  const handleCloseLogoutDialog = () => {
+    setShowLogoutDialog(false);
+    logoutDialogRef.current?.close();
+  };
+
   const handleLogout = async () => {
     try {
+      handleCloseLogoutDialog();
       await signOut(auth);
       console.log("Host logged out");
       navigate("/host", { replace: true });
     } catch (err) {
       console.error("Logout failed:", err.message);
+      alert('Failed to logout. Please try again.');
     }
   };
 
@@ -60,35 +95,120 @@ function Host_Navigation({ hostId, userData }) {
 
   // ✅ Subscribe to notifications for host
   useEffect(() => {
-    if (!hostId) return;
-    const q = query(collection(db, 'Notifications'), where('recipientId', '==', hostId));
-    const unsub = onSnapshot(q, (snap) => {
-      const list = [];
-      snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-      list.sort((a, b) => {
-        const toMs = (v) => (v?.toMillis ? v.toMillis() : (v?.seconds ? v.seconds * 1000 : (Date.parse(v) || 0)));
-        return toMs(b.createdAt) - toMs(a.createdAt);
-      });
-      setNotifications(list);
-      setUnreadCount(list.filter(n => !n.read).length);
-    });
-    return () => unsub();
+    console.log('🔔 HostNav: useEffect triggered, hostId:', hostId);
+    console.log('🔔 HostNav: hostId type:', typeof hostId);
+    console.log('🔔 HostNav: hostId value:', JSON.stringify(hostId));
+    
+    if (!hostId) {
+      console.log('⚠️ HostNav: No hostId, returning early');
+      return;
+    }
+    
+    // Query ALL notifications and filter client-side to support both old and new formats
+    // Old format: has hostId but no recipientId
+    // New format: has recipientId
+    const allNotificationsQuery = query(collection(db, 'Notifications'));
+    console.log('🔔 HostNav: Setting up Firestore listener for hostId:', hostId);
+    console.log('🔔 HostNav: Querying ALL notifications (will filter client-side)');
+    
+    const unsub = onSnapshot(
+      allNotificationsQuery, 
+      (snap) => {
+        console.log('🔔 HostNav: Snapshot received!');
+        console.log('🔔 HostNav: Total notifications in DB:', snap.size);
+        
+        try {
+          const list = [];
+          snap.forEach((d) => {
+            try {
+              const data = d.data();
+              const hasRecipientId = data.recipientId === hostId;
+              const hasOldFormatHostId = data.hostId === hostId && !data.recipientId;
+              
+              // Include if: new format (recipientId matches) OR old format (hostId matches but no recipientId)
+              if (hasRecipientId || hasOldFormatHostId) {
+                console.log('✅ HostNav: Including notification:', {
+                  id: d.id,
+                  recipientId: data.recipientId,
+                  hostId: data.hostId,
+                  title: data.title,
+                  format: hasRecipientId ? 'new' : 'old'
+                });
+                
+                // If old format, add recipientId for consistency
+                if (hasOldFormatHostId && !data.recipientId) {
+                  data.recipientId = data.hostId;
+                  console.log('🔄 HostNav: Adding recipientId to old format notification');
+                }
+                
+                list.push({ id: d.id, ...data });
+              }
+            } catch (err) {
+              console.error('❌ HostNav: Error processing notification document:', err);
+            }
+          });
+          
+          console.log('🔔 HostNav: Total notifications found after filtering:', list.length);
+          console.log('🔔 HostNav: Notifications list:', list);
+          
+          list.sort((a, b) => {
+            try {
+              const toMs = (v) => (v?.toMillis ? v.toMillis() : (v?.seconds ? v.seconds * 1000 : (Date.parse(v) || 0)));
+              return toMs(b.createdAt) - toMs(a.createdAt);
+            } catch (err) {
+              console.error('❌ HostNav: Error sorting:', err);
+              return 0;
+            }
+          });
+          
+          const unread = list.filter(n => !n.read);
+          console.log('🔔 HostNav: Unread notifications:', unread.length);
+          console.log('🔔 HostNav: Setting notifications state with', list.length, 'items');
+          console.log('🔔 HostNav: Setting unread count to', unread.length);
+          
+          setNotifications(list);
+          setUnreadCount(unread.length);
+        } catch (error) {
+          console.error('❌ HostNav: Error processing notifications:', error);
+        }
+      },
+      (error) => {
+        console.error('❌ HostNav: Firestore snapshot error:', error);
+        console.error('❌ HostNav: Error code:', error.code);
+        console.error('❌ HostNav: Error message:', error.message);
+      }
+    );
+    
+    return () => {
+      console.log('🔔 HostNav: Cleaning up listener');
+      if (unsub) unsub();
+    };
   }, [hostId]);
 
   // ✅ Mark all as read when dropdown opens
   const handleNotificationClick = async () => {
-    const nextOpen = !notificationOpen;
-    setNotificationOpen(nextOpen);
-    if (nextOpen) {
-      const unread = notifications.filter(n => !n.read);
-      if (unread.length === 0) return;
-      try {
-        const batch = writeBatch(db);
-        unread.forEach((n) => batch.update(doc(db, 'Notifications', n.id), { read: true }));
-        await batch.commit();
-      } catch (e) {
-        console.error('Failed to mark notifications read', e);
+    try {
+      const nextOpen = !notificationOpen;
+      setNotificationOpen(nextOpen);
+      if (nextOpen) {
+        const unread = notifications.filter(n => !n.read);
+        if (unread.length === 0) return;
+        try {
+          const batch = writeBatch(db);
+          unread.forEach((n) => {
+            try {
+              batch.update(doc(db, 'Notifications', n.id), { read: true });
+            } catch (err) {
+              console.error('Error adding notification to batch:', err);
+            }
+          });
+          await batch.commit();
+        } catch (e) {
+          console.error('Failed to mark notifications read', e);
+        }
       }
+    } catch (error) {
+      console.error('Error in handleNotificationClick:', error);
     }
   };
 
@@ -233,12 +353,19 @@ function Host_Navigation({ hostId, userData }) {
               )}
               {notifications.map((n) => (
                 <div key={n.id} className={`notification-item ${!n.read ? 'unread' : ''}`} onClick={() => {
-                  if (n.conversationId) navigate(`/host/${hostId}/chat/${n.conversationId}`)
-                  else if (n.navigateTo === 'bookings') navigate(`/host/${hostId}/bookings`)
+                    if (n.conversationId) {
+                    navigate(`/host/${hostId}/chat/${n.conversationId}`)
+                  } else if (n.reservationId || n.navigateTo === 'bookings') {
+                    // Navigate to bookings page when clicking on booking-related notifications
+                    navigate(`/host/${hostId}/bookings`)
+                  } else if (n.listingId) {
+                    navigate(`/host/${hostId}/${n.listingId}`)
+                  }
                 }}>
                   <div className="notification-icon">🔔</div>
                   <div className="notification-content">
                     <p className="notification-title">{n.title || 'Notification'}</p>
+                    {n.message && <p className="notification-message" style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{n.message}</p>}
                     <p className="notification-time">{n.createdAt ? new Date(n.createdAt?.toMillis ? n.createdAt.toMillis() : n.createdAt).toLocaleString() : ''}</p>
                   </div>
                 </div>
@@ -283,12 +410,81 @@ function Host_Navigation({ hostId, userData }) {
           <button onClick={() => navigate(`/host/${hostId}/messages`)}>💬 Messages</button>
             <button onClick={() => { handleNotificationClick(); setOpen(false); }}>🔔 Notifications {unreadCount > 0 && `(${unreadCount})`}</button>
             <button>⚙️ Account Settings</button>
-            <button onClick={handleLogout}>🚪 Logout</button>
+            <button onClick={showLogoutConfirmation}>🚪 Logout</button>
           </div>
         )}
       </nav>
 
       <div className="host-main-page">{renderingPages()}</div>
+
+      {/* Logout Confirmation Dialog */}
+      {showLogoutDialog && (
+        <dialog ref={logoutDialogRef} className="logout-confirmation-dialog" style={{ maxWidth: '500px', width: '90%', border: 'none', borderRadius: '16px', padding: 0, boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' }}>
+          <style>
+            {`.logout-confirmation-dialog::backdrop {
+              background: rgba(0, 0, 0, 0.5);
+              backdrop-filter: blur(4px);
+            }`}
+          </style>
+          <div style={{ padding: '30px', textAlign: 'center' }}>
+            <div style={{ fontSize: '48px', marginBottom: '20px' }}>🚪</div>
+            <h2 style={{ margin: '0 0 15px 0', fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
+              Confirm Logout
+            </h2>
+            <p style={{ margin: '0 0 30px 0', fontSize: '16px', color: '#6b7280', lineHeight: '1.5' }}>
+              Are you sure you want to logout? You will need to login again to access your account.
+            </p>
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+              <button
+                onClick={handleCloseLogoutDialog}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
+                  background: 'white',
+                  color: '#374151',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#f9fafb';
+                  e.target.style.borderColor = '#d1d5db';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'white';
+                  e.target.style.borderColor = '#e5e7eb';
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#31326F',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#252550';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = '#31326F';
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
     </>
   );
 }

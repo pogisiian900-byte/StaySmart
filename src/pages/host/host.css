@@ -160,23 +160,62 @@
 .discount-card{
   display: flex;
   justify-content: space-between;
-  align-content: center;
-  gap: 10px;
+  align-items: center;
+  gap: 15px;
+  padding: 15px 20px;
+  background: linear-gradient(135deg, rgba(67, 153, 251, 0.1) 0%, rgba(57, 59, 146, 0.1) 100%);
+  border: 2px solid #2a75c5;
+  border-radius: 12px;
+  margin: 20px 0;
 }
+
+.discount-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
+}
+
+.discount-info svg {
+  color: #2a75c5;
+  flex-shrink: 0;
+}
+
+.discount-info p {
+  margin: 5px 0;
+  font-size: 1rem;
+}
+
+.promo-code-display {
+  color: #10b981;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.promo-dates {
+  color: #666;
+  font-size: 0.9rem;
+}
+
 .changeDiscountButton{
-  border-radius: 15px;
-  padding: 0 20px;
+  border-radius: 10px;
+  padding: 10px 20px;
   border: 0;
   background-color: #2a75c5;
   color: white;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s;
+  white-space: nowrap;
 }
 .changeDiscountButton:hover{
   background-color: rgb(17, 19, 138);
-  font-weight: bold;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 .addDiscount{
   width: 100%;
-  padding: 10px;
+  padding: 12px;
   font-size: 1.1em;
   border-radius: 10px;
   display: flex;
@@ -184,12 +223,253 @@
   align-items: center;
   gap: 10px;
   border: 0;
-  background-color: #2a75c5;
+  background: linear-gradient(135deg, #2a75c5 0%, #007bff 100%);
   color: white;
   cursor: pointer;
+  transition: all 0.3s;
+  font-weight: 600;
 }
 .addDiscount:hover{
-   background-color: #007bff;
+   background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+   transform: translateY(-2px);
+   box-shadow: 0 4px 12px rgba(42, 117, 197, 0.4);
+}
+
+/* Discount Dialog Styles */
+.addDiscount-dialog {
+  position: fixed;
+  top: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 30px;
+  background: white;
+  z-index: 1000;
+}
+
+.addDiscount-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.addDiscount-dialog h3 {
+  margin: 0 0 25px 0;
+  font-size: 1.8rem;
+  color: #222;
+  font-weight: 700;
+  text-align: center;
+}
+
+.addDiscount-dialog .closeButton {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.addDiscount-dialog .closeButton:hover {
+  background: #f3f4f6;
+  color: #ef4444;
+}
+
+.discount-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.discount-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.discount-form-group .form-label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.95rem;
+}
+
+.discount-form-group .form-input {
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.discount-form-group .form-input:focus {
+  outline: none;
+  border-color: #2a75c5;
+  box-shadow: 0 0 0 3px rgba(42, 117, 197, 0.1);
+}
+
+.discount-form-group small {
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.discount-preview {
+  margin: 20px 0;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 2px solid #e5e7eb;
+}
+
+.discount-preview h4 {
+  margin: 0 0 15px 0;
+  color: #222;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.preview-card {
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.preview-card p {
+  margin: 8px 0;
+  font-size: 0.95rem;
+}
+
+.preview-description {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.preview-price {
+  color: #10b981;
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin-top: 10px !important;
+}
+
+.discount-dialog-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.save-discount-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.save-discount-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.save-discount-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.remove-discount-btn {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #ef4444;
+  border-radius: 10px;
+  background: white;
+  color: #ef4444;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.remove-discount-btn:hover:not(:disabled) {
+  background: #ef4444;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.remove-discount-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancel-discount-btn {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  background: white;
+  color: #6b7280;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.cancel-discount-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.cancel-discount-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Responsive styles for discount dialog */
+@media (max-width: 768px) {
+  .addDiscount-dialog {
+    width: 95%;
+    padding: 20px;
+    top: 2%;
+  }
+
+  .addDiscount-dialog h3 {
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+  }
+
+  .discount-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .changeDiscountButton {
+    width: 100%;
+  }
+
+  .discount-info {
+    width: 100%;
+  }
 }
 .editListing-dialog{
   position: fixed;
@@ -498,41 +778,158 @@
   background: #0056b3;
 }
 
+.table-wrapper {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  margin-top: 20px;
+}
+
 .earningTable {
   width: 100%;
   border-collapse: collapse;
+  background: white;
 }
 
-.earningTable th,
-.earningTable td {
-  padding: 12px;
-  border-bottom: 1px solid #ddd;
+.earningTable thead {
+  background: linear-gradient(135deg, #393b92 0%, #5758a2 100%);
+  color: white;
+}
+
+.earningTable th {
+  padding: 16px 12px;
   text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.earningTable td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.earningTable tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.earningTable tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.earningTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.booking-id,
+.payout-id {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  color: #393b92;
+}
+
+.amount-earned,
+.payout-amount {
+  font-weight: 700;
+  color: #10b981;
+  font-size: 1rem;
+}
+
+.reference {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.status {
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 6px 12px;
+  border-radius: 20px;
+  display: inline-block;
+  font-size: 0.85rem;
 }
 
 .status.completed {
-  color: green;
-  font-weight: 600;
+  background: #d1fae5;
+  color: #065f46;
 }
 
 .status.pending {
-  color: orange;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status.processing {
+  background: #dbeafe;
+  color: #1e40af;
 }
 
 .status.cancelled {
-  color: red;
+  background: #fee2e2;
+  color: #991b1b;
 }
 
-.overview-div{
-  border: 1px solid;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+.table-empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 1.1rem;
 }
-.overview-card{
-  padding: 10px;
-  border: 1px solid;
-  border-radius: 20px;
-  margin: 10px;
+
+.overview-div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin: 20px 0;
+}
+
+.overview-card {
+  padding: 20px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.overview-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.overview-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.overview-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.overview-card-header p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.overview-amount {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
 }
 @media (max-width: 768px) {
   .login-host-card {
@@ -549,6 +946,63 @@
     padding: 8px;
   }
 
+  /* Earnings Page Responsive */
+  .earnings-container {
+    padding: 15px;
+  }
+
+  .earnings-filters {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .earnings-filters input,
+  .earnings-filters select {
+    width: 100%;
+  }
+
+  .overview-div {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+  }
+
+  .overview-card {
+    padding: 15px;
+  }
+
+  .overview-amount {
+    font-size: 1.5rem;
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .earningTable {
+    min-width: 800px;
+  }
+
+  .earningTable th,
+  .earningTable td {
+    padding: 10px 8px;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .overview-div {
+    grid-template-columns: 1fr;
+  }
+
+  .earnings-tabs {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .earnings-tabs button {
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {

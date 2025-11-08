@@ -10,6 +10,8 @@ import {
   doc,
   updateDoc,
   getDoc,
+  where,
+  getDocs,
 } from "firebase/firestore";
 import { useNavigate, useParams } from "react-router-dom";
 import "./ChatWindow.css";
@@ -19,6 +21,9 @@ export default function ChatWindow({ conversationId }) {
   const [text, setText] = useState("");
   const [otherUser, setOtherUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [hostListings, setHostListings] = useState([]);
+  const [showPromoDialog, setShowPromoDialog] = useState(false);
+  const [selectedPromoListing, setSelectedPromoListing] = useState(null);
   const bottomRef = useRef();
   const messagesEndRef = useRef();
   const navigate = useNavigate();
@@ -70,6 +75,36 @@ export default function ChatWindow({ conversationId }) {
     fetchConversation();
   }, [conversationId]);
 
+  // Fetch host listings if current user is a host
+  useEffect(() => {
+    const fetchHostListings = async () => {
+      const user = auth.currentUser;
+      if (!user || currentUser?.role !== 'host') return;
+
+      try {
+        const listingsQuery = query(
+          collection(db, "Listings"),
+          where("hostId", "==", user.uid)
+        );
+        const listingsSnapshot = await getDocs(listingsQuery);
+        const listings = listingsSnapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .filter((listing) => listing.discount > 0 && listing.promoCode); // Only listings with promo codes
+        
+        setHostListings(listings);
+      } catch (error) {
+        console.error("Error fetching host listings:", error);
+      }
+    };
+
+    if (currentUser) {
+      fetchHostListings();
+    }
+  }, [currentUser]);
+
   // Listen to messages
   useEffect(() => {
     if (!conversationId) return;
@@ -108,6 +143,7 @@ export default function ChatWindow({ conversationId }) {
         {
           senderId: user.uid,
           text: text.trim(),
+          type: "text",
           createdAt: serverTimestamp(),
         }
       );
@@ -123,6 +159,59 @@ export default function ChatWindow({ conversationId }) {
       console.error("Error sending message:", error);
       alert("Failed to send message. Please try again.");
     }
+  };
+
+  const sendPromoCode = async (listing) => {
+    if (!listing.promoCode || !listing.discount) {
+      alert("This listing doesn't have a promo code.");
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user) return alert("You must be logged in to send messages.");
+
+    try {
+      const promoMessage = {
+        senderId: user.uid,
+        type: "promoCode",
+        listingId: listing.id,
+        listingTitle: listing.title,
+        listingPhoto: listing.photos?.[0] || null,
+        promoCode: listing.promoCode,
+        discount: listing.discount,
+        text: `🎉 Special Offer! Use promo code "${listing.promoCode}" for ${listing.discount}% off on "${listing.title}"!`,
+        createdAt: serverTimestamp(),
+      };
+
+      await addDoc(
+        collection(db, "Conversations", conversationId, "messages"),
+        promoMessage
+      );
+
+      // Update last message on parent conversation
+      await updateDoc(doc(db, "Conversations", conversationId), {
+        lastMessage: `Promo code: ${listing.promoCode}`,
+        updatedAt: serverTimestamp(),
+      });
+
+      setShowPromoDialog(false);
+      setSelectedPromoListing(null);
+    } catch (error) {
+      console.error("Error sending promo code:", error);
+      alert("Failed to send promo code. Please try again.");
+    }
+  };
+
+  const handleUsePromoCode = (message) => {
+    if (!guestId || !message.listingId) return;
+    
+    // Navigate to listing with promo code pre-applied
+    navigate(`/guest/${guestId}/view-listing/${message.listingId}`, {
+      state: {
+        promoCode: message.promoCode,
+        fromMessage: true,
+      },
+    });
   };
 
   const formatTime = (timestamp) => {
@@ -213,6 +302,9 @@ export default function ChatWindow({ conversationId }) {
             const showTime = index === messages.length - 1 || 
               messages[index + 1].senderId !== m.senderId;
 
+            // Check if message is a promo code
+            const isPromoCode = m.type === "promoCode";
+
             return (
               <div
                 key={m.id}
@@ -224,14 +316,49 @@ export default function ChatWindow({ conversationId }) {
                   </div>
                 )}
                 <div className="message-content-group">
-                  <div className={`message-bubble ${isMe ? "message-mine" : "message-theirs"}`}>
-                    <p className="message-text">{m.text}</p>
-                    {showTime && (
-                      <span className="message-time">
-                        {formatTime(m.createdAt)}
-                      </span>
-                    )}
-                  </div>
+                  {isPromoCode ? (
+                    <div className={`promo-code-message ${isMe ? "promo-mine" : "promo-theirs"}`}>
+                      {m.listingPhoto && (
+                        <img 
+                          src={m.listingPhoto} 
+                          alt={m.listingTitle} 
+                          className="promo-listing-image"
+                        />
+                      )}
+                      <div className="promo-code-content">
+                        <div className="promo-code-badge">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                          </svg>
+                          <span>{m.discount}% OFF</span>
+                        </div>
+                        <h4 className="promo-listing-title">{m.listingTitle}</h4>
+                        <p className="promo-code-text">Promo Code: <strong>{m.promoCode}</strong></p>
+                        {!isMe && guestId && (
+                          <button 
+                            className="promo-use-btn"
+                            onClick={() => handleUsePromoCode(m)}
+                          >
+                            Use This Promo Code
+                          </button>
+                        )}
+                      </div>
+                      {showTime && (
+                        <span className="message-time promo-time">
+                          {formatTime(m.createdAt)}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className={`message-bubble ${isMe ? "message-mine" : "message-theirs"}`}>
+                      <p className="message-text">{m.text}</p>
+                      {showTime && (
+                        <span className="message-time">
+                          {formatTime(m.createdAt)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -243,6 +370,18 @@ export default function ChatWindow({ conversationId }) {
       {/* Message Input */}
       <form className="chat-input-form" onSubmit={sendMessage}>
         <div className="chat-input-container">
+          {currentUser?.role === 'host' && hostListings.length > 0 && (
+            <button 
+              type="button" 
+              className="chat-promo-btn" 
+              title="Share Promo Code"
+              onClick={() => setShowPromoDialog(true)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </button>
+          )}
           <button type="button" className="chat-attachment-btn" title="Attach file">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
@@ -269,6 +408,67 @@ export default function ChatWindow({ conversationId }) {
           </button>
         </div>
       </form>
+
+      {/* Promo Code Dialog */}
+      {showPromoDialog && (
+        <div className="promo-dialog-overlay" onClick={() => setShowPromoDialog(false)}>
+          <div className="promo-dialog-content" onClick={(e) => e.stopPropagation()}>
+            <div className="promo-dialog-header">
+              <h3>Share Promo Code</h3>
+              <button 
+                className="promo-dialog-close"
+                onClick={() => setShowPromoDialog(false)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            <div className="promo-dialog-body">
+              {hostListings.length === 0 ? (
+                <p className="no-promo-message">You don't have any listings with promo codes yet. Add a promo code to your listing first.</p>
+              ) : (
+                <div className="promo-listings-list">
+                  {hostListings.map((listing) => (
+                    <div 
+                      key={listing.id}
+                      className={`promo-listing-item ${selectedPromoListing?.id === listing.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedPromoListing(listing)}
+                    >
+                      {listing.photos?.[0] && (
+                        <img 
+                          src={listing.photos[0]} 
+                          alt={listing.title}
+                          className="promo-listing-thumb"
+                        />
+                      )}
+                      <div className="promo-listing-info">
+                        <h4>{listing.title}</h4>
+                        <div className="promo-listing-details">
+                          <span className="promo-code-preview">Code: <strong>{listing.promoCode}</strong></span>
+                          <span className="promo-discount-preview">{listing.discount}% OFF</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {hostListings.length > 0 && (
+              <div className="promo-dialog-footer">
+                <button
+                  className="promo-send-btn"
+                  onClick={() => selectedPromoListing && sendPromoCode(selectedPromoListing)}
+                  disabled={!selectedPromoListing}
+                >
+                  Send Promo Code
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

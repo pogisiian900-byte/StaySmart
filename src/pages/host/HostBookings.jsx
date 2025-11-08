@@ -21,6 +21,9 @@ const HostBookings = () => {
   const [reservationToConfirm, setReservationToConfirm] = useState(null)
   const [hostPayPalInfo, setHostPayPalInfo] = useState(null)
   const confirmDialogRef = React.useRef(null)
+  const [showDeclineDialog, setShowDeclineDialog] = useState(false)
+  const [reservationToDecline, setReservationToDecline] = useState(null)
+  const declineDialogRef = React.useRef(null)
 
   // Read date from URL params on mount
   useEffect(() => {
@@ -75,6 +78,9 @@ const HostBookings = () => {
     if (confirmDialogRef.current && !confirmDialogRef.current.showModal) {
       dialogPolyfill.registerDialog(confirmDialogRef.current)
     }
+    if (declineDialogRef.current && !declineDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(declineDialogRef.current)
+    }
   }, [])
 
   const showConfirmBookingDialog = async (reservation) => {
@@ -126,6 +132,38 @@ const HostBookings = () => {
     await handleDecision(reservationToConfirm.id, 'confirmed')
   }
 
+  const showDeclineBookingDialog = async (reservation) => {
+    setReservationToDecline(reservation)
+    setShowDeclineDialog(true)
+    setTimeout(() => {
+      if (declineDialogRef.current) {
+        try {
+          if (typeof declineDialogRef.current.showModal === 'function') {
+            declineDialogRef.current.showModal()
+          } else {
+            dialogPolyfill.registerDialog(declineDialogRef.current)
+            declineDialogRef.current.showModal()
+          }
+        } catch (err) {
+          console.error('Error showing decline dialog:', err)
+          declineDialogRef.current.style.display = 'block'
+        }
+      }
+    }, 50)
+  }
+
+  const handleCloseDeclineDialog = () => {
+    setShowDeclineDialog(false)
+    declineDialogRef.current?.close()
+    setReservationToDecline(null)
+  }
+
+  const handleDeclineBooking = async () => {
+    if (!reservationToDecline) return
+    handleCloseDeclineDialog()
+    await handleDecision(reservationToDecline.id, 'declined')
+  }
+
   const handleDecision = async (id, status) => {
     try {
       setUpdating(id)
@@ -147,9 +185,44 @@ const HostBookings = () => {
         updatedAt: serverTimestamp(),
       })
 
+      // Create notification for guest when booking status changes
+      if (reservationData.guestId) {
+        const guestNotification = {
+          type: status === 'confirmed' ? 'booking_confirmed' : status === 'declined' ? 'booking_declined' : 'booking_updated',
+          recipientId: reservationData.guestId, // Guest receives the notification
+          guestId: reservationData.guestId,
+          hostId: hostId,
+          listingId: reservationData.listingId,
+          reservationId: id,
+          title: status === 'confirmed' ? 'Booking Confirmed!' : status === 'declined' ? 'Booking Declined' : 'Booking Updated',
+          body: status === 'confirmed' 
+            ? `Your booking for ${reservationData.listingTitle || 'listing'} has been confirmed! Check-in: ${new Date(reservationData.checkIn).toLocaleDateString()}`
+            : status === 'declined'
+            ? `Unfortunately, your booking request for ${reservationData.listingTitle || 'listing'} has been declined.`
+            : `Your booking for ${reservationData.listingTitle || 'listing'} has been updated.`,
+          message: status === 'confirmed' 
+            ? `Your booking for ${reservationData.listingTitle || 'listing'} has been confirmed!`
+            : status === 'declined'
+            ? `Your booking request for ${reservationData.listingTitle || 'listing'} has been declined.`
+            : `Your booking status has been updated.`,
+          read: false,
+          createdAt: serverTimestamp(),
+        }
+        console.log('🔔 Creating guest notification for status change:', guestNotification);
+        const guestNotificationRef = await addDoc(collection(db, 'Notifications'), guestNotification);
+        console.log('✅ Guest notification created with ID:', guestNotificationRef.id);
+      } else {
+        console.log('⚠️ No guestId in reservation, skipping guest notification');
+      }
+
       // If confirmed, credit the amount to host
       if (status === 'confirmed' && reservationData.pricing) {
+        // IMPORTANT: Only add subtotal to host account, NOT the total (grandTotal)
+        // The total includes service fee which should NOT go to the host
         const hostEarnings = reservationData.pricing.subtotal || 0 // Host gets subtotal (excluding service fee)
+        // DO NOT use reservationData.pricing.total or grandTotal - that includes service fee
+        
+        console.log('Reservation pricing data:', reservationData.pricing)
         
         if (hostEarnings > 0 && hostId) {
           // Get host document
@@ -161,16 +234,50 @@ const HostBookings = () => {
             const currentEarnings = hostData.totalEarnings || 0
             const newTotalEarnings = currentEarnings + hostEarnings
             
+            // Get the amount guest was charged (total/grandTotal)
+            // If total doesn't exist, calculate it from subtotal + serviceFee
+            let guestChargedAmount = reservationData.pricing.total || 0
+            if (!guestChargedAmount && reservationData.pricing.subtotal && reservationData.pricing.serviceFee) {
+              guestChargedAmount = reservationData.pricing.subtotal + reservationData.pricing.serviceFee
+              console.log('Calculated total from subtotal + serviceFee:', guestChargedAmount)
+            }
+            
+            // Get current PayPal balance and increase it by the amount guest was charged
+            const currentPayPalBalance = hostData.paypalBalance || 0
+            const newPayPalBalance = currentPayPalBalance + guestChargedAmount
+            
+            // Validate that we have a valid amount to add
+            if (!guestChargedAmount || guestChargedAmount <= 0) {
+              console.warn('Invalid guestChargedAmount:', guestChargedAmount, 'Pricing data:', reservationData.pricing)
+            }
+            
+            console.log('Updating host PayPal balance:', {
+              hostId,
+              currentPayPalBalance,
+              guestChargedAmount,
+              newPayPalBalance,
+              reservationId: id,
+              hostDataKeys: Object.keys(hostData)
+            })
+            
             // Get host's PayPal email for payout
             const hostPayPalEmail = hostData.paymentMethod?.paypalEmail || null
             const hostPayerId = hostData.paymentMethod?.payerId || null
             const paymentMethod = reservationData.paymentSummary?.methodType || 'card'
             
-            // Update host's total earnings
-            await updateDoc(hostRef, {
-              totalEarnings: newTotalEarnings,
-              updatedAt: serverTimestamp(),
-            })
+            // Update host's total earnings and PayPal balance
+            try {
+              await updateDoc(hostRef, {
+                totalEarnings: newTotalEarnings,
+                paypalBalance: newPayPalBalance,
+                paypalLastUpdated: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              })
+              console.log('Successfully updated host PayPal balance to:', newPayPalBalance)
+            } catch (updateError) {
+              console.error('Error updating host PayPal balance:', updateError)
+              throw updateError // Re-throw to be caught by outer try-catch
+            }
 
             // Create transaction record with payment details
             const transaction = {
@@ -180,12 +287,15 @@ const HostBookings = () => {
               listingId: reservationData.listingId,
               listingTitle: reservationData.listingTitle || '',
               amount: hostEarnings,
+              guestChargedAmount: guestChargedAmount, // Total amount guest paid
               type: 'booking_earnings',
               status: 'completed',
               paymentMethod: paymentMethod,
               guestPayPalEmail: reservationData.paymentSummary?.paypalEmail || null,
               hostPayPalEmail: hostPayPalEmail,
               payoutStatus: hostPayPalEmail ? 'pending_payout' : 'manual_payout_required',
+              balanceBefore: currentPayPalBalance,
+              balanceAfter: newPayPalBalance,
               checkIn: reservationData.checkIn,
               checkOut: reservationData.checkOut,
               nights: reservationData.nights || 0,
@@ -243,10 +353,12 @@ const HostBookings = () => {
                 // Update notification with success message including all payment details
                 const notification = {
                   type: 'earnings_credited',
+                  recipientId: hostId, // Fixed: Use recipientId instead of hostId for query matching
                   hostId,
                   reservationId: id,
                   title: 'Earnings Credited & Payment Sent',
                   body: `₱${hostEarnings.toLocaleString()} has been sent to your PayPal account.\n\nPayment Details:\nPayPal Email: ${hostPayPalEmail}\nPayPal ID: ${hostData.paymentMethod?.payerId || 'N/A'}\nPayout Batch ID: ${payoutResult.data.payoutBatchId}\nTransaction ID: ${reservationData.paymentSummary?.transactionId || 'N/A'}`,
+                  message: `₱${hostEarnings.toLocaleString()} has been sent to your PayPal account.`,
                   read: false,
                   createdAt: serverTimestamp(),
                 }
@@ -267,10 +379,12 @@ const HostBookings = () => {
                 // Still create notification but with error message
                 const notification = {
                   type: 'earnings_credited',
+                  recipientId: hostId, // Fixed: Use recipientId instead of hostId for query matching
                   hostId,
                   reservationId: id,
                   title: 'Earnings Credited - Payout Pending',
                   body: `₱${hostEarnings.toLocaleString()} has been credited to your account. PayPal payout failed: ${payoutError.message || 'Please contact support'}.\n\nTransaction ID: ${reservationData.paymentSummary?.transactionId || 'N/A'}`,
+                  message: `₱${hostEarnings.toLocaleString()} has been credited to your account. PayPal payout failed.`,
                   read: false,
                   createdAt: serverTimestamp(),
                 }
@@ -282,10 +396,12 @@ const HostBookings = () => {
               // No PayPal email - create notification for manual payout
               const notification = {
                 type: 'earnings_credited',
+                recipientId: hostId, // Fixed: Use recipientId instead of hostId for query matching
                 hostId,
                 reservationId: id,
                 title: 'Earnings Credited',
                 body: `₱${hostEarnings.toLocaleString()} has been credited to your account for booking ${reservationData.listingTitle || 'reservation'}. Manual payout required - please add your PayPal email in profile.\n\nTransaction ID: ${reservationData.paymentSummary?.transactionId || 'N/A'}`,
+                message: `₱${hostEarnings.toLocaleString()} has been credited to your account. Manual payout required.`,
                 read: false,
                 createdAt: serverTimestamp(),
               }
@@ -392,7 +508,55 @@ const HostBookings = () => {
             <span className="status-badge status-declined">Declined</span>
           </div>
         </div>
-        {filtered.length === 0 && (<div style={{ padding: 12, color: '#666' }}>No reservations{selectedDate ? ' on selected date' : ''}.</div>)}
+        {filtered.length === 0 && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '60px 20px',
+            textAlign: 'center',
+            background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
+            borderRadius: '16px',
+            border: '2px dashed #d1d5db',
+            margin: '20px 0'
+          }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              background: 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
+            }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </div>
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: 600,
+              color: '#374151',
+              margin: '0 0 8px 0'
+            }}>
+              {selectedDate ? `No reservations on ${selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No reservations found'}
+            </h3>
+            <p style={{
+              fontSize: '0.95rem',
+              color: '#6b7280',
+              margin: 0,
+              maxWidth: '400px'
+            }}>
+              {selectedDate ? 'There are no reservations scheduled for this date. Try selecting a different date from the calendar.' : 'You don\'t have any reservations yet. When guests book your listings, they will appear here.'}
+            </p>
+          </div>
+        )}
         <div className="booking-list">
           {filtered.map((r) => (
             <div key={r.id} className="booking-card" onClick={() => setSelectedReservation(r)} style={{ cursor: 'pointer' }}>
@@ -465,7 +629,7 @@ const HostBookings = () => {
                     display: 'flex', 
                     alignItems: 'center', 
                     gap: '8px',
-                    background: '#4a90e2',
+                    background: '#31326F',
                     color: 'white',
                     border: 'none'
                   }}
@@ -474,7 +638,7 @@ const HostBookings = () => {
                   Message Guest
                 </button>
                 <button className="btn btn-primary" disabled={updating===selectedReservation.id || selectedReservation.status!=='pending'} onClick={() => showConfirmBookingDialog(selectedReservation)}>Confirm</button>
-                <button className="btn btn-danger" disabled={updating===selectedReservation.id || selectedReservation.status!=='pending'} onClick={() => handleDecision(selectedReservation.id, 'declined')}>Decline</button>
+                <button className="btn btn-danger" disabled={updating===selectedReservation.id || selectedReservation.status!=='pending'} onClick={() => showDeclineBookingDialog(selectedReservation)}>Decline</button>
               </div>
             </div>
           </div>
@@ -623,6 +787,151 @@ const HostBookings = () => {
               }}
             >
               {updating === reservationToConfirm?.id ? 'Processing...' : 'Yes, Confirm Booking'}
+            </button>
+          </div>
+        </div>
+      </dialog>
+
+      {/* Decline Confirmation Dialog */}
+      <dialog ref={declineDialogRef} className="decline-booking-dialog-host" style={{ maxWidth: '500px', width: '90%', border: 'none', borderRadius: '16px', padding: 0, boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' }}>
+        <style>{`
+          .decline-booking-dialog-host::backdrop {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+          }
+        `}</style>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            padding: '32px 24px 24px', 
+            position: 'relative',
+            background: 'linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%)',
+            borderRadius: '16px 16px 0 0'
+          }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              background: '#ef4444',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              marginBottom: '16px'
+            }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </div>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#991b1b', margin: '0 0 8px 0', textAlign: 'center' }}>
+              Decline Booking Request
+            </h3>
+            <button 
+              onClick={handleCloseDeclineDialog} 
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'rgba(255, 255, 255, 0.8)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#6b7280'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          <div style={{ padding: '24px' }}>
+            {reservationToDecline && (
+              <>
+                <p style={{ fontSize: '1.1rem', color: '#4b5563', marginBottom: '20px', textAlign: 'center', lineHeight: '1.6' }}>
+                  Are you sure you want to decline this booking request? The guest will be notified and their payment will be refunded.
+                </p>
+                <div style={{ 
+                  background: '#fef2f2', 
+                  borderRadius: '12px', 
+                  padding: '20px', 
+                  border: '1px solid #fecaca',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #fee2e2' }}>
+                    <span style={{ color: '#6b7280', fontWeight: 500 }}>Listing:</span>
+                    <span style={{ color: '#1f2937', fontWeight: 600 }}>{reservationToDecline.listingTitle || 'N/A'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #fee2e2' }}>
+                    <span style={{ color: '#6b7280', fontWeight: 500 }}>Check-in:</span>
+                    <span style={{ color: '#1f2937', fontWeight: 600 }}>{new Date(reservationToDecline.checkIn).toLocaleDateString()}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #fee2e2' }}>
+                    <span style={{ color: '#6b7280', fontWeight: 500 }}>Check-out:</span>
+                    <span style={{ color: '#1f2937', fontWeight: 600 }}>{new Date(reservationToDecline.checkOut).toLocaleDateString()}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #fee2e2' }}>
+                    <span style={{ color: '#6b7280', fontWeight: 500 }}>Nights:</span>
+                    <span style={{ color: '#1f2937', fontWeight: 600 }}>{reservationToDecline.nights || 0} night(s)</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
+                    <span style={{ color: '#6b7280', fontWeight: 500 }}>Total Amount:</span>
+                    <span style={{ color: '#991b1b', fontWeight: 700, fontSize: '1.1rem' }}>₱{(reservationToDecline?.pricing?.total || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+                <div style={{
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  marginBottom: '20px'
+                }}>
+                  <p style={{ fontSize: '0.9rem', color: '#92400e', margin: 0, lineHeight: '1.5' }}>
+                    <strong>⚠️ Warning:</strong> Declining this booking will notify the guest and they will receive a full refund. This action cannot be undone.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+          <div style={{ padding: '20px 24px 24px', display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid #f3f4f6' }}>
+            <button 
+              onClick={handleCloseDeclineDialog}
+              style={{
+                background: '#f3f4f6',
+                color: '#4b5563',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '12px 24px',
+                fontSize: '1rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleDeclineBooking}
+              disabled={updating === reservationToDecline?.id}
+              style={{
+                background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '12px 28px',
+                fontSize: '1rem',
+                fontWeight: 600,
+                cursor: updating === reservationToDecline?.id ? 'not-allowed' : 'pointer',
+                boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+                opacity: updating === reservationToDecline?.id ? 0.6 : 1
+              }}
+            >
+              {updating === reservationToDecline?.id ? 'Processing...' : 'Yes, Decline Booking'}
             </button>
           </div>
         </div>

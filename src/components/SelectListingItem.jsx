@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db, auth} from "../config/firebase";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, Timestamp } from "firebase/firestore";
 import "../pages/guest/guest-viewListing.css";
 
@@ -22,6 +22,7 @@ import { createOrGetConversation } from "../pages/for-all/messages/createOrGetCo
 import Loading from "./Loading";
 const SelectListingItem = () => {
   const { listingId } = useParams();
+  const location = useLocation();
   const [selectedListing, setSelectedListing] = useState(null);
   const [hostOfListing, setHostofListing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,13 +42,105 @@ const SelectListingItem = () => {
   const [ratingLoading, setRatingLoading] = useState(false); // Loading state for rating submission
   const [userRatings, setUserRatings] = useState([]); // All ratings for this listing
   const [showRatingForm, setShowRatingForm] = useState(false); // Toggle rating form
- 
+  
+  // Host rating states
+  const [hostUserRating, setHostUserRating] = useState(0); // Guest's rating for the host
+  const [hostHoveredRating, setHostHoveredRating] = useState(0); // For hover effect
+  const [hostRatings, setHostRatings] = useState([]); // All ratings for this host
+  const [hostRatingLoading, setHostRatingLoading] = useState(false); // Loading state for host rating submission
+  const [showHostRatingForm, setShowHostRatingForm] = useState(false); // Toggle host rating form
+  
+  // Promo code states
+  const [showPromoModal, setShowPromoModal] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoError, setPromoError] = useState("");
+  const [appliedPromoDiscount, setAppliedPromoDiscount] = useState(0);
 
     const handleMessageHost = async (hostId, guestId) => {
       const conversationId = await createOrGetConversation(hostId, guestId);
       console.log("id used:"+ conversationId)
       navigate(`/guest/${guestId}/chat/${conversationId}`);
 
+    };
+
+    // Handle promo code application
+    const handleApplyPromo = () => {
+      setPromoError("");
+      if (!promoCode.trim()) {
+        setPromoError("Please enter a promo code");
+        return;
+      }
+      
+      const upperCode = promoCode.toUpperCase().trim();
+      
+      // Check if promo code matches listing's promo code
+      if (selectedListing?.promoCode && selectedListing.promoCode.toUpperCase() === upperCode) {
+        // Check if discount is still valid (check dates if applicable)
+        const now = new Date();
+        let isValidDate = true;
+        
+        if (selectedListing.discountStartDate) {
+          const startDate = selectedListing.discountStartDate?.toDate 
+            ? selectedListing.discountStartDate.toDate() 
+            : new Date(selectedListing.discountStartDate);
+          if (now < startDate) {
+            setPromoError(`This promo code is not yet valid. Valid from ${startDate.toLocaleDateString()}`);
+            return;
+          }
+        }
+        
+        if (selectedListing.discountEndDate) {
+          const endDate = selectedListing.discountEndDate?.toDate 
+            ? selectedListing.discountEndDate.toDate() 
+            : new Date(selectedListing.discountEndDate);
+          if (now > endDate) {
+            setPromoError(`This promo code has expired. Expired on ${endDate.toLocaleDateString()}`);
+            return;
+          }
+        }
+        
+        if (selectedListing.discount && selectedListing.discount > 0) {
+          setPromoApplied(true);
+          setAppliedPromoDiscount(selectedListing.discount);
+          setPromoError("");
+          alert(`✅ Promo code "${upperCode}" applied! You'll get ${selectedListing.discount}% off.`);
+          setShowPromoModal(false);
+        } else {
+          setPromoError("This listing doesn't have an active discount.");
+        }
+      } else {
+        setPromoError("Invalid promo code. Please check and try again.");
+      }
+    };
+
+    // Handle viewing map
+    const handleViewMap = () => {
+      if (selectedListing?.location) {
+        const encodedLocation = encodeURIComponent(selectedListing.location);
+        window.open(`https://www.google.com/maps/search/?api=1&query=${encodedLocation}`, '_blank');
+      } else {
+        alert("Location information not available");
+      }
+    };
+
+    // Handle getting directions
+    const handleGetDirections = () => {
+      if (selectedListing?.location) {
+        const encodedLocation = encodeURIComponent(selectedListing.location);
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodedLocation}`, '_blank');
+      } else {
+        alert("Location information not available");
+      }
+    };
+
+    // Handle reporting listing
+    const handleReportListing = () => {
+      const confirmed = window.confirm("Are you sure you want to report this listing? This action cannot be undone.");
+      if (confirmed) {
+        // In production, this would send a report to the backend
+        alert("Thank you for your report. Our team will review it shortly.");
+      }
     };
 
     useEffect(() => {
@@ -113,6 +206,21 @@ const handleCheckInChange = (e) => {
           rating: ratingValue // Ensure rating is always a number
         });
         
+        // Check if promo code was passed from navigation (e.g., from messages)
+        const locationState = location.state;
+        if (locationState?.promoCode && locationState.fromMessage) {
+          // Verify the promo code matches the listing's promo code
+          if (data.promoCode && data.promoCode.toUpperCase() === locationState.promoCode.toUpperCase()) {
+            setPromoCode(locationState.promoCode.toUpperCase());
+            setAppliedPromoDiscount(data.discount || 0);
+            setPromoApplied(true);
+            // Show success message
+            setTimeout(() => {
+              alert(`✅ Promo code "${locationState.promoCode}" applied! You'll get ${data.discount || 0}% off.`);
+            }, 500);
+          }
+        }
+        
         // Fetch ratings if they exist
         if (data.ratings && Array.isArray(data.ratings)) {
           setUserRatings(data.ratings);
@@ -134,8 +242,24 @@ const handleCheckInChange = (e) => {
           const hostRef = doc(db, "Users", data.hostId);
           const hostSnap = await getDoc(hostRef);
 
-          if (hostSnap.exists()) {  
-            setHostofListing({ id: hostSnap.id, ...hostSnap.data() });
+          if (hostSnap.exists()) {
+            const hostData = hostSnap.data();
+            setHostofListing({ id: hostSnap.id, ...hostData });
+            
+            // Fetch host ratings if they exist
+            if (hostData.ratings && Array.isArray(hostData.ratings)) {
+              setHostRatings(hostData.ratings);
+              
+              // Pre-populate user's existing host rating if they have one
+              if (guestId) {
+                const userHostRatingData = hostData.ratings.find(r => r.userId === guestId);
+                if (userHostRatingData) {
+                  setHostUserRating(Number(userHostRatingData.rating) || 0);
+                }
+              }
+            } else {
+              setHostRatings([]);
+            }
           } else {
             console.warn("No host found for this listing");
           }
@@ -189,6 +313,20 @@ useEffect(() => {
       setComment("");
     }
   }, [guestId, userRatings]);
+
+  // Update host rating form when user logs in/out or when host ratings change
+  useEffect(() => {
+    if (guestId && hostRatings.length > 0) {
+      const userHostRatingData = hostRatings.find(r => r.userId === guestId);
+      if (userHostRatingData) {
+        setHostUserRating(userHostRatingData.rating);
+      } else {
+        setHostUserRating(0);
+      }
+    } else {
+      setHostUserRating(0);
+    }
+  }, [guestId, hostRatings]);
 
   // ✅ toggleFavourite (your function integrated)
   const toggleFavourite = async (listingId, e) => {
@@ -517,6 +655,74 @@ useEffect(() => {
     }
   };
 
+  // Submit host rating function
+  const handleSubmitHostRating = async () => {
+    if (!guestId) {
+      alert("Please log in to rate the host");
+      return;
+    }
+
+    if (!hostOfListing?.id) {
+      alert("Host information not available");
+      return;
+    }
+
+    if (hostUserRating === 0) {
+      alert("Please select a rating");
+      return;
+    }
+
+    setHostRatingLoading(true);
+    try {
+      const hostRef = doc(db, "Users", hostOfListing.id);
+      
+      // Check if user has already rated this host
+      const existingRatingIndex = hostRatings.findIndex(r => r.userId === guestId);
+      
+      const newRatingData = {
+        userId: guestId,
+        rating: hostUserRating,
+        timestamp: Timestamp.now(),
+        userName: auth.currentUser?.displayName || auth.currentUser?.email || "Anonymous"
+      };
+
+      let updatedRatings;
+      if (existingRatingIndex >= 0) {
+        // Update existing rating
+        updatedRatings = [...hostRatings];
+        updatedRatings[existingRatingIndex] = newRatingData;
+      } else {
+        // Add new rating
+        updatedRatings = [...hostRatings, newRatingData];
+      }
+
+      // Calculate average rating (ensure all ratings are numbers)
+      const averageRating = updatedRatings.length > 0 
+        ? Number((updatedRatings.reduce((sum, r) => sum + Number(r.rating || 0), 0) / updatedRatings.length).toFixed(1))
+        : 0;
+
+      // Update Firebase - rating must be a number
+      await updateDoc(hostRef, {
+        ratings: updatedRatings,
+        rating: Number(averageRating) // Explicitly ensure it's a number
+      });
+
+      // Update local state
+      setHostRatings(updatedRatings);
+      setHostofListing(prev => ({ ...prev, rating: Number(averageRating) }));
+      setHostUserRating(0);
+      setHostHoveredRating(0);
+      setShowHostRatingForm(false);
+
+      alert("✅ Host rating submitted successfully!");
+    } catch (error) {
+      console.error("Error submitting host rating:", error);
+      alert("❌ Failed to submit host rating. Please try again.");
+    } finally {
+      setHostRatingLoading(false);
+    }
+  };
+
   const { serviceType } = selectedListing;
 
   const totalGuests = guestCounts.adults + guestCounts.children;
@@ -626,8 +832,132 @@ const handleAddGuest = (key) => {
         <div className="hostProfile-text">
 
       <p><strong>Host:</strong> {hostOfListing.firstName || "Unnamed Host"}</p>
-      <p><strong>Phone:</strong> {hostOfListing.phoneNumber || "N/A"}</p>
-      <p><strong>Email:</strong> {hostOfListing.emailAddress || "N/A"}</p>
+      {(hostOfListing.rating !== undefined && hostOfListing.rating !== null) ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', marginBottom: '4px' }}>
+          <StarRatingDisplay rating={typeof hostOfListing.rating === 'number' ? hostOfListing.rating : parseFloat(hostOfListing.rating) || 0} />
+          <span style={{ fontSize: '14px', color: '#666', fontWeight: '500' }}>
+            {typeof hostOfListing.rating === 'number' ? hostOfListing.rating.toFixed(1) : parseFloat(hostOfListing.rating || 0).toFixed(1)}
+          </span>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', marginBottom: '4px', color: '#999', fontSize: '14px' }}>
+          <span>No rating yet</span>
+        </div>
+      )}
+      
+      {/* Host Rating Input for Guests */}
+      {guestId && guestId !== hostOfListing.id && (
+        <div style={{ marginTop: '12px', padding: '12px', background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
+          {!showHostRatingForm ? (
+            <button 
+              onClick={() => {
+                // Pre-populate rating if user has already rated
+                const existingRating = hostRatings.find(r => r.userId === guestId);
+                if (existingRating) {
+                  setHostUserRating(Number(existingRating.rating) || 0);
+                }
+                setShowHostRatingForm(true);
+              }}
+              style={{
+                background: 'transparent',
+                border: '1px solid #3b82f6',
+                color: '#3b82f6',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+              {hostRatings.find(r => r.userId === guestId) ? "Update Your Rating" : "Rate This Host"}
+            </button>
+          ) : (
+            <div>
+              <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                {hostRatings.find(r => r.userId === guestId) ? "Update Your Rating" : "Rate This Host"}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px'
+                    }}
+                    onMouseEnter={() => setHostHoveredRating(star)}
+                    onMouseLeave={() => setHostHoveredRating(0)}
+                    onClick={() => setHostUserRating(star)}
+                    aria-label={`Rate ${star} star${star !== 1 ? 's' : ''}`}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill={star <= (hostHoveredRating || hostUserRating) ? "#FFD700" : "none"}
+                      stroke={star <= (hostHoveredRating || hostUserRating) ? "#FFD700" : "#ddd"}
+                      strokeWidth="2"
+                    >
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+              {hostUserRating > 0 && (
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                  You selected {hostUserRating} star{hostUserRating !== 1 ? 's' : ''}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={handleSubmitHostRating}
+                  disabled={hostRatingLoading || hostUserRating === 0}
+                  style={{
+                    background: hostUserRating === 0 ? '#d1d5db' : '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    padding: '6px 16px',
+                    borderRadius: '6px',
+                    cursor: hostUserRating === 0 ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  {hostRatingLoading ? 'Submitting...' : 'Submit'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowHostRatingForm(false);
+                    if (!hostRatings.find(r => r.userId === guestId)) {
+                      setHostUserRating(0);
+                    }
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #d1d5db',
+                    color: '#6b7280',
+                    padding: '6px 16px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      
         </div>
       </div>
     
@@ -696,15 +1026,39 @@ const handleAddGuest = (key) => {
           <h2>{selectedListing.title}</h2>
           <p>{selectedListing.description}</p>
           <br />
+          
+          {/* Action Buttons Section */}
+          <div className="action-buttons-section">
+            <button className="action-btn map-btn" onClick={handleViewMap}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+              View Map
+            </button>
+            <button className="action-btn directions-btn" onClick={handleGetDirections}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20M2 12h20"/>
+                <path d="m6 6 6 6 6-6"/>
+              </svg>
+              Get Directions
+            </button>
+            <button className="action-btn report-btn" onClick={handleReportListing}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                <line x1="4" x2="4" y1="22" y2="15"/>
+                <path d="M12 22v-8"/>
+              </svg>
+              Report
+            </button>
+          </div>
+          <br />
+          
           <div className="view-listing-initialText">
             <InfoBlock src={pin} label="Location" value={selectedListing.location} />
             <InfoBlock src={price} label="Price" value={`₱${selectedListing.price}`} />
             <InfoBlock src={group} label="Maximum Guest" value={selectedListing.maxGuests} />
-            <div className="infoBlockText">
-              <img src={rating} alt="" width={"35px"} />
-              <strong>Rating:</strong>
-              <StarRatingDisplay rating={selectedListing.rating || 0} />
-            </div>
+            
           </div>
           <hr />
 
@@ -747,47 +1101,143 @@ const handleAddGuest = (key) => {
      
         {/* Reservation Box */}
         <div className="reservationBox">
-          <div className="promo-div">
-            {selectedListing.discount ? (
-              <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="lucide lucide-gem-icon"
-                >
-                  <path d="M10.5 3 8 9l4 13 4-13-2.5-6" />
-                  <path d="M17 3a2 2 0 0 1 1.6.8l3 4a2 2 0 0 1 .013 2.382l-7.99 10.986a2 2 0 0 1-3.247 0l-7.99-10.986A2 2 0 0 1 2.4 7.8l2.998-3.997A2 2 0 0 1 7 3z" />
-                  <path d="M2 9h20" />
-                </svg>
-                <p> with {selectedListing.discount || "Discount"} %</p>
-              </>
-            ) : (
-              <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  height="24px"
-                  viewBox="0 -960 960 960"
-                  width="24px"
-                  fill="#393b92"
-                >
-                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z" />
-                </svg>
-                <p>No Discount</p>
-              </>
-            )}
+          <div className="promo-section">
+            <div className="promo-div">
+              {selectedListing.discount || appliedPromoDiscount ? (
+                <>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="lucide lucide-gem-icon"
+                  >
+                    <path d="M10.5 3 8 9l4 13 4-13-2.5-6" />
+                    <path d="M17 3a2 2 0 0 1 1.6.8l3 4a2 2 0 0 1 .013 2.382l-7.99 10.986a2 2 0 0 1-3.247 0l-7.99-10.986A2 2 0 0 1 2.4 7.8l2.998-3.997A2 2 0 0 1 7 3z" />
+                    <path d="M2 9h20" />
+                  </svg>
+                  <p>
+                    {appliedPromoDiscount ? `Promo Applied: ${appliedPromoDiscount}% off` : 
+                     selectedListing.discount ? `Discount: ${selectedListing.discount}%` : ""}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    height="20px"
+                    viewBox="0 -960 960 960"
+                    width="20px"
+                    fill="#393b92"
+                  >
+                    <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z" />
+                  </svg>
+                  <p>No Discount</p>
+                </>
+              )}
+            </div>
+            <button 
+              className="promo-btn"
+              onClick={() => setShowPromoModal(true)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+              {promoApplied ? "Change Promo" : "Apply Promo"}
+            </button>
           </div>
 
+          {/* Promo Code Modal */}
+          {showPromoModal && (
+            <div className="promo-modal-overlay" onClick={() => setShowPromoModal(false)}>
+              <div className="promo-modal-content" onClick={(e) => e.stopPropagation()}>
+                <button className="promo-modal-close" onClick={() => setShowPromoModal(false)}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+                <h3>Apply Promo Code</h3>
+                <p className="promo-modal-description">Enter the promo code provided by the host to get a discount on this listing</p>
+                {selectedListing?.promoCode && (
+                  <div style={{ 
+                    padding: '10px', 
+                    background: '#f0fdf4', 
+                    border: '1px solid #10b981', 
+                    borderRadius: '8px', 
+                    marginBottom: '15px' 
+                  }}>
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#065f46' }}>
+                      💡 This listing has a promo code available! Ask the host or check your messages.
+                    </p>
+                  </div>
+                )}
+                <div className="promo-input-group">
+                  <input
+                    type="text"
+                    placeholder={selectedListing?.promoCode ? `Enter promo code (e.g., ${selectedListing.promoCode})` : "Enter promo code"}
+                    value={promoCode}
+                    onChange={(e) => {
+                      setPromoCode(e.target.value);
+                      setPromoError("");
+                    }}
+                    className="promo-input"
+                    onKeyPress={(e) => e.key === 'Enter' && handleApplyPromo()}
+                  />
+                  <button className="promo-apply-btn" onClick={handleApplyPromo}>
+                    Apply
+                  </button>
+                </div>
+                {promoError && <p className="promo-error">{promoError}</p>}
+                {selectedListing?.promoCode && (
+                  <div className="promo-suggestions">
+                    <p>Available promo code for this listing:</p>
+                    <div className="promo-codes-list">
+                      <span 
+                        onClick={() => { 
+                          setPromoCode(selectedListing.promoCode); 
+                          setPromoError(""); 
+                        }}
+                        style={{ 
+                          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
+                          color: 'white',
+                          fontWeight: '700'
+                        }}
+                      >
+                        {selectedListing.promoCode} ({selectedListing.discount}% OFF)
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="price-header">
-            <h2>
-              <span className="price">{selectedListing.price} ₱</span>
-            </h2>
+            <div>
+              <h2>
+                <span className="price">
+                  {appliedPromoDiscount > 0 ? (
+                    <>
+                      <span className="original-price">₱{selectedListing.price}</span>
+                      <span className="discounted-price">
+                        ₱{Math.round(selectedListing.price * (1 - appliedPromoDiscount / 100))}
+                      </span>
+                    </>
+                  ) : (
+                    `₱${selectedListing.price}`
+                  )}
+                </span>
+              </h2>
+              {appliedPromoDiscount > 0 && (
+                <p className="savings-text">You save ₱{Math.round(selectedListing.price * (appliedPromoDiscount / 100))}!</p>
+              )}
+            </div>
           </div>
 
               <div className="check-section">
@@ -871,6 +1321,8 @@ const handleAddGuest = (key) => {
                 checkIn,
                 checkOut,
                 guestCounts,
+                promoCode: promoApplied ? promoCode : null,
+                promoDiscount: appliedPromoDiscount > 0 ? appliedPromoDiscount : (selectedListing.discount || 0),
               },
             })
           }

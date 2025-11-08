@@ -153,11 +153,14 @@ const GuestBookings = () => {
       if (selectedReservation.hostId) {
         const notification = {
           type: 'refund_requested',
+          recipientId: selectedReservation.hostId, // Fixed: Use recipientId instead of hostId for query matching
           hostId: selectedReservation.hostId,
           guestId: guestId,
           reservationId: selectedReservation.id,
+          listingId: selectedReservation.listingId,
           title: 'Refund Requested',
           body: `Guest has requested a refund for reservation: ${selectedReservation.listingTitle}. Amount: ₱${selectedReservation?.pricing?.total || 0}`,
+          message: `Guest has requested a refund for reservation: ${selectedReservation.listingTitle}.`,
           read: false,
           createdAt: serverTimestamp()
         }
@@ -214,7 +217,53 @@ const GuestBookings = () => {
           </div>
         </div>
         {filtered.length === 0 && (
-          <div style={{ padding: 12, color: '#666' }}>No reservations{selectedDate ? ' on selected date' : ''}.</div>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '60px 20px',
+            textAlign: 'center',
+            background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
+            borderRadius: '16px',
+            border: '2px dashed #d1d5db',
+            margin: '20px 0'
+          }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              background: 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '20px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
+            }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </div>
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: 600,
+              color: '#374151',
+              margin: '0 0 8px 0'
+            }}>
+              {selectedDate ? `No reservations on ${selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No reservations found'}
+            </h3>
+            <p style={{
+              fontSize: '0.95rem',
+              color: '#6b7280',
+              margin: 0,
+              maxWidth: '400px'
+            }}>
+              {selectedDate ? 'You don\'t have any reservations scheduled for this date. Try selecting a different date from the calendar.' : 'You don\'t have any reservations yet. Start exploring listings and book your next stay!'}
+            </p>
+          </div>
         )}
         <div className="booking-list">
           {filtered.map((r) => (
