@@ -21,10 +21,16 @@ const [paymentMethodType, setPaymentMethodType] = useState('card');
 const [showPayPalDialog, setShowPayPalDialog] = useState(false);
 const [recentBookings, setRecentBookings] = useState([]);
 const [loadingBookings, setLoadingBookings] = useState(true);
+const [showWithdrawalDialog, setShowWithdrawalDialog] = useState(false);
+const [withdrawalAmount, setWithdrawalAmount] = useState('');
+const [withdrawalMethod, setWithdrawalMethod] = useState('bank'); // 'bank', 'paypal', 'gcash'
+const [withdrawalAccount, setWithdrawalAccount] = useState('');
+const [processingWithdrawal, setProcessingWithdrawal] = useState(false);
 const navigate = useNavigate();
 const dialogRef = useRef(null);
 const fileInputRef = useRef(null);
 const paymentDialogRef = useRef(null);
+const withdrawalDialogRef = useRef(null);
 
 // Payment method form state
 const [paymentForm, setPaymentForm] = useState({
@@ -105,6 +111,9 @@ useEffect(() => {
   }
   if (paymentDialogRef.current && !paymentDialogRef.current.showModal) {
     dialogPolyfill.registerDialog(paymentDialogRef.current);
+  }
+  if (withdrawalDialogRef.current && !withdrawalDialogRef.current.showModal) {
+    dialogPolyfill.registerDialog(withdrawalDialogRef.current);
   }
 
   const userId = hostId || guestId;
@@ -304,6 +313,116 @@ const handleSave = async () => {
     alert('Failed to update profile. Please try again.');
   } finally {
     setIsSaving(false);
+  }
+};
+
+// Withdrawal Functions
+const handleWithdrawal = async () => {
+  const userId = hostId || guestId;
+  if (!userId) return;
+
+  // Validate withdrawal amount
+  const amount = parseFloat(withdrawalAmount);
+  
+  if (!amount || isNaN(amount) || amount <= 0) {
+    alert('Please enter a valid withdrawal amount.');
+    return;
+  }
+
+  if (amount < 100) {
+    alert('Minimum withdrawal amount is ₱100.');
+    return;
+  }
+
+  if (!withdrawalAccount || withdrawalAccount.trim() === '') {
+    alert('Please enter your account details.');
+    return;
+  }
+
+  try {
+    setProcessingWithdrawal(true);
+    
+    // Get user data and validate balance
+    const userRef = doc(db, 'Users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (!userSnap.exists()) {
+      alert('User account not found. Please contact support.');
+      setProcessingWithdrawal(false);
+      return;
+    }
+
+    const userData = userSnap.data();
+    const currentBalance = userData.balance || userData.walletBalance || 0;
+
+    // Check if user has sufficient balance
+    if (amount > currentBalance) {
+      alert(`Insufficient balance. You have ₱${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available.`);
+      setProcessingWithdrawal(false);
+      return;
+    }
+
+    // Calculate new balance
+    const newBalance = currentBalance - amount;
+
+    // Create withdrawal transaction record
+    const withdrawalTransaction = {
+      userId: userId,
+      userRole: userData.role || 'guest',
+      type: 'withdrawal',
+      amount: amount,
+      currency: 'PHP',
+      status: 'pending', // Admin will approve/process
+      description: `Withdrawal request via ${withdrawalMethod}`,
+      paymentMethod: withdrawalMethod,
+      accountDetails: withdrawalAccount,
+      balanceBefore: currentBalance,
+      balanceAfter: newBalance,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    // Add to Transactions collection
+    const transactionRef = await addDoc(collection(db, 'Transactions'), withdrawalTransaction);
+    
+    // Also add to Withdrawals collection for admin management
+    await addDoc(collection(db, 'Withdrawals'), {
+      ...withdrawalTransaction,
+      requestId: transactionRef.id
+    });
+
+    // Update balance in user document (hold the funds)
+    await updateDoc(userRef, {
+      balance: newBalance,
+      walletBalance: newBalance, // Keep for backward compatibility
+      updatedAt: serverTimestamp()
+    });
+
+    // Create notification for user
+    await addDoc(collection(db, 'Notifications'), {
+      type: 'withdrawal_requested',
+      recipientId: userId,
+      title: 'Withdrawal Request Submitted',
+      body: `Your withdrawal request of ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} has been submitted and is pending admin approval.`,
+      message: `Withdrawal request of ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} submitted.`,
+      read: false,
+      createdAt: serverTimestamp()
+    });
+
+    alert(`Withdrawal request submitted successfully!\n\nAmount: ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\nMethod: ${withdrawalMethod}\n\nYour request is pending admin approval. You will be notified once it's processed.`);
+    
+    // Reset form and close dialog
+    setWithdrawalAmount('');
+    setWithdrawalAccount('');
+    setWithdrawalMethod('bank');
+    setShowWithdrawalDialog(false);
+    withdrawalDialogRef.current?.close();
+    
+  } catch (error) {
+    console.error('Error processing withdrawal:', error);
+    alert(`Failed to process withdrawal: ${error.message || 'Please try again.'}`);
+  } finally {
+    setProcessingWithdrawal(false);
   }
 };
 
@@ -929,7 +1048,7 @@ const handlePayPalCancel = () => {
           )}
         </div>
 
-        {/* PayPal Balance Card - Only for Hosts (Business Accounts) */}
+        {/* Stay Smart Balance Card - Only for Hosts */}
         {user?.role === 'host' && (
           <div className="profile-info-card" style={{ 
             background: 'linear-gradient(135deg, #0070ba 0%, #003087 100%)',
@@ -965,222 +1084,56 @@ const handlePayPalCancel = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                     </svg>
-                    <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'white' }}>PayPal Balance</h3>
+                    <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'white' }}>Stay Smart Balance</h3>
                   </div>
                   <p style={{ margin: 0, fontSize: '14px', color: 'rgba(255, 255, 255, 0.8)' }}>Digital Wallet</p>
                 </div>
                 <button
-                  onClick={async () => {
-                    const userId = hostId || guestId
-                    if (!userId) return
-                    
-                    try {
-                      setIsSaving(true)
-                      const userRef = doc(db, 'Users', userId)
-                      const userSnap = await getDoc(userRef)
-                      
-                      if (!userSnap.exists()) {
-                        alert('User not found')
-                        return
-                      }
-                      
-                      const userData = userSnap.data()
-                      
-                      // Check if user has PayPal account connected
-                      const hasPayPalAccount = userData.paymentMethod?.paypalEmail || 
-                                              userData.paypalAccountId ||
-                                              userData.paymentMethod?.payerId
-                      
-                      if (!hasPayPalAccount) {
-                        // If no PayPal account, use manual entry
-                        const currentBalanceInput = prompt(
-                          'Sync PayPal Balance\n\n' +
-                          'No PayPal account connected. Enter your current PayPal account balance (PHP) to sync with Firebase:\n\n' +
-                          'Example: If you have ₱20,000 in your PayPal account, enter: 20000'
-                        )
-                        
-                        if (currentBalanceInput === null) return // User cancelled
-                        
-                        let newBalance = 0
-                        if (currentBalanceInput && currentBalanceInput.trim() !== '') {
-                          const parsedBalance = parseFloat(currentBalanceInput)
-                          if (!isNaN(parsedBalance) && parsedBalance >= 0) {
-                            newBalance = parsedBalance
-                          } else {
-                            alert('Please enter a valid number')
-                            return
-                          }
-                        }
-                        
-                        const currentBalance = userData.paypalBalance || 0
-                        const balanceDifference = newBalance - currentBalance
-                        
-                        // Update balance
-                        await updateDoc(userRef, {
-                          paypalBalance: newBalance,
-                          paypalLastUpdated: serverTimestamp(),
-                          balanceSyncedAt: serverTimestamp()
-                        })
-                        
-                        // Create transaction record for the balance adjustment
-                        if (balanceDifference !== 0) {
-                          await addDoc(collection(db, 'PayPalTransactions'), {
-                            userId: userId,
-                            userRole: userData.role || 'guest',
-                            type: balanceDifference > 0 ? 'deposit' : 'withdrawal',
-                            amount: Math.abs(balanceDifference),
-                            currency: 'PHP',
-                            status: 'completed',
-                            description: `Balance sync - Updated to match PayPal account (${balanceDifference > 0 ? 'added' : 'adjusted'})`,
-                            paymentMethod: 'paypal',
-                            payerId: userData.paypalAccountId || null,
-                            accountId: userData.paypalAccountId || null,
-                            balanceBefore: currentBalance,
-                            balanceAfter: newBalance,
-                            isBalanceSync: true,
-                            createdAt: serverTimestamp(),
-                            updatedAt: serverTimestamp()
-                          })
-                        }
-                        
-                        alert(`Balance synced successfully!\n\nNew balance: ₱${newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-                      } else {
-                        // Try to get balance from PayPal API
+                  onClick={() => {
+                    setShowWithdrawalDialog(true);
+                    setTimeout(() => {
+                      if (withdrawalDialogRef.current) {
                         try {
-                          // Import sync function dynamically to avoid issues if not available
-                          const { syncPayPalBalanceToFirebase } = await import('../utils/paypalApi')
-                          
-                          alert('Fetching balance from PayPal... Please wait.')
-                          
-                          const syncResult = await syncPayPalBalanceToFirebase(userId, 'PHP')
-                          const paypalBalance = syncResult.balance
-                          const currentBalance = userData.paypalBalance || 0
-                          const balanceDifference = paypalBalance - currentBalance
-                          
-                          // Update balance in Firebase
-                          await updateDoc(userRef, {
-                            paypalBalance: paypalBalance,
-                            paypalLastUpdated: serverTimestamp(),
-                            balanceSyncedAt: serverTimestamp(),
-                            paypalBalanceData: syncResult.balanceData // Store full balance data
-                          })
-                          
-                          // Create transaction record for the balance adjustment if different
-                          if (Math.abs(balanceDifference) > 0.01) {
-                            await addDoc(collection(db, 'PayPalTransactions'), {
-                              userId: userId,
-                              userRole: userData.role || 'guest',
-                              type: balanceDifference > 0 ? 'deposit' : 'withdrawal',
-                              amount: Math.abs(balanceDifference),
-                              currency: 'PHP',
-                              status: 'completed',
-                              description: `Balance sync from PayPal API - Auto-synced from actual PayPal account`,
-                              paymentMethod: 'paypal',
-                              payerId: userData.paypalAccountId || userData.paymentMethod?.payerId || null,
-                              accountId: userData.paypalAccountId || userData.paymentMethod?.payerId || null,
-                              balanceBefore: currentBalance,
-                              balanceAfter: paypalBalance,
-                              isBalanceSync: true,
-                              isApiSync: true, // Mark as API sync
-                              createdAt: serverTimestamp(),
-                              updatedAt: serverTimestamp()
-                            })
+                          if (typeof withdrawalDialogRef.current.showModal === 'function') {
+                            withdrawalDialogRef.current.showModal();
+                          } else {
+                            dialogPolyfill.registerDialog(withdrawalDialogRef.current);
+                            withdrawalDialogRef.current.showModal();
                           }
-                          
-                          alert(`Balance synced from PayPal successfully!\n\nPayPal Balance: ₱${paypalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\nPrevious Balance: ₱${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-                        } catch (apiError) {
-                          console.error('Error syncing from PayPal API:', apiError)
-                          // Fallback to manual entry if API fails
-                          const currentBalanceInput = prompt(
-                            `Could not fetch balance from PayPal API.\n\nError: ${apiError.message || 'Unknown error'}\n\nPlease enter your current PayPal account balance (PHP) manually:\n\nExample: If you have ₱20,000, enter: 20000`
-                          )
-                          
-                          if (currentBalanceInput === null) return
-                          
-                          let newBalance = 0
-                          if (currentBalanceInput && currentBalanceInput.trim() !== '') {
-                            const parsedBalance = parseFloat(currentBalanceInput)
-                            if (!isNaN(parsedBalance) && parsedBalance >= 0) {
-                              newBalance = parsedBalance
-                            } else {
-                              alert('Please enter a valid number')
-                              return
-                            }
-                          }
-                          
-                          const currentBalance = userData.paypalBalance || 0
-                          const balanceDifference = newBalance - currentBalance
-                          
-                          await updateDoc(userRef, {
-                            paypalBalance: newBalance,
-                            paypalLastUpdated: serverTimestamp(),
-                            balanceSyncedAt: serverTimestamp()
-                          })
-                          
-                          if (balanceDifference !== 0) {
-                            await addDoc(collection(db, 'PayPalTransactions'), {
-                              userId: userId,
-                              userRole: userData.role || 'guest',
-                              type: balanceDifference > 0 ? 'deposit' : 'withdrawal',
-                              amount: Math.abs(balanceDifference),
-                              currency: 'PHP',
-                              status: 'completed',
-                              description: `Balance sync - Manual entry (API sync failed)`,
-                              paymentMethod: 'paypal',
-                              payerId: userData.paypalAccountId || null,
-                              accountId: userData.paypalAccountId || null,
-                              balanceBefore: currentBalance,
-                              balanceAfter: newBalance,
-                              isBalanceSync: true,
-                              createdAt: serverTimestamp(),
-                              updatedAt: serverTimestamp()
-                            })
-                          }
-                          
-                          alert(`Balance synced manually!\n\nNew balance: ₱${newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+                        } catch (err) {
+                          console.error('Error showing withdrawal dialog:', err);
+                          withdrawalDialogRef.current.style.display = 'block';
                         }
                       }
-                    } catch (error) {
-                      console.error('Error syncing balance:', error)
-                      alert(`Error syncing balance: ${error.message || 'Please try again.'}`)
-                    } finally {
-                      setIsSaving(false)
-                    }
+                    }, 50);
                   }}
-                  disabled={isSaving}
                   style={{
-                    padding: '8px 12px',
-                    background: isSaving ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)',
+                    padding: '8px 16px',
+                    background: 'rgba(255, 255, 255, 0.2)',
                     border: '1px solid rgba(255, 255, 255, 0.3)',
                     borderRadius: '8px',
                     color: 'white',
-                    cursor: isSaving ? 'not-allowed' : 'pointer',
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    fontSize: '12px',
+                    fontSize: '14px',
                     fontWeight: '500',
-                    transition: 'all 0.3s ease',
-                    opacity: isSaving ? 0.6 : 1
+                    transition: 'all 0.3s ease'
                   }}
                   onMouseOver={(e) => {
-                    if (!isSaving) {
-                      e.target.style.background = 'rgba(255, 255, 255, 0.3)'
-                    }
+                    e.target.style.background = 'rgba(255, 255, 255, 0.3)'
                   }}
                   onMouseOut={(e) => {
-                    if (!isSaving) {
-                      e.target.style.background = 'rgba(255, 255, 255, 0.2)'
-                    }
+                    e.target.style.background = 'rgba(255, 255, 255, 0.2)'
                   }}
-                  title="Sync balance from your actual PayPal account"
+                  title="Withdraw funds"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="23 4 23 10 17 10"/>
-                    <polyline points="1 20 1 14 7 14"/>
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 22v-8M6 12l6-6 6 6"/>
+                    <path d="M2 4h20"/>
                   </svg>
-                  {isSaving ? 'Syncing...' : 'Sync Balance'}
+                  Withdraw
                 </button>
               </div>
 
@@ -1200,7 +1153,7 @@ const handlePayPalCancel = () => {
                   color: 'white',
                   letterSpacing: '-1px'
                 }}>
-                  ₱{(user?.paypalBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ₱{((user?.balance || user?.walletBalance || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
 
@@ -1247,7 +1200,7 @@ const handlePayPalCancel = () => {
                       fontWeight: '600', 
                       color: '#10b981'
                     }}>
-                      {user?.paymentMethod?.paypalEmail ? 'Active' : 'Not Connected'}
+                      Active
                     </p>
                     {user?.paymentMethod?.accountType === 'business' && (
                       <span style={{ 
@@ -1265,40 +1218,6 @@ const handlePayPalCancel = () => {
                   </div>
                 </div>
               </div>
-
-              {user?.paymentMethod?.paypalEmail && (
-                <div style={{ 
-                  marginTop: '16px',
-                  padding: '12px',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/>
-                    <rect x="2" y="4" width="20" height="16" rx="2"/>
-                  </svg>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ 
-                      margin: '0 0 2px 0', 
-                      fontSize: '12px', 
-                      color: 'rgba(255, 255, 255, 0.7)'
-                    }}>
-                      PayPal Email
-                    </p>
-                    <p style={{ 
-                      margin: 0, 
-                      fontSize: '14px', 
-                      fontWeight: '600', 
-                      color: 'white'
-                    }}>
-                      {user.paymentMethod.paypalEmail}
-                    </p>
-                  </div>
-                </div>
-              )}
 
               {!user?.paymentMethod?.paypalEmail && (
                 <div style={{ 
@@ -2008,6 +1927,187 @@ const handlePayPalCancel = () => {
           onClose={() => setShowPayPalDialog(false)}
         />
       )}
+
+      {/* Withdrawal Dialog */}
+      <dialog 
+        ref={withdrawalDialogRef} 
+        style={{ 
+          maxWidth: '500px', 
+          width: '90%', 
+          border: 'none', 
+          borderRadius: '16px', 
+          padding: 0, 
+          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' 
+        }}
+      >
+        <style>{`
+          dialog::backdrop {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+          }
+        `}</style>
+        <div style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '700', color: '#1f2937' }}>Withdraw Funds</h2>
+            <button
+              onClick={() => {
+                setShowWithdrawalDialog(false);
+                withdrawalDialogRef.current?.close();
+                setWithdrawalAmount('');
+                setWithdrawalAccount('');
+                setWithdrawalMethod('bank');
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+              Withdrawal Amount (₱)
+            </label>
+            <input
+              type="number"
+              value={withdrawalAmount}
+              onChange={(e) => setWithdrawalAmount(e.target.value)}
+              placeholder="Enter amount"
+              min="100"
+              step="0.01"
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '8px',
+                fontSize: '16px',
+                boxSizing: 'border-box'
+              }}
+              disabled={processingWithdrawal}
+            />
+            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#6b7280' }}>
+              Minimum withdrawal: ₱100.00
+              {user && (
+                <span style={{ display: 'block', marginTop: '4px' }}>
+                  Available balance: ₱{((user?.balance || user?.walletBalance || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+              Withdrawal Method
+            </label>
+            <select
+              value={withdrawalMethod}
+              onChange={(e) => setWithdrawalMethod(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '8px',
+                fontSize: '16px',
+                boxSizing: 'border-box',
+                background: 'white'
+              }}
+              disabled={processingWithdrawal}
+            >
+              <option value="bank">Bank Transfer</option>
+              <option value="paypal">PayPal</option>
+              <option value="gcash">GCash</option>
+              <option value="paymaya">PayMaya</option>
+            </select>
+          </div>
+
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+              Account Details
+            </label>
+            <input
+              type="text"
+              value={withdrawalAccount}
+              onChange={(e) => setWithdrawalAccount(e.target.value)}
+              placeholder={withdrawalMethod === 'bank' ? 'Account name, Bank name, Account number' : withdrawalMethod === 'paypal' ? 'PayPal email' : 'Mobile number'}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '8px',
+                fontSize: '16px',
+                boxSizing: 'border-box'
+              }}
+              disabled={processingWithdrawal}
+            />
+            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#6b7280' }}>
+              {withdrawalMethod === 'bank' && 'Enter your bank account details'}
+              {withdrawalMethod === 'paypal' && 'Enter your PayPal email address'}
+              {(withdrawalMethod === 'gcash' || withdrawalMethod === 'paymaya') && 'Enter your mobile number'}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => {
+                setShowWithdrawalDialog(false);
+                withdrawalDialogRef.current?.close();
+                setWithdrawalAmount('');
+                setWithdrawalAccount('');
+                setWithdrawalMethod('bank');
+              }}
+              disabled={processingWithdrawal}
+              style={{
+                flex: 1,
+                padding: '12px',
+                background: '#f3f4f6',
+                color: '#4b5563',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: processingWithdrawal ? 'not-allowed' : 'pointer',
+                opacity: processingWithdrawal ? 0.6 : 1
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleWithdrawal}
+              disabled={
+                processingWithdrawal || 
+                !withdrawalAmount || 
+                parseFloat(withdrawalAmount) < 100 ||
+                parseFloat(withdrawalAmount) > (user?.balance || user?.walletBalance || 0) ||
+                !withdrawalAccount
+              }
+              style={{
+                flex: 1,
+                padding: '12px',
+                background: processingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) < 100 || parseFloat(withdrawalAmount) > (user?.balance || user?.walletBalance || 0) || !withdrawalAccount ? '#9ca3af' : '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: processingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) < 100 || parseFloat(withdrawalAmount) > (user?.balance || user?.walletBalance || 0) || !withdrawalAccount ? 'not-allowed' : 'pointer',
+                opacity: processingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) < 100 || parseFloat(withdrawalAmount) > (user?.balance || user?.walletBalance || 0) || !withdrawalAccount ? 0.6 : 1
+              }}
+            >
+              {processingWithdrawal ? 'Processing...' : 'Submit Withdrawal Request'}
+            </button>
+          </div>
+        </div>
+      </dialog>
     </div>
   )
 }

@@ -247,7 +247,7 @@ function Guest_Logged_Navigation({ userData }) {
       <nav className="guest-nav">
         {/* Logo */}
         <div className="navLogo">
-          <img src={Logo} alt="Logo" width={"150px"} />
+          <img src={Logo} alt="StaySmart logo" className="navLogoImage" />
         </div>
 
         {/* Navigation Items */}

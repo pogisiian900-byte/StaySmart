@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { collection, onSnapshot, orderBy, query, updateDoc, where, doc, serverTimestamp, getDoc, addDoc, getDocs } from 'firebase/firestore'
 import { db } from '../../config/firebase'
-import { processPayPalPayout } from '../../config/firebase'
+// Removed PayPal payout import - using Firebase balance instead
 import ContinuousCalendar from '../../components/ContinuousCalendar'
 import { createOrGetConversation } from '../for-all/messages/createOrGetConversation'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
@@ -19,7 +19,7 @@ const HostBookings = () => {
   const [selectedReservation, setSelectedReservation] = useState(null)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [reservationToConfirm, setReservationToConfirm] = useState(null)
-  const [hostPayPalInfo, setHostPayPalInfo] = useState(null)
+  // Removed hostPayPalInfo state - using Firebase balance instead
   const confirmDialogRef = React.useRef(null)
   const [showDeclineDialog, setShowDeclineDialog] = useState(false)
   const [reservationToDecline, setReservationToDecline] = useState(null)
@@ -87,20 +87,7 @@ const HostBookings = () => {
     setReservationToConfirm(reservation)
     setShowConfirmDialog(true)
     
-    // Fetch host PayPal info
-    try {
-      const hostRef = doc(db, 'Users', hostId)
-      const hostSnap = await getDoc(hostRef)
-      if (hostSnap.exists()) {
-        const hostData = hostSnap.data()
-        setHostPayPalInfo({
-          paypalEmail: hostData.paymentMethod?.paypalEmail || null,
-          payerId: hostData.paymentMethod?.payerId || null,
-        })
-      }
-    } catch (error) {
-      console.error('Error fetching host PayPal info:', error)
-    }
+    // Removed PayPal info fetching - using Firebase balance instead
     
     setTimeout(() => {
       if (confirmDialogRef.current) {
@@ -123,13 +110,18 @@ const HostBookings = () => {
     setShowConfirmDialog(false)
     confirmDialogRef.current?.close()
     setReservationToConfirm(null)
-    setHostPayPalInfo(null)
   }
 
   const handleConfirmBooking = async () => {
     if (!reservationToConfirm) return
+    const reservationId = reservationToConfirm.id
     handleCloseConfirmDialog()
-    await handleDecision(reservationToConfirm.id, 'confirmed')
+    try {
+      await handleDecision(reservationId, 'confirmed')
+    } catch (error) {
+      console.error('Error confirming booking:', error)
+      alert(`Failed to confirm booking: ${error.message || 'Please try again.'}`)
+    }
   }
 
   const showDeclineBookingDialog = async (reservation) => {
@@ -179,6 +171,13 @@ const HostBookings = () => {
 
       const reservationData = reservationSnap.data()
       
+      // If confirming, validate pricing data exists first
+      if (status === 'confirmed' && !reservationData.pricing) {
+        console.warn('Cannot confirm booking: pricing data is missing:', reservationData)
+        alert('Cannot confirm booking: Pricing information is missing. Please contact support.')
+        return
+      }
+      
       // Update reservation status
       await updateDoc(reservationRef, {
         status,
@@ -213,6 +212,7 @@ const HostBookings = () => {
 
       // If confirmed, credit the amount to host and service fee to admin
       if (status === 'confirmed' && reservationData.pricing) {
+        
         // IMPORTANT: Only add subtotal to host account, NOT the total (grandTotal)
         // The total includes service fee which goes to ADMIN
         const hostEarnings = reservationData.pricing.subtotal || 0 // Host gets subtotal (excluding service fee)
@@ -233,87 +233,66 @@ const HostBookings = () => {
             const currentEarnings = hostData.totalEarnings || 0
             const newTotalEarnings = currentEarnings + hostEarnings
             
-            // Get current PayPal balance and increase it by HOST EARNINGS (subtotal only)
-            const currentPayPalBalance = hostData.paypalBalance || 0
-            const newPayPalBalance = currentPayPalBalance + hostEarnings // Only add subtotal, not total
+            // Get current Firebase balance and increase it by HOST EARNINGS (subtotal only)
+            const currentHostBalance = hostData.balance || hostData.walletBalance || hostData.paypalBalance || 0
+            const newHostBalance = currentHostBalance + hostEarnings // Only add subtotal, not total
             
-            console.log('Updating host PayPal balance:', {
+            console.log('Updating host balance:', {
               hostId,
-              currentPayPalBalance,
+              currentHostBalance,
               hostEarnings,
-              newPayPalBalance,
+              newHostBalance,
               reservationId: id
             })
             
-            // Get host's PayPal email for payout
-            const hostPayPalEmail = hostData.paymentMethod?.paypalEmail || null
-            const hostPayerId = hostData.paymentMethod?.payerId || null
-            const paymentMethod = reservationData.paymentSummary?.methodType || 'card'
+            const paymentMethod = reservationData.paymentSummary?.methodType || 'balance'
             
-            // Update host's total earnings (balance will be auto-synced by Firebase Function)
-            // Also store/update account ID if available
+            // Update host's balance and total earnings
             try {
               const updateData = {
+                balance: newHostBalance,
                 totalEarnings: newTotalEarnings,
                 updatedAt: serverTimestamp(),
               }
               
-              // Store account ID if available (for tracking)
-              if (hostPayerId) {
-                updateData.paypalAccountId = hostPayerId
-              }
-              
               await updateDoc(hostRef, updateData)
-              console.log('Successfully updated host earnings. Balance will auto-sync via Firebase Function. Account ID:', hostPayerId)
-              
-              // Note: PayPal balance will be automatically synced by onHostTransactionUpdated Firebase Function
-              // when the HostTransaction is created below
+              console.log(`✅ Added ₱${hostEarnings} to host balance. New host balance: ₱${newHostBalance}`)
             } catch (updateError) {
               console.error('Error updating host data:', updateError)
               throw updateError // Re-throw to be caught by outer try-catch
             }
 
-            // Add service fee to admin's PayPal balance
+            // Add service fee to admin's Firebase balance
             if (serviceFee > 0) {
               try {
-                // Find admin user(s) - fetch all users and filter client-side to avoid index requirement
-                const usersSnapshot = await getDocs(collection(db, 'Users'))
-                const adminDocs = usersSnapshot.docs.filter(doc => doc.data().role === 'admin')
+                // Find admin user(s) - use query for better performance
+                const adminQuery = query(collection(db, 'Users'), where('role', '==', 'admin'))
+                const adminSnapshot = await getDocs(adminQuery)
                 
-                if (adminDocs.length > 0) {
+                if (!adminSnapshot.empty) {
                   // Get the first admin (or distribute to all admins - for now, just first one)
-                  const adminDoc = adminDocs[0]
+                  const adminDoc = adminSnapshot.docs[0]
                   const adminId = adminDoc.id
                   const adminData = adminDoc.data()
                   
                   const adminRef = doc(db, 'Users', adminId)
-                  const currentAdminBalance = adminData.paypalBalance || 0
+                  const currentAdminBalance = adminData.balance || adminData.walletBalance || adminData.paypalBalance || 0
                   const currentAdminEarnings = adminData.totalEarnings || 0
                   const newAdminBalance = currentAdminBalance + serviceFee
                   const newAdminEarnings = currentAdminEarnings + serviceFee
                   
-                  // Get admin account ID
-                  const adminPayerId = adminData.paymentMethod?.payerId || null
-                  
-                  // Update admin's total earnings (balance will be auto-synced by Firebase Function)
+                  // Update admin's balance and total earnings
                   const adminUpdateData = {
+                    balance: newAdminBalance,
                     totalEarnings: newAdminEarnings,
                     updatedAt: serverTimestamp(),
                   }
                   
-                  // Store account ID if available
-                  if (adminPayerId) {
-                    adminUpdateData.paypalAccountId = adminPayerId
-                  }
-                  
                   await updateDoc(adminRef, adminUpdateData)
                   
-                  // Note: PayPal balance will be automatically synced by onAdminTransactionUpdated Firebase Function
-                  // when the AdminTransaction is created below
+                  console.log(`✅ Added ₱${serviceFee} to admin balance. New admin balance: ₱${newAdminBalance}`)
                   
-                  console.log('Successfully updated admin earnings. Balance will auto-sync via Firebase Function.')
-                  
-                  // Create admin transaction record with account ID
+                  // Create admin transaction record
                   const adminTransaction = {
                     adminId,
                     reservationId: id,
@@ -328,8 +307,6 @@ const HostBookings = () => {
                     transactionId: reservationData.paymentSummary?.transactionId || null,
                     balanceBefore: currentAdminBalance,
                     balanceAfter: newAdminBalance,
-                    adminPayerId: adminPayerId, // Store admin account ID
-                    accountId: adminPayerId || null, // Account ID for balance tracking
                     checkIn: reservationData.checkIn,
                     checkOut: reservationData.checkOut,
                     nights: reservationData.nights || 0,
@@ -337,14 +314,19 @@ const HostBookings = () => {
                     updatedAt: serverTimestamp(),
                   }
                   
+                  // Add to Transactions collection (for Firebase balance system)
+                  await addDoc(collection(db, 'Transactions'), adminTransaction)
+                  
+                  // Also add to AdminTransactions for backward compatibility
                   await addDoc(collection(db, 'AdminTransactions'), adminTransaction)
-                  console.log('Admin transaction recorded:', adminTransaction)
+                  
+                  console.log('✅ Admin transaction recorded:', adminTransaction)
                 } else {
                   console.warn('No admin user found to credit service fee')
                 }
               } catch (adminError) {
-                console.error('Error updating admin PayPal balance:', adminError)
-                // Don't throw - we don't want to fail the host payout if admin update fails
+                console.error('Error updating admin balance:', adminError)
+                // Don't throw - we don't want to fail the host update if admin update fails
               }
             }
 
@@ -355,7 +337,7 @@ const HostBookings = () => {
               console.log('Calculated total from subtotal + serviceFee:', guestChargedAmount)
             }
             
-            // Create transaction record with payment details and account IDs
+            // Create transaction record with payment details
             const transaction = {
               hostId,
               reservationId: id,
@@ -368,13 +350,8 @@ const HostBookings = () => {
               type: 'booking_earnings',
               status: 'completed',
               paymentMethod: paymentMethod,
-              guestPayPalEmail: reservationData.paymentSummary?.paypalEmail || null,
-              hostPayPalEmail: hostPayPalEmail,
-              hostPayerId: hostPayerId, // Store host account ID
-              payoutStatus: hostPayPalEmail ? 'pending_payout' : 'manual_payout_required',
-              balanceBefore: currentPayPalBalance,
-              balanceAfter: newPayPalBalance,
-              accountId: hostPayerId || null, // Account ID for balance tracking
+              balanceBefore: currentHostBalance,
+              balanceAfter: newHostBalance,
               checkIn: reservationData.checkIn,
               checkOut: reservationData.checkOut,
               nights: reservationData.nights || 0,
@@ -382,205 +359,29 @@ const HostBookings = () => {
               updatedAt: serverTimestamp(),
             }
 
+            // Add to Transactions collection (for Firebase balance system)
+            await addDoc(collection(db, 'Transactions'), transaction)
+            
+            // Also add to HostTransactions for backward compatibility
             await addDoc(collection(db, 'HostTransactions'), transaction)
             
-            // If host has PayPal email or payerId, create payout record and process immediately
-            if (hostPayPalEmail || hostPayerId) {
-              // Create payout record that will be processed
-              const payoutRecord = {
-                hostId,
-                hostPayPalEmail: hostPayPalEmail || null,
-                payerId: hostPayerId || null,
-                reservationId: id,
-                transactionId: reservationData.paymentSummary?.transactionId || null,
-                amount: hostEarnings,
-                currency: 'PHP',
-                status: 'pending',
-                type: 'booking_payout',
-                guestPaymentMethod: paymentMethod,
-                guestPayPalEmail: reservationData.paymentSummary?.paypalEmail || null,
-                createdAt: serverTimestamp(),
-              }
-              
-              // Add payout record to Firestore
-              const payoutRef = await addDoc(collection(db, 'PayPalPayouts'), payoutRecord)
-              const payoutId = payoutRef.id
-              
-              // Immediately process PayPal payout via Cloud Function
-              let payoutResult = null
-              try {
-                console.log(`[PAYOUT] Starting PayPal payout process`)
-                console.log(`[PAYOUT] Amount: ₱${hostEarnings}`)
-                console.log(`[PAYOUT] Host PayPal Email: ${hostPayPalEmail || 'N/A'}`)
-                console.log(`[PAYOUT] Host Payer ID: ${hostPayerId || 'N/A'}`)
-                console.log(`[PAYOUT] Payout ID: ${payoutId}`)
-                
-                // Verify function is available
-                if (!processPayPalPayout) {
-                  throw new Error('processPayPalPayout function is not available. Please ensure Firebase Functions are deployed.')
-                }
-                
-                console.log(`[PAYOUT] Calling processPayPalPayout function...`)
-                
-                payoutResult = await processPayPalPayout({
-                  payoutEmail: hostPayPalEmail || '',
-                  payerId: hostPayerId || null,
-                  amount: hostEarnings,
-                  currency: 'PHP',
-                })
-
-                console.log(`[PAYOUT] Function call successful`)
-                console.log(`[PAYOUT] Response data:`, payoutResult.data)
-
-                // Update payout record with result
-                await updateDoc(payoutRef, {
-                  payoutBatchId: payoutResult.data.payoutBatchId,
-                  status: payoutResult.data.status === 'PENDING' ? 'processing' : payoutResult.data.status.toLowerCase(),
-                  processedAt: serverTimestamp(),
-                  updatedAt: serverTimestamp(),
-                })
-
-                console.log(`[PAYOUT] PayPal payout successful: ${payoutResult.data.payoutBatchId}`)
-                
-                // Update notification with success message including all payment details
-                const notification = {
-                  type: 'earnings_credited',
-                  recipientId: hostId, // Fixed: Use recipientId instead of hostId for query matching
-                  hostId,
-                  reservationId: id,
-                  title: 'Earnings Credited & Payment Sent',
-                  body: `₱${hostEarnings.toLocaleString()} has been sent to your PayPal account.\n\nPayment Details:\nPayPal Email: ${hostPayPalEmail}\nPayPal ID: ${hostData.paymentMethod?.payerId || 'N/A'}\nPayout Batch ID: ${payoutResult.data.payoutBatchId}\nTransaction ID: ${reservationData.paymentSummary?.transactionId || 'N/A'}`,
-                  message: `₱${hostEarnings.toLocaleString()} has been sent to your PayPal account.`,
-                  read: false,
-                  createdAt: serverTimestamp(),
-                }
-                await addDoc(collection(db, 'Notifications'), notification)
-                
-                // Show detailed success alert
-                alert(`Reservation confirmed successfully!\n\nPayment Details:\nPayPal Email: ${hostPayPalEmail}\nPayPal ID: ${hostData.paymentMethod?.payerId || 'N/A'}\nPayout Batch ID: ${payoutResult.data.payoutBatchId}\nTransaction ID: ${reservationData.paymentSummary?.transactionId || 'N/A'}\n\nAmount: ₱${hostEarnings.toLocaleString()}`)
-              } catch (payoutError) {
-                console.error('PayPal payout error:', payoutError)
-                console.error('PayPal payout error details:', {
-                  code: payoutError?.code,
-                  message: payoutError?.message,
-                  details: payoutError?.details,
-                  stack: payoutError?.stack
-                })
-                
-                // Extract error message from Firebase Function error
-                let errorMessage = 'Payout processing failed'
-                let errorDetails = null
-                
-                // Firebase Functions errors have a specific structure
-                if (payoutError?.code) {
-                  console.log('Error code:', payoutError.code)
-                  
-                  if (payoutError.code === 'functions/not-found') {
-                    errorMessage = 'PayPal payout function not found. Please ensure Firebase Functions are deployed.'
-                  } else if (payoutError.code === 'functions/unavailable') {
-                    errorMessage = 'PayPal payout service unavailable. Please try again later.'
-                  } else if (payoutError.code === 'functions/unauthenticated') {
-                    errorMessage = 'Authentication failed. Please log in again.'
-                  } else if (payoutError.code === 'functions/permission-denied') {
-                    errorMessage = 'Permission denied. You may not have access to process payouts.'
-                  } else if (payoutError.code === 'functions/internal') {
-                    // Internal error - extract the actual error message from details
-                    if (payoutError.message) {
-                      // Remove the "PayPal payout failed: " prefix if present
-                      errorMessage = payoutError.message.replace(/^PayPal payout failed: /, '')
-                    }
-                    if (payoutError.details) {
-                      errorDetails = payoutError.details
-                      // Try to get more specific error message from details
-                      if (payoutError.details.originalError) {
-                        errorMessage = payoutError.details.originalError
-                      } else if (payoutError.details.message) {
-                        errorMessage = payoutError.details.message
-                      }
-                    }
-                  }
-                } else if (payoutError?.message) {
-                  errorMessage = payoutError.message
-                } else if (payoutError?.details?.message) {
-                  errorMessage = payoutError.details.message
-                } else if (typeof payoutError === 'string') {
-                  errorMessage = payoutError
-                }
-                
-                // Check for common PayPal error messages
-                if (errorMessage.includes('credentials not configured')) {
-                  errorMessage = 'PayPal credentials not configured in Firebase Functions. Please contact administrator.'
-                } else if (errorMessage.includes('AUTHENTICATION_FAILURE') || errorMessage.includes('401')) {
-                  errorMessage = 'PayPal authentication failed. Please check PayPal credentials configuration.'
-                } else if (errorMessage.includes('INSUFFICIENT_FUNDS')) {
-                  errorMessage = 'Insufficient funds in PayPal account for payout.'
-                } else if (errorMessage.includes('INVALID_RECEIVER')) {
-                  errorMessage = 'Invalid PayPal receiver. Please verify the host PayPal email or payer ID is correct.'
-                }
-                
-                // Update payout record with error status
-                await updateDoc(payoutRef, {
-                  status: 'failed',
-                  error: errorMessage,
-                  errorCode: payoutError?.code || 'unknown',
-                  errorDetails: payoutError?.details || null,
-                  updatedAt: serverTimestamp(),
-                })
-
-                // Still create notification but with error message
-                const notification = {
-                  type: 'earnings_credited',
-                  recipientId: hostId,
-                  hostId,
-                  reservationId: id,
-                  title: 'Earnings Credited - Payout Pending',
-                  body: `₱${hostEarnings.toLocaleString()} has been credited to your account. PayPal payout failed: ${errorMessage}.\n\nTransaction ID: ${reservationData.paymentSummary?.transactionId || 'N/A'}`,
-                  message: `₱${hostEarnings.toLocaleString()} has been credited to your account. PayPal payout failed.`,
-                  read: false,
-                  createdAt: serverTimestamp(),
-                }
-                await addDoc(collection(db, 'Notifications'), notification)
-                
-                // Build detailed error message
-                let errorAlert = `Reservation confirmed successfully!\n\n⚠️ PayPal Payout Error:\n${errorMessage}\n\n`
-                
-                if (errorDetails) {
-                  errorAlert += `Error Details:\n`
-                  if (errorDetails.errorCode) {
-                    errorAlert += `Error Code: ${errorDetails.errorCode}\n`
-                  }
-                  if (errorDetails.details) {
-                    if (typeof errorDetails.details === 'object') {
-                      errorAlert += `Details: ${JSON.stringify(errorDetails.details, null, 2)}\n`
-                    } else {
-                      errorAlert += `Details: ${errorDetails.details}\n`
-                    }
-                  }
-                  errorAlert += `\n`
-                }
-                
-                errorAlert += `Payment Details:\nPayPal Email: ${hostPayPalEmail || 'N/A'}\nPayPal ID: ${hostData.paymentMethod?.payerId || 'N/A'}\nTransaction ID: ${reservationData.paymentSummary?.transactionId || 'N/A'}\n\nAmount: ₱${hostEarnings.toLocaleString()}\n\nNote: Your earnings have been credited to your account balance. The payout will be retried or processed manually.\n\nPlease check Firebase Functions logs for more details.`
-                
-                // Show detailed error alert
-                alert(errorAlert)
-              }
-            } else {
-              // No PayPal email - create notification for manual payout
-              const notification = {
-                type: 'earnings_credited',
-                recipientId: hostId, // Fixed: Use recipientId instead of hostId for query matching
-                hostId,
-                reservationId: id,
-                title: 'Earnings Credited',
-                body: `₱${hostEarnings.toLocaleString()} has been credited to your account for booking ${reservationData.listingTitle || 'reservation'}. Manual payout required - please add your PayPal email in profile.\n\nTransaction ID: ${reservationData.paymentSummary?.transactionId || 'N/A'}`,
-                message: `₱${hostEarnings.toLocaleString()} has been credited to your account. Manual payout required.`,
-                read: false,
-                createdAt: serverTimestamp(),
-              }
-              await addDoc(collection(db, 'Notifications'), notification)
-              
-              alert(`Reservation confirmed successfully!\n\nEarnings: ₱${hostEarnings.toLocaleString()}\nTransaction ID: ${reservationData.paymentSummary?.transactionId || 'N/A'}\n\nNote: Please add your PayPal email in profile to receive payments.`)
+            console.log('✅ Host transaction recorded:', transaction)
+            
+            // Create notification for host
+            const notification = {
+              type: 'earnings_credited',
+              recipientId: hostId,
+              hostId,
+              reservationId: id,
+              title: 'Earnings Credited',
+              body: `₱${hostEarnings.toLocaleString()} has been added to your account balance.`,
+              message: `₱${hostEarnings.toLocaleString()} has been added to your account balance.`,
+              read: false,
+              createdAt: serverTimestamp(),
             }
+            await addDoc(collection(db, 'Notifications'), notification)
+            
+            alert(`Reservation confirmed successfully!\n\n₱${hostEarnings.toLocaleString()} has been added to your account balance.\nService fee of ₱${serviceFee.toLocaleString()} has been credited to admin.`)
           }
         }
       }
@@ -900,18 +701,10 @@ const HostBookings = () => {
                     <span style={{ color: '#6b7280', fontWeight: 500 }}>Nights:</span>
                     <span style={{ color: '#1f2937', fontWeight: 600 }}>{reservationToConfirm.nights || 0} night(s)</span>
                   </div>
-                  {hostPayPalInfo?.paypalEmail && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
-                      <span style={{ color: '#6b7280', fontWeight: 500 }}>PayPal Email:</span>
-                      <span style={{ color: '#1f2937', fontWeight: 600 }}>{hostPayPalInfo.paypalEmail}</span>
-                    </div>
-                  )}
-                  {hostPayPalInfo?.payerId && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
-                      <span style={{ color: '#6b7280', fontWeight: 500 }}>PayPal ID:</span>
-                      <span style={{ color: '#1f2937', fontWeight: 600, fontSize: '0.9rem', wordBreak: 'break-all', textAlign: 'right' }}>{hostPayPalInfo.payerId}</span>
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                    <span style={{ color: '#6b7280', fontWeight: 500 }}>Service Fee:</span>
+                    <span style={{ color: '#ef4444', fontWeight: 600 }}>₱{((reservationToConfirm?.pricing?.serviceFee || 0).toLocaleString())}</span>
+                  </div>
                   {reservationToConfirm.paymentSummary?.transactionId && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
                       <span style={{ color: '#6b7280', fontWeight: 500 }}>Transaction ID:</span>
@@ -920,9 +713,7 @@ const HostBookings = () => {
                   )}
                 </div>
                 <p style={{ fontSize: '0.9rem', color: '#6b7280', textAlign: 'center', marginBottom: '20px' }}>
-                  {hostPayPalInfo?.paypalEmail 
-                    ? `Payment will be sent to your PayPal account (${hostPayPalInfo.paypalEmail}) once confirmed.`
-                    : 'Please add your PayPal email in profile to receive payments.'}
+                  Earnings will be added to your account balance once confirmed. Service fee will be credited to admin.
                 </p>
               </>
             )}

@@ -1028,3 +1028,511 @@
     font-size: 0.8rem;
   }
 }
+
+.navLogoImage {
+  width: 70px;
+  height: auto;
+  display: block;
+}
+
+/* ================================ */
+/* Host Points & Perks Page Styles  */
+/* ================================ */
+.host-points-page {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  background: #f5f6fb;
+  min-height: calc(100vh - 120px);
+}
+
+.host-points-header h1 {
+  margin: 0 0 8px;
+  font-size: 2rem;
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.host-points-header p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.host-points-alert {
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.host-points-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.host-points-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 10px 30px -20px rgba(49, 50, 111, 0.4);
+  border: 1px solid rgba(49, 50, 111, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.host-points-card.highlight {
+  background: linear-gradient(135deg, #31326f, #4647a8);
+  color: white;
+  box-shadow: 0 18px 40px -18px rgba(49, 50, 111, 0.7);
+}
+
+.host-points-card .label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.host-points-card .value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: inherit;
+}
+
+.host-points-card .helper {
+  margin: 0;
+  font-size: 0.85rem;
+  color: inherit;
+  opacity: 0.8;
+}
+
+.host-points-progress {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 24px -16px rgba(49, 50, 111, 0.6);
+  border: 1px solid rgba(49, 50, 111, 0.08);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.progress-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.progress-bar {
+  height: 14px;
+  width: 100%;
+  background: rgba(49, 50, 111, 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(135deg, #6366f1, #0ea5e9);
+  border-radius: inherit;
+  transition: width 0.4s ease;
+}
+
+.host-points-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+}
+
+.section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.section-header h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.4rem;
+}
+
+.section-header p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.action-card {
+  background: white;
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px -18px rgba(49, 50, 111, 0.45);
+  border: 1px solid rgba(49, 50, 111, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-card h3 {
+  margin: 0;
+  color: #1f2937;
+}
+
+.action-card p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.action-card button {
+  align-self: flex-start;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  background: #31326f;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.action-card button:disabled {
+  background: #d1d5db;
+  color: #6b7280;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.action-card button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px -16px rgba(49, 50, 111, 0.6);
+}
+
+.host-points-achievements,
+.host-points-earnings,
+.host-points-rewards {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 12px 30px -22px rgba(49, 50, 111, 0.6);
+  border: 1px solid rgba(49, 50, 111, 0.08);
+}
+
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.achievement-card {
+  display: flex;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 12px;
+  background: rgba(49, 50, 111, 0.04);
+  border: 1px solid transparent;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.achievement-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(49, 50, 111, 0.2);
+  box-shadow: 0 14px 32px -24px rgba(49, 50, 111, 0.6);
+}
+
+.achievement-card.achieved {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.achievement-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.achievement-content h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.05rem;
+}
+
+.achievement-content p {
+  margin: 4px 0;
+  color: #6b7280;
+}
+
+.achievement-target {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.achievement-progress {
+  margin-top: 12px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(49, 50, 111, 0.12);
+  overflow: hidden;
+}
+
+.achievement-progress-fill {
+  height: 100%;
+  background: linear-gradient(135deg, #10b981, #14b8a6);
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+.earning-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.earning-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: rgba(49, 50, 111, 0.04);
+  border: 1px solid transparent;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.earning-item:hover {
+  transform: translateX(4px);
+  border-color: rgba(49, 50, 111, 0.2);
+}
+
+.earning-item h3 {
+  margin: 0;
+  color: #1f2937;
+}
+
+.earning-item p {
+  margin: 4px 0 0;
+  color: #6b7280;
+}
+
+.earning-points {
+  font-weight: 700;
+  color: #6366f1;
+  font-size: 0.95rem;
+}
+
+.reward-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.reward-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 14px;
+  background: rgba(49, 50, 111, 0.04);
+  border: 1px solid transparent;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.reward-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(49, 50, 111, 0.2);
+}
+
+.reward-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.reward-header h3 {
+  margin: 0;
+  color: #1f2937;
+}
+
+.reward-cost {
+  font-weight: 700;
+  color: #10b981;
+}
+
+.reward-card p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.reward-card button {
+  align-self: flex-start;
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: none;
+  background: #d1d5db;
+  color: #374151;
+  font-weight: 600;
+  cursor: not-allowed;
+}
+
+.host-points-history {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 12px 30px -22px rgba(49, 50, 111, 0.6);
+  border: 1px solid rgba(49, 50, 111, 0.08);
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 20px;
+  color: #4b5563;
+}
+
+.history-header h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.3rem;
+}
+
+.history-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: rgba(49, 50, 111, 0.04);
+  transition: background 0.2s ease;
+}
+
+.history-item:hover {
+  background: rgba(49, 50, 111, 0.08);
+}
+
+.history-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-title {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.history-date {
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.history-amount {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.history-amount.positive {
+  color: #059669;
+}
+
+.history-amount.negative {
+  color: #dc2626;
+}
+
+@media (max-width: 1024px) {
+  .host-points-page {
+    padding: 24px;
+  }
+
+  .host-points-card .value {
+    font-size: 1.7rem;
+  }
+
+  .achievement-grid,
+  .reward-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .host-points-page {
+    padding: 20px;
+  }
+
+  .progress-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .achievement-grid,
+  .reward-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .achievement-card {
+    flex-direction: column;
+  }
+
+  .earning-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .reward-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .history-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .history-amount {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 540px) {
+  .host-points-page {
+    padding: 16px;
+    gap: 24px;
+  }
+
+  .host-points-header h1 {
+    font-size: 1.6rem;
+  }
+}

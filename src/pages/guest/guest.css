@@ -60,6 +60,11 @@ body{
 .navLogo{
     margin-left: 10px;
 }
+.navLogoImage{
+    width: 70px;
+    height: auto;
+    display: block;
+}
 .hamburgDiv{
   margin: 10px;
   display: flex;

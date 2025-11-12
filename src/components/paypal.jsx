@@ -1,21 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, orderBy, doc, updateDoc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { processPayPalPayout as processPayPalPayoutAPI, syncPayPalBalanceToFirebase } from '../utils/paypalApi';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import 'dialog-polyfill/dist/dialog-polyfill.css';
 import dialogPolyfill from 'dialog-polyfill';
 import './paypal.css';
 
 const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
   const [balance, setBalance] = useState(0);
-  const [depositAmount, setDepositAmount] = useState('');
+  const [topUpAmount, setTopUpAmount] = useState('');
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [processingWithdrawal, setProcessingWithdrawal] = useState(false);
-  const [activeTab, setActiveTab] = useState('deposit');
+  const [activeTab, setActiveTab] = useState('topup');
+  const [showPayPalButtons, setShowPayPalButtons] = useState(false);
   const dialogRef = useRef(null);
+  
+  // PayPal Client ID
+  const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID || "AWzCyB0viVv8_sS4aT309bhLLTMGLBYXexAJmIHkbrmTKp0hswkl1OHImpQDOWBnRncPBd7Us4dkNGbi";
 
   useEffect(() => {
     if (dialogRef.current && !dialogRef.current.showModal) {
@@ -33,22 +38,23 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
       async (userSnap) => {
         if (userSnap.exists()) {
           const userData = userSnap.data();
-          let newBalance = userData.paypalBalance;
+          // Use balance or walletBalance field (Firebase balance system)
+          let newBalance = userData.balance || userData.walletBalance || userData.paypalBalance || 0;
           
-          console.log('=== PAYPAL BALANCE UPDATE DETECTED ===');
+          console.log('=== BALANCE UPDATE DETECTED ===');
           console.log('User ID:', userId);
           console.log('New Firebase Balance:', newBalance);
           console.log('Previous Balance (local state):', balance);
           
           // Initialize balance if it doesn't exist
-          if (newBalance === undefined || newBalance === null) {
+          if ((userData.balance === undefined && userData.walletBalance === undefined && userData.paypalBalance === undefined) || newBalance === null) {
             console.log('Balance not initialized, setting to 0');
             newBalance = 0;
             // Initialize balance field in Firebase
             try {
               await updateDoc(userRef, {
-                paypalBalance: 0,
-                paypalLastUpdated: serverTimestamp()
+                balance: 0,
+                updatedAt: serverTimestamp()
               });
               console.log('✅ Balance initialized to 0 in Firestore');
             } catch (error) {
@@ -124,20 +130,45 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
     try {
       setLoading(true);
       
-      // Fetch transactions
-      const transactionsQuery = query(
+      // Fetch transactions from both collections
+      const paypalTransactionsQuery = query(
         collection(db, 'PayPalTransactions'),
         where('userId', '==', userId),
         orderBy('createdAt', 'desc')
       );
+      
+      const transactionsQuery = query(
+        collection(db, 'Transactions'),
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
 
-      const unsub = onSnapshot(transactionsQuery, async (snapshot) => {
+      // Listen to PayPalTransactions
+      const unsubPayPal = onSnapshot(paypalTransactionsQuery, async (snapshot) => {
         const transList = [];
 
         snapshot.forEach((doc) => {
           const data = doc.data();
-          const trans = { id: doc.id, ...data };
+          const trans = { id: doc.id, ...data, source: 'PayPalTransactions' };
           transList.push(trans);
+        });
+
+        // Also fetch from Transactions collection for top-up transactions
+        const transactionsSnap = await getDocs(transactionsQuery);
+        transactionsSnap.forEach((doc) => {
+          const data = doc.data();
+          // Only include top-up transactions from Transactions collection
+          if (data.type === 'topup') {
+            const trans = { id: doc.id, ...data, source: 'Transactions' };
+            transList.push(trans);
+          }
+        });
+
+        // Sort by date (most recent first)
+        transList.sort((a, b) => {
+          const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds * 1000 || 0);
+          const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds * 1000 || 0);
+          return dateB - dateA;
         });
 
         setTransactions(transList);
@@ -146,7 +177,7 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
         // Calculate balance from transactions
         let calculatedBalance = 0;
         transList.forEach((trans) => {
-          if (trans.type === 'deposit') {
+          if (trans.type === 'topup' || trans.type === 'deposit') {
             calculatedBalance += trans.amount || 0;
           } else if (trans.type === 'payment' || trans.type === 'withdrawal') {
             calculatedBalance -= trans.amount || 0;
@@ -158,13 +189,12 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
           const userRef = doc(db, 'Users', userId);
           const userSnap = await getDoc(userRef);
           if (userSnap.exists()) {
-            const storedBalance = userSnap.data().paypalBalance || 0;
+            const userData = userSnap.data();
+            const storedBalance = userData.balance || userData.walletBalance || userData.paypalBalance || 0;
             
             // If there's a discrepancy, sync the balance (use stored balance as source of truth)
-            // The stored balance is updated atomically during deposits, so it should be accurate
             if (Math.abs(storedBalance - calculatedBalance) > 0.01) {
               console.warn('Balance discrepancy detected. Using stored balance:', storedBalance);
-              // Optionally sync: await updateDoc(userRef, { paypalBalance: calculatedBalance });
             }
           }
         } catch (error) {
@@ -177,7 +207,7 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
         setLoading(false);
       });
 
-      return unsub;
+      return unsubPayPal;
     } catch (error) {
       console.error('Error fetching PayPal data:', error);
       setLoading(false);
@@ -185,64 +215,99 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
     }
   };
 
-  const handleDeposit = async () => {
-    const amount = parseFloat(depositAmount);
-    
-    if (!amount || amount <= 0) {
-      alert('Please enter a valid deposit amount');
-      return;
+  // Handle Top Up with PayPal Checkout
+  const handleTopUpAmountChange = (e) => {
+    const value = e.target.value;
+    setTopUpAmount(value);
+    // Show PayPal buttons if amount is valid
+    const amount = parseFloat(value);
+    if (amount && amount >= 100) {
+      setShowPayPalButtons(true);
+    } else {
+      setShowPayPalButtons(false);
     }
+  };
 
-    if (amount < 100) {
-      alert('Minimum deposit amount is ₱100');
-      return;
-    }
-
+  const handlePayPalTopUpSuccess = async (data, actions) => {
     try {
+      console.log('PayPal top-up payment approved, capturing order...', data);
+      
+      // Capture the payment
+      const details = await actions.order.capture();
+      console.log('PayPal payment captured successfully:', details);
+      
+      const amount = parseFloat(details.purchase_units[0].amount.value);
+      
       setProcessing(true);
 
       const userRef = doc(db, 'Users', userId);
       
-      // Get current balance atomically using transaction-like approach
+      // Get current balance atomically
       const userSnap = await getDoc(userRef);
       let currentBalance = 0;
       if (userSnap.exists()) {
-        currentBalance = userSnap.data().paypalBalance || 0;
+        const userData = userSnap.data();
+        currentBalance = userData.balance || userData.walletBalance || userData.paypalBalance || 0;
       }
 
       const newBalance = currentBalance + amount;
 
-      // Create transaction record first
+      // Create transaction record
       const transaction = {
         userId: userId,
         userRole: userRole,
-        type: 'deposit',
+        type: 'topup',
         amount: amount,
         currency: 'PHP',
         status: 'completed',
-        description: `Deposit to PayPal account`,
-        paymentMethod: paymentMethod?.type || 'paypal',
+        description: `Top up via PayPal`,
+        paymentMethod: 'paypal',
+        paypalTransactionId: details.id,
+        paypalPayerEmail: details.payer?.email_address || null,
         balanceBefore: currentBalance,
         balanceAfter: newBalance,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
 
-      // Create transaction record - balance will be auto-synced by Firebase Function
-      await addDoc(collection(db, 'PayPalTransactions'), transaction);
-
-      // The real-time listener will automatically update the balance when Firebase Function syncs it
-      console.log(`Deposit transaction created: ₱${amount}. Balance will auto-sync via Firebase Function.`);
+      // Add to Transactions collection (for Firebase balance system)
+      await addDoc(collection(db, 'Transactions'), transaction);
       
-      alert(`Successfully deposited ₱${amount.toLocaleString()} to your PayPal account!`);
-      setDepositAmount('');
+      // Also add to PayPalTransactions for backward compatibility
+      await addDoc(collection(db, 'PayPalTransactions'), {
+        ...transaction,
+        type: 'deposit' // Keep as deposit for backward compatibility
+      });
+
+      // Update balance in user document
+      await updateDoc(userRef, {
+        balance: newBalance,
+        updatedAt: serverTimestamp()
+      });
+
+      console.log(`✅ Top-up successful: ₱${amount}. New balance: ₱${newBalance}`);
+      
+      alert(`Successfully topped up ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} to your account!`);
+      setTopUpAmount('');
+      setShowPayPalButtons(false);
       setActiveTab('history');
     } catch (error) {
-      console.error('Error processing deposit:', error);
-      alert('Failed to process deposit. Please try again.');
+      console.error('Error processing top-up:', error);
+      alert('Failed to process top-up. Please try again.');
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handlePayPalTopUpError = (err) => {
+    console.error('PayPal Top-Up Error:', err);
+    alert('An error occurred with PayPal payment. Please try again.');
+    setProcessing(false);
+  };
+
+  const handlePayPalTopUpCancel = () => {
+    console.log('PayPal top-up payment cancelled');
+    setProcessing(false);
   };
 
   // 💸 Handle Withdrawal (wallet balance → PayPal account)
@@ -277,7 +342,7 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
       }
 
       const userData = userSnap.data();
-      const currentBalance = userData.paypalBalance || 0;
+      const currentBalance = userData.balance || userData.walletBalance || userData.paypalBalance || 0;
 
       console.log('Current balance:', currentBalance);
 
@@ -369,8 +434,8 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
 
       // 7️⃣ Update balance in user document
       await updateDoc(userRef, {
-        paypalBalance: newBalance,
-        paypalLastUpdated: serverTimestamp(),
+        balance: newBalance,
+        paypalBalance: newBalance, // Keep for backward compatibility
         updatedAt: serverTimestamp()
       });
       console.log('✅ Balance updated in user document');
@@ -471,14 +536,14 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
 
         <div className="paypal-tabs">
           <button 
-            className={`paypal-tab ${activeTab === 'deposit' ? 'active' : ''}`}
-            onClick={() => setActiveTab('deposit')}
+            className={`paypal-tab ${activeTab === 'topup' ? 'active' : ''}`}
+            onClick={() => setActiveTab('topup')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Deposit Money
+            Top Up
           </button>
           <button 
             className={`paypal-tab ${activeTab === 'withdraw' ? 'active' : ''}`}
@@ -504,31 +569,69 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
         </div>
 
         <div className="paypal-content">
-          {activeTab === 'deposit' && (
+          {activeTab === 'topup' && (
             <div className="deposit-section">
               <div className="deposit-form">
-                <label htmlFor="depositAmount">Deposit Amount</label>
+                <label htmlFor="topUpAmount">Top Up Amount</label>
                 <div className="deposit-input-wrapper">
                   <span className="currency-symbol">₱</span>
                   <input
                     type="number"
-                    id="depositAmount"
+                    id="topUpAmount"
                     placeholder="0.00"
-                    value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value)}
+                    value={topUpAmount}
+                    onChange={handleTopUpAmountChange}
                     min="100"
                     step="0.01"
                     disabled={processing}
                   />
                 </div>
-                <p className="deposit-note">Minimum deposit: ₱100.00</p>
-                <button 
-                  className="deposit-btn"
-                  onClick={handleDeposit}
-                  disabled={processing || !depositAmount || parseFloat(depositAmount) < 100}
-                >
-                  {processing ? 'Processing...' : 'Deposit Money'}
-                </button>
+                <p className="deposit-note">Minimum top-up: ₱100.00</p>
+                
+                {showPayPalButtons && parseFloat(topUpAmount) >= 100 && (
+                  <div style={{ marginTop: '20px' }}>
+                    <PayPalScriptProvider 
+                      options={{ 
+                        "client-id": PAYPAL_CLIENT_ID,
+                        currency: "PHP",
+                        intent: "capture"
+                      }}
+                    >
+                      <PayPalButtons
+                        createOrder={(data, actions) => {
+                          const amount = parseFloat(topUpAmount);
+                          if (isNaN(amount) || amount <= 0) {
+                            throw new Error('Invalid top-up amount');
+                          }
+                          
+                          return actions.order.create({
+                            purchase_units: [{
+                              amount: {
+                                value: amount.toFixed(2),
+                                currency_code: "PHP"
+                              },
+                              description: `Top up account balance`
+                            }],
+                            application_context: {
+                              brand_name: "StaySmart",
+                              landing_page: "NO_PREFERENCE",
+                              user_action: "PAY_NOW"
+                            }
+                          });
+                        }}
+                        onApprove={handlePayPalTopUpSuccess}
+                        onError={handlePayPalTopUpError}
+                        onCancel={handlePayPalTopUpCancel}
+                        style={{
+                          layout: "vertical",
+                          color: "blue",
+                          shape: "rect",
+                          label: "paypal"
+                        }}
+                      />
+                    </PayPalScriptProvider>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -601,14 +704,14 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
                     <polyline points="14 2 14 8 20 8"></polyline>
                   </svg>
                   <p>No transactions yet</p>
-                  <p className="empty-subtitle">Start by making a deposit</p>
+                  <p className="empty-subtitle">Start by topping up your account</p>
                 </div>
               ) : (
                 <div className="transaction-list">
                   {transactions.map((transaction) => (
                     <div key={transaction.id} className="transaction-item">
                       <div className="transaction-icon">
-                        {transaction.type === 'deposit' ? (
+                        {(transaction.type === 'deposit' || transaction.type === 'topup') ? (
                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
                             <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -638,8 +741,8 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
                           </div>
                         )}
                       </div>
-                      <div className={`transaction-amount ${transaction.type === 'deposit' ? 'positive' : 'negative'}`}>
-                        {transaction.type === 'deposit' ? '+' : '-'}₱{transaction.amount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <div className={`transaction-amount ${(transaction.type === 'deposit' || transaction.type === 'topup') ? 'positive' : 'negative'}`}>
+                        {(transaction.type === 'deposit' || transaction.type === 'topup') ? '+' : '-'}₱{transaction.amount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                     </div>
                   ))}

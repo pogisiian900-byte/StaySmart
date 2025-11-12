@@ -9,6 +9,7 @@ import HostDashboard from "../../components/Host/Dashboard";
 import Listings from "../../components/Host/Listings";
 import Bookings from "../../pages/host/HostBookings";
 import Earnings from "../../components/Host/Earnings";
+import Points from "../../components/Host/Points";
 import 'dialog-polyfill/dist/dialog-polyfill.css';
 import dialogPolyfill from 'dialog-polyfill';
 
@@ -193,6 +194,8 @@ function Host_Navigation({ hostId, userData }) {
         return <Bookings />;
       case "earnings":
         return <Earnings />;
+      case "points":
+        return <Points hostId={hostId} />;
       default:
         return <p>Page not Found</p>;
     }
@@ -202,7 +205,7 @@ function Host_Navigation({ hostId, userData }) {
     <>
       <nav className="host-nav">
         <div className="navLogo">
-          <img src={Logo} alt="" width={"150px"} />
+          <img src={Logo} alt="StaySmart logo" className="navLogoImage" />
         </div>
 
         {/* Main Navigation */}
@@ -380,6 +383,15 @@ function Host_Navigation({ hostId, userData }) {
 
           <button onClick={() => navigate(`/host/${hostId}/messages`)}>💬 Messages</button>
             <button onClick={() => { handleNotificationClick(); setOpen(false); }}>🔔 Notifications {unreadCount > 0 && `(${unreadCount})`}</button>
+            <button
+              onClick={() => {
+                setRenderedPage("points");
+                setSelectedNav("points");
+                setOpen(false);
+              }}
+            >
+              ⭐ Points & Perks
+            </button>
             <button>⚙️ Account Settings</button>
             <button onClick={showLogoutConfirmation}>🚪 Logout</button>
           </div>
@@ -387,7 +399,6 @@ function Host_Navigation({ hostId, userData }) {
       </nav>
 
       <div className="host-main-page">{renderingPages()}</div>
-
       {/* Logout Confirmation Dialog */}
       {showLogoutDialog && (
         <dialog ref={logoutDialogRef} className="logout-confirmation-dialog" style={{ maxWidth: '500px', width: '90%', border: 'none', borderRadius: '16px', padding: 0, boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' }}>

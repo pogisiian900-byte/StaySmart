@@ -6,8 +6,7 @@ import '../pages/guest/guest-bookingConfirmation.css';
 import Loading from '../components/Loading';
 import 'dialog-polyfill/dist/dialog-polyfill.css';
 import dialogPolyfill from 'dialog-polyfill';
-import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
-import { processPayPalPayout } from '../utils/paypalApi';
+// Removed PayPal imports - using Firebase balance instead
 
 const SelectedListingBookingConfirmation = () => {
   const { listingId, guestId } = useParams();
@@ -20,7 +19,8 @@ const SelectedListingBookingConfirmation = () => {
   const [loadingListing, setLoadingListing] = useState(false);
   const [message, setMessage] = useState('');
   const [paymentMethod, setPaymentMethod] = useState(null);
-  const [paymentMethodType, setPaymentMethodType] = useState('card'); // 'card' or 'paypal'
+  const [paymentMethodType, setPaymentMethodType] = useState('balance'); // 'balance' for Firebase balance
+  const [userBalance, setUserBalance] = useState(0);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const paymentDialogRef = useRef(null);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
@@ -31,12 +31,7 @@ const SelectedListingBookingConfirmation = () => {
   const [selectedPaymentMethodType, setSelectedPaymentMethodType] = useState(null); // For confirmation dialog
   const [showInsufficientBalanceDialog, setShowInsufficientBalanceDialog] = useState(false);
   const insufficientBalanceDialogRef = useRef(null);
-  const [hostPayPalEmail, setHostPayPalEmail] = useState(null);
-  const [hostPayerId, setHostPayerId] = useState(null);
-  const [hostEmail, setHostEmail] = useState(null);
-  const [adminPayPalEmail, setAdminPayPalEmail] = useState(null);
-  const [adminPayerId, setAdminPayerId] = useState(null);
-  const [adminEmail, setAdminEmail] = useState(null);
+  // Removed PayPal-related states - using Firebase balance instead
   
   // Booking data state (fallback if location.state is missing)
   const [listing, setListing] = useState(bookingData?.listing || null);
@@ -221,10 +216,6 @@ const SelectedListingBookingConfirmation = () => {
   return `${checkInFormatted} – ${checkOutFormatted}, ${year}`;
 };
 
-  // PayPal Sandbox Client ID - Replace with your actual Sandbox Client ID from PayPal Developer Dashboard
-  // For Vite, use import.meta.env instead of process.env
-  const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID || "AWzCyB0viVv8_sS4aT309bhLLTMGLBYXexAJmIHkbrmTKp0hswkl1OHImpQDOWBnRncPBd7Us4dkNGbi"; // Fallback to hardcoded for development
-
   // Register dialog polyfills
   useEffect(() => {
     if (paymentDialogRef.current && !paymentDialogRef.current.showModal) {
@@ -240,14 +231,6 @@ const SelectedListingBookingConfirmation = () => {
       dialogPolyfill.registerDialog(insufficientBalanceDialogRef.current);
     }
   }, []);
-
-  // Validate PayPal Client ID format
-  useEffect(() => {
-    if (PAYPAL_CLIENT_ID && PAYPAL_CLIENT_ID.length < 10) {
-      console.warn('PayPal Client ID appears to be invalid. Please check your VITE_PAYPAL_CLIENT_ID environment variable.');
-    }
-    console.log('PayPal Client ID:', PAYPAL_CLIENT_ID);
-  }, [PAYPAL_CLIENT_ID]);
 
   const showError = (message) => {
     setErrorMessage(message);
@@ -300,8 +283,24 @@ const SelectedListingBookingConfirmation = () => {
 
   const showConfirmBookingDialog = () => {
     setShowConfirmDialog(true);
-    // Reset payment method selection when opening dialog
-    setSelectedPaymentMethodType(null);
+    // Set default payment method to balance
+    setSelectedPaymentMethodType('balance');
+    // Refresh user balance before showing dialog
+    const refreshBalance = async () => {
+      try {
+        const userRef = doc(db, 'Users', guestId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          const balance = userData.balance || userData.walletBalance || 0;
+          setUserBalance(balance);
+        }
+      } catch (error) {
+        console.error('Error refreshing balance:', error);
+      }
+    };
+    refreshBalance();
+    
     setTimeout(() => {
       if (confirmDialogRef.current) {
         try {
@@ -334,10 +333,14 @@ const SelectedListingBookingConfirmation = () => {
           const userData = userSnap.data();
           setUserInfo(userData);
           
+          // Get user balance
+          const balance = userData.balance || userData.walletBalance || 0;
+          setUserBalance(balance);
+          
           // Optional: Check if user has saved payment method (can be used for quick selection)
           if (userData.paymentMethod) {
             setPaymentMethod(userData.paymentMethod);
-            setPaymentMethodType(userData.paymentMethod.type || 'card');
+            setPaymentMethodType(userData.paymentMethod.type || 'balance');
           }
         } else {
           console.error('User not found');
@@ -354,68 +357,7 @@ const SelectedListingBookingConfirmation = () => {
     }
   }, [guestId]);
 
-  // Fetch host PayPal info for direct payment
-  useEffect(() => {
-    const fetchHostPayPalInfo = async () => {
-      if (listing?.hostId) {
-        try {
-          const hostRef = doc(db, 'Users', listing.hostId);
-          const hostSnap = await getDoc(hostRef);
-          if (hostSnap.exists()) {
-            const hostData = hostSnap.data();
-            const paypalEmail = hostData.paymentMethod?.paypalEmail || null;
-            const payerId = hostData.paymentMethod?.payerId || null;
-            const emailAddress = hostData.emailAddress || null;
-            setHostPayPalEmail(paypalEmail);
-            setHostPayerId(payerId);
-            setHostEmail(emailAddress);
-            console.log('Host PayPal info fetched:', { paypalEmail, payerId, emailAddress });
-            if (!paypalEmail && !payerId) {
-              console.warn('Host does not have PayPal email or payer ID configured. Payment will go to app account.');
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching host PayPal info:', error);
-        }
-      }
-    };
-
-    if (listing?.hostId) {
-      fetchHostPayPalInfo();
-    }
-  }, [listing?.hostId]);
-
-  // Fetch admin PayPal info for service fee
-  useEffect(() => {
-    const fetchAdminPayPalInfo = async () => {
-      try {
-        // Query for admin user
-        const adminQuery = query(collection(db, 'Users'), where('role', '==', 'admin'));
-        const adminSnapshot = await getDocs(adminQuery);
-        
-        if (!adminSnapshot.empty) {
-          const adminDoc = adminSnapshot.docs[0];
-          const adminData = adminDoc.data();
-          const paypalEmail = adminData.paymentMethod?.paypalEmail || null;
-          const payerId = adminData.paymentMethod?.payerId || null;
-          const emailAddress = adminData.emailAddress || null;
-          setAdminPayPalEmail(paypalEmail);
-          setAdminPayerId(payerId);
-          setAdminEmail(emailAddress);
-          console.log('Admin PayPal info fetched:', { paypalEmail, payerId, emailAddress });
-          if (!paypalEmail && !payerId) {
-            console.warn('Admin does not have PayPal email or payer ID configured.');
-          }
-        } else {
-          console.warn('No admin user found in database.');
-        }
-      } catch (error) {
-        console.error('Error fetching admin PayPal info:', error);
-      }
-    };
-
-    fetchAdminPayPalInfo();
-  }, []);
+  // Removed PayPal info fetching - using Firebase balance instead
 
   const handlePaymentFormChange = (e) => {
     const { name, value } = e.target;
@@ -459,105 +401,123 @@ const SelectedListingBookingConfirmation = () => {
     }));
   };
 
-  const handlePayPalSuccess = async (data, actions) => {
+  // Firebase Balance Payment Handler
+  const handleBalancePayment = async () => {
     try {
-      console.log('PayPal payment approved, capturing order...', data);
+      console.log('Processing Firebase balance payment...');
       
       // Check balance before processing payment
       const userRef = doc(db, 'Users', guestId);
       const userSnap = await getDoc(userRef);
       
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        const currentBalance = userData.paypalBalance || 0;
-        
-        // Check if balance is sufficient
-        if (currentBalance < grandTotal) {
-          const shortage = grandTotal - currentBalance;
-          setErrorMessage(`Insufficient PayPal balance. You need ₱${shortage.toLocaleString()} more to complete this booking.\n\nCurrent Balance: ₱${currentBalance.toLocaleString()}\nRequired Amount: ₱${grandTotal.toLocaleString()}`);
-          showInsufficientBalance();
-          return;
-        }
-      } else {
-        // User document doesn't exist or no balance set
-        setErrorMessage(`Insufficient PayPal balance. Please add funds to your PayPal account.\n\nRequired Amount: ₱${grandTotal.toLocaleString()}`);
+      if (!userSnap.exists()) {
+        setErrorMessage(`User account not found. Please contact support.`);
+        showError();
+        return;
+      }
+
+      const userData = userSnap.data();
+      const currentBalance = userData.balance || userData.walletBalance || 0;
+      
+      // Check if balance is sufficient
+      if (currentBalance < grandTotal) {
+        const shortage = grandTotal - currentBalance;
+        setErrorMessage(`Insufficient balance. You need ₱${shortage.toLocaleString()} more to complete this booking.\n\nCurrent Balance: ₱${currentBalance.toLocaleString()}\nRequired Amount: ₱${grandTotal.toLocaleString()}\n\nPlease add funds to your account.`);
         showInsufficientBalance();
         return;
       }
       
-      // Capture the payment
-      const details = await actions.order.capture();
+      // Deduct balance from guest
+      const newGuestBalance = currentBalance - grandTotal;
       
-      console.log('PayPal payment captured successfully:', details);
+      // Get host and admin info for balance distribution
+      let hostBalance = 0;
+      let adminBalance = 0;
       
-      // Split payment: Send subtotal to host, keep service fee in platform account
-      try {
-        console.log('=== SPLITTING PAYMENT ===');
-        console.log('Subtotal (to host):', subtotal);
-        console.log('Service Fee (to admin/platform):', serviceFee);
-        console.log('Total paid:', grandTotal);
-        console.log('--- RECIPIENTS ---');
-        console.log('Host Email:', hostEmail || 'Not available');
-        console.log('Host PayPal Email:', hostPayPalEmail || 'Not available');
-        console.log('Host Payer ID:', hostPayerId || 'Not available');
-        console.log('Admin Email:', adminEmail || 'Not available');
-        console.log('Admin PayPal Email:', adminPayPalEmail || 'Not available');
-        console.log('Admin Payer ID:', adminPayerId || 'Not available');
-
-        // Send subtotal to host via PayPal Payout
-        if (hostPayPalEmail || hostPayerId) {
-          try {
-            const payoutResult = await processPayPalPayout(
-              hostPayPalEmail || '',
-              subtotal,
-              'PHP',
-              hostPayerId || null
-            );
-            console.log('✅ Host payout successful:', payoutResult);
-            console.log('💰 Sent ₱' + subtotal + ' to Host:', hostEmail || hostPayPalEmail || 'Host Account');
-          } catch (payoutError) {
-            console.error('❌ Error sending payout to host:', payoutError);
-            console.error('Host recipient:', hostEmail || hostPayPalEmail || 'Not available');
-            // Don't fail the booking - log error and continue
-            // You may want to retry this later or notify admin
-            console.warn('⚠️ Booking will continue despite payout error. Payout can be retried later.');
+      // Add subtotal to host balance
+      if (listing?.hostId) {
+        try {
+          const hostRef = doc(db, 'Users', listing.hostId);
+          const hostSnap = await getDoc(hostRef);
+          if (hostSnap.exists()) {
+            const hostData = hostSnap.data();
+            hostBalance = (hostData.balance || hostData.walletBalance || 0) + subtotal;
+            await updateDoc(hostRef, {
+              balance: hostBalance,
+              updatedAt: serverTimestamp()
+            });
+            console.log(`✅ Added ₱${subtotal} to host balance. New host balance: ₱${hostBalance}`);
           }
-        } else {
-          console.warn('⚠️ Host PayPal info not available. Payout skipped. Host will need to be paid manually.');
-          console.warn('Host Email:', hostEmail || 'Not available');
+        } catch (hostError) {
+          console.error('Error updating host balance:', hostError);
         }
-
-        // Service fee stays in platform account (admin)
-        // No action needed - it's already in the platform account
-        console.log('✅ Service fee (₱' + serviceFee + ') remains in platform account');
-        console.log('💰 Admin recipient:', adminEmail || adminPayPalEmail || 'Platform Account');
-      } catch (splitError) {
-        console.error('Error splitting payment:', splitError);
-        // Log error but don't fail the booking
-        console.warn('⚠️ Payment split failed, but booking will continue. Split can be processed manually later.');
       }
+      
+      // Add service fee to admin balance
+      try {
+        const adminQuery = query(collection(db, 'Users'), where('role', '==', 'admin'));
+        const adminSnapshot = await getDocs(adminQuery);
+        if (!adminSnapshot.empty) {
+          const adminDoc = adminSnapshot.docs[0];
+          const adminRef = doc(db, 'Users', adminDoc.id);
+          const adminData = adminDoc.data();
+          adminBalance = (adminData.balance || adminData.walletBalance || 0) + serviceFee;
+          await updateDoc(adminRef, {
+            balance: adminBalance,
+            updatedAt: serverTimestamp()
+          });
+          console.log(`✅ Added ₱${serviceFee} to admin balance. New admin balance: ₱${adminBalance}`);
+        }
+      } catch (adminError) {
+        console.error('Error updating admin balance:', adminError);
+      }
+      
+      // Update guest balance
+      await updateDoc(userRef, {
+        balance: newGuestBalance,
+        updatedAt: serverTimestamp()
+      });
+      
+      // Create payment transaction record
+      const paymentTransaction = {
+        userId: guestId,
+        userRole: 'guest',
+        type: 'payment',
+        amount: grandTotal,
+        currency: 'PHP',
+        status: 'completed',
+        description: `Payment for booking: ${listing?.title || 'Listing'}`,
+        listingId: listing?.id || listingId,
+        listingTitle: listing?.title || '',
+        balanceBefore: currentBalance,
+        balanceAfter: newGuestBalance,
+        paymentMethod: 'balance',
+        splitPayment: {
+          hostAmount: subtotal,
+          adminAmount: serviceFee,
+          hostId: listing?.hostId || null
+        },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      // Add transaction and get the document reference
+      const transactionRef = await addDoc(collection(db, 'Transactions'), paymentTransaction);
+      
+      console.log(`✅ Deducted ₱${grandTotal} from guest balance. New balance: ₱${newGuestBalance}`);
+      console.log(`💰 Payment split - Host: ₱${subtotal}, Admin: ₱${serviceFee}`);
+      console.log(`📝 Transaction ID: ${transactionRef.id}`);
       
       // Set payment method for booking
       const paymentData = {
-        type: 'paypal',
-        paypalEmail: details.payer.email_address,
-        payerId: details.payer.payer_id,
-        payerName: `${details.payer.name.given_name} ${details.payer.name.surname}`,
-        transactionId: details.id,
-        status: details.status
+        type: 'balance',
+        transactionId: transactionRef.id,
+        status: 'completed'
       };
 
-      console.log('Payment data prepared:', paymentData);
-
-      // Save payment method to user profile (optional)
-      await updateDoc(userRef, {
-        paymentMethod: paymentData
-      });
-
-      setPaymentMethod(paymentData);
-      setPaymentMethodType('paypal');
-      setSelectedPaymentMethodType('paypal');
-      setUserInfo(prev => ({ ...prev, paymentMethod: paymentData }));
+      // Update user balance state
+      setUserBalance(newGuestBalance);
+      setUserInfo(prev => ({ ...prev, balance: newGuestBalance }));
       
       // Close confirmation dialog before submitting booking
       handleCloseConfirmDialog();
@@ -565,18 +525,9 @@ const SelectedListingBookingConfirmation = () => {
       // Payment successful, now submit the booking
       await submitBookingWithPayment(paymentData);
     } catch (error) {
-      console.error('Error processing PayPal payment:', error);
-      showError(`Failed to process PayPal payment: ${error.message || 'Please try again.'}`);
+      console.error('Error processing balance payment:', error);
+      showError(`Failed to process payment: ${error.message || 'Please try again.'}`);
     }
-  };
-
-  const handlePayPalError = (err) => {
-    console.error('PayPal Error:', err);
-    alert('An error occurred with PayPal payment. Please try again.');
-  };
-
-  const handlePayPalCancel = () => {
-    console.log('PayPal payment cancelled');
   };
 
   const handleOpenPaymentDialog = () => {
@@ -737,28 +688,26 @@ const SelectedListingBookingConfirmation = () => {
       return;
     }
 
-    // Check PayPal balance before showing confirmation dialog
+    // Check Firebase balance before showing confirmation dialog
     const userRef = doc(db, 'Users', guestId);
     const userSnap = await getDoc(userRef);
     
     if (userSnap.exists()) {
       const userData = userSnap.data();
-      const currentBalance = userData.paypalBalance || 0;
-      const paymentMethodData = userData.paymentMethod;
+      const currentBalance = userData.balance || userData.walletBalance || 0;
       
-      // Only check balance if user has PayPal payment method
-      if (paymentMethodData?.type === 'paypal') {
-        // Check if balance is sufficient
-        if (currentBalance < grandTotal) {
-          const shortage = grandTotal - currentBalance;
-          setErrorMessage(`Insufficient PayPal balance. You need ₱${shortage.toLocaleString()} more to complete this booking.\n\nCurrent Balance: ₱${currentBalance.toLocaleString()}\nRequired Amount: ₱${grandTotal.toLocaleString()}`);
-          showInsufficientBalance();
-          return;
-        }
+      // Check if balance is sufficient
+      if (currentBalance < grandTotal) {
+        const shortage = grandTotal - currentBalance;
+        setErrorMessage(`Insufficient balance. You need ₱${shortage.toLocaleString()} more to complete this booking.\n\nCurrent Balance: ₱${currentBalance.toLocaleString()}\nRequired Amount: ₱${grandTotal.toLocaleString()}\n\nPlease add funds to your account.`);
+        showInsufficientBalance();
+        return;
       }
     } else {
-      // User document doesn't exist - check if they have payment method set
-      // If no payment method, allow them to proceed to set one up
+      // User document doesn't exist
+      setErrorMessage(`User account not found. Please contact support.`);
+      showError();
+      return;
     }
 
     // If validation passes and balance is sufficient, show confirmation dialog
@@ -769,32 +718,7 @@ const SelectedListingBookingConfirmation = () => {
     try {
       console.log('Submitting booking with payment data:', paymentData);
       
-      // Check PayPal balance if using PayPal payment method
-      const finalPaymentMethod = paymentData || (selectedPaymentMethodType === 'paypal' ? paymentMethod : null);
-      
-      if (finalPaymentMethod?.type === 'paypal' || selectedPaymentMethodType === 'paypal') {
-        // Get user's current PayPal balance
-        const userRef = doc(db, 'Users', guestId);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          const currentBalance = userData.paypalBalance || 0;
-          
-          // Check if balance is sufficient
-          if (currentBalance < grandTotal) {
-            const shortage = grandTotal - currentBalance;
-            setErrorMessage(`Insufficient PayPal balance. You need ₱${shortage.toLocaleString()} more to complete this booking.\n\nCurrent Balance: ₱${currentBalance.toLocaleString()}\nRequired Amount: ₱${grandTotal.toLocaleString()}`);
-            showInsufficientBalance();
-            return;
-          }
-        } else {
-          // User document doesn't exist or no balance set
-          setErrorMessage(`Insufficient PayPal balance. Please add funds to your PayPal account.\n\nRequired Amount: ₱${grandTotal.toLocaleString()}`);
-          showInsufficientBalance();
-          return;
-        }
-      }
+      // Payment is already processed in handleBalancePayment, so we just proceed with booking creation
       
       // Close confirmation dialog if still open
       if (showConfirmDialog) {
@@ -852,49 +776,8 @@ const SelectedListingBookingConfirmation = () => {
       // Create the Reservation document
       const reservationRef = await addDoc(collection(db, 'Reservation'), reservation);
 
-      // Deduct PayPal balance if using PayPal payment method
-      if (finalPaymentMethodForReservation?.type === 'paypal' || selectedPaymentMethodType === 'paypal') {
-        const userRef = doc(db, 'Users', guestId);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          const userData = userSnap.data();
-          const currentBalance = userData.paypalBalance || 0;
-          const newBalance = currentBalance - grandTotal;
-
-          // Create payment transaction record
-          const paymentTransaction = {
-            userId: guestId,
-            userRole: 'guest',
-            type: 'payment',
-            amount: grandTotal,
-            currency: 'PHP',
-            status: 'completed',
-            description: `Payment for booking: ${reservation.listingTitle}`,
-            reservationId: reservationRef.id,
-            listingId: reservation.listingId,
-            listingTitle: reservation.listingTitle,
-            balanceBefore: currentBalance,
-            balanceAfter: newBalance,
-            paymentMethod: 'paypal',
-            transactionId: finalPaymentMethodForReservation?.transactionId || null,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          };
-
-          // Deduct balance and create transaction record atomically
-          await Promise.all([
-            updateDoc(userRef, {
-              paypalBalance: newBalance,
-              paypalLastUpdated: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            }),
-            addDoc(collection(db, 'PayPalTransactions'), paymentTransaction)
-          ]);
-
-          console.log(`Deducted ₱${grandTotal} from PayPal balance. New balance: ₱${newBalance}`);
-        }
-      }
+      // Payment is already processed in handleBalancePayment before this function is called
+      // Balance deduction and distribution to host/admin is handled there
 
       // Create a notification for the host about the new reservation request
       // IMPORTANT: Do NOT add any money to host account at this point
@@ -945,48 +828,14 @@ const SelectedListingBookingConfirmation = () => {
   };
 
   const submitBooking = async () => {
-    // Check if payment method is selected
-    if (!selectedPaymentMethodType) {
-      showError('Please select a payment method.');
+    // Use Firebase balance payment
+    if (selectedPaymentMethodType === 'balance') {
+      await handleBalancePayment();
       return;
     }
 
-    // If PayPal is selected, payment will be handled by PayPal buttons
-    if (selectedPaymentMethodType === 'paypal') {
-      // Payment will be processed through PayPal buttons in the dialog
-      // The handlePayPalSuccess will call submitBookingWithPayment
-      return;
-    }
-
-    // For card payment, validate card details
-    if (selectedPaymentMethodType === 'card') {
-      if (!paymentForm.cardNumber || !paymentForm.cardHolder || !paymentForm.expiryDate || !paymentForm.cvv) {
-        showError('Please fill in all card details.');
-        return;
-      }
-
-      // Validate card number
-      const cardDigits = paymentForm.cardNumber.replace(/\D/g, '');
-      if (cardDigits.length !== 16) {
-        showError('Please enter a valid 16-digit card number.');
-        return;
-      }
-
-      // Validate expiry date
-      if (!/^\d{2}\/\d{2}$/.test(paymentForm.expiryDate)) {
-        showError('Please enter a valid expiry date (MM/YY).');
-        return;
-      }
-
-      // Validate CVV
-      if (paymentForm.cvv.length < 3) {
-        showError('Please enter a valid CVV (3-4 digits).');
-        return;
-      }
-    }
-
-    // Submit booking with card payment
-    await submitBookingWithPayment();
+    // Fallback: if no payment method selected, use balance
+    await handleBalancePayment();
   };
 
   if (loadingUser) {
@@ -1187,18 +1036,11 @@ const SelectedListingBookingConfirmation = () => {
         </div>
       </div>
 
-      {/* Payment Method Dialog */}
-      <PayPalScriptProvider 
-        options={{ 
-          "client-id": PAYPAL_CLIENT_ID,
-          currency: "PHP",
-          intent: "capture"
-        }}
-      >
+      {/* Payment Method Dialog - Balance Payment */}
       <dialog ref={paymentDialogRef} className="payment-method-dialog">
         <div className="payment-dialog-content">
           <div className="payment-dialog-header">
-            <h3>Add Payment Method</h3>
+            <h3>Payment Method</h3>
             <button onClick={handleClosePaymentDialog} className="close-payment-dialog-btn">
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1207,85 +1049,34 @@ const SelectedListingBookingConfirmation = () => {
             </button>
           </div>
 
-          {/* Payment Method Type Selector */}
-          <div className="payment-method-selector">
-            <button 
-              className={`payment-type-btn ${paymentMethodType === 'card' ? 'active' : ''}`}
-              onClick={() => setPaymentMethodType('card')}
-            >
-              Credit/Debit Card
-            </button>
-            <button 
-              className={`payment-type-btn ${paymentMethodType === 'paypal' ? 'active' : ''}`}
-              onClick={() => setPaymentMethodType('paypal')}
-            >
-              PayPal
-            </button>
-          </div>
-
-          {paymentMethodType === 'paypal' ? (
-            <div className="paypal-section">
-              <p className="paypal-description">Pay ₱{grandTotal.toFixed(2)} using your PayPal account.</p>
-              <PayPalButtons
-                    createOrder={(data, actions) => {
-                      // Ensure grandTotal is a number and properly formatted
-                      const amount = Number(grandTotal);
-                      
-                      if (isNaN(amount) || amount <= 0) {
-                        console.error('Invalid amount:', grandTotal);
-                        throw new Error('Invalid payment amount');
-                      }
-                      
-                      const formattedAmount = amount.toFixed(2);
-                      
-                      // Prepare purchase unit
-                      const purchaseUnit = {
-                        amount: {
-                          value: formattedAmount,
-                          currency_code: "PHP"
-                        },
-                        description: `Booking payment for ${listing.title} - ${nights} night(s)`
-                      };
-
-                      // Payment goes to platform account (no payee field)
-                      // We'll split it after payment capture using Payouts API
-                      // Host gets: subtotal
-                      // Admin/platform gets: serviceFee
-                      console.log('Payment will go to platform account. Split will be processed after capture.');
-                      
-                      console.log('Creating PayPal order (Payment Dialog):', {
-                        amount: formattedAmount,
-                        currency: 'PHP',
-                        total: grandTotal,
-                        subtotal: subtotal,
-                        serviceFee: serviceFee,
-                        nights: nights,
-                        listingPrice: listing.price,
-                        note: 'Payment goes to platform. Will be split after capture.'
-                      });
-                      
-                      // Create order with the actual booking total
-                      return actions.order.create({
-                        purchase_units: [purchaseUnit],
-                        application_context: {
-                          brand_name: "StaySmart",
-                          landing_page: "NO_PREFERENCE",
-                          user_action: "PAY_NOW"
-                        }
-                      });
+          {/* Balance Payment Section */}
+          <div className="balance-payment-section">
+            <div className="balance-info">
+              <h4>Your Account Balance</h4>
+              <p className="balance-amount">₱{userBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <p className="balance-description">
+                Total amount needed: <strong>₱{grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+              </p>
+              {userBalance < grandTotal && (
+                <div className="insufficient-balance-warning">
+                  <p>⚠️ Insufficient balance. You need ₱{(grandTotal - userBalance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} more.</p>
+                  <button 
+                    className="add-balance-btn"
+                    onClick={() => {
+                      handleClosePaymentDialog();
+                      // Navigate to add balance page or open add balance dialog
+                      alert('Please add funds to your account to complete this booking.');
                     }}
-                    onApprove={handlePayPalSuccess}
-                    onError={handlePayPalError}
-                    onCancel={handlePayPalCancel}
-                    style={{
-                      layout: "vertical",
-                      color: "blue",
-                      shape: "rect",
-                      label: "paypal"
-                    }}
-                  />
+                  >
+                    Add Funds
+                  </button>
+                </div>
+              )}
             </div>
-          ) : (
+          </div>
+          
+          {/* Card payment form removed - using balance only */}
+          {false && (
             <div className="payment-form">
             <div className="payment-form-group">
               <label htmlFor="cardNumber">Card Number</label>
@@ -1354,19 +1145,24 @@ const SelectedListingBookingConfirmation = () => {
           </div>
           )}
 
-          {paymentMethodType === 'card' && (
-            <div className="payment-dialog-actions">
-              <button onClick={handleClosePaymentDialog} className="cancel-payment-btn">
-                Cancel
+          <div className="payment-dialog-actions">
+            <button onClick={handleClosePaymentDialog} className="cancel-payment-btn">
+              Close
+            </button>
+            {userBalance >= grandTotal && (
+              <button 
+                onClick={() => {
+                  handleClosePaymentDialog();
+                  showConfirmBookingDialog();
+                }} 
+                className="save-payment-btn"
+              >
+                Proceed to Confirm
               </button>
-              <button onClick={handleSavePaymentMethod} className="save-payment-btn">
-                Save Payment Method
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </dialog>
-      </PayPalScriptProvider>
 
       {/* Error Dialog */}
       <dialog ref={errorDialogRef} className="error-dialog">
@@ -1420,7 +1216,7 @@ const SelectedListingBookingConfirmation = () => {
           <div className="error-dialog-body">
             <p className="error-message" style={{ whiteSpace: 'pre-line' }}>{errorMessage}</p>
             <p style={{ marginTop: '16px', fontSize: '0.9rem', color: '#666' }}>
-              Please add funds to your PayPal account to complete this booking.
+              Please add funds to your account balance to complete this booking.
             </p>
           </div>
           <div className="error-dialog-actions">
@@ -1432,13 +1228,6 @@ const SelectedListingBookingConfirmation = () => {
       </dialog>
 
       {/* Confirmation Dialog */}
-      <PayPalScriptProvider 
-        options={{ 
-          "client-id": PAYPAL_CLIENT_ID,
-          currency: "PHP",
-          intent: "capture"
-        }}
-      >
       <dialog ref={confirmDialogRef} className="confirm-booking-dialog">
         <div className="confirm-dialog-content">
           <div className="confirm-dialog-header">
@@ -1542,191 +1331,66 @@ const SelectedListingBookingConfirmation = () => {
                   </p>
                 </div>
               )}
+              {message && (
+                <div className="confirm-detail-row" style={{ 
+                  marginTop: '12px',
+                  padding: '12px',
+                  background: '#f9fafb',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb'
+                }}>
+                  <span className="confirm-label">Message to Host:</span>
+                  <span className="confirm-value" style={{ fontStyle: 'italic', color: '#4b5563' }}>
+                    "{message}"
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Payment Method Selection */}
+            {/* Balance Payment Section */}
             <div className="confirm-payment-section">
-              <h4>Select Payment Method</h4>
-              <div className="confirm-payment-options">
-                <button 
-                  className={`confirm-payment-option ${selectedPaymentMethodType === 'card' ? 'selected' : ''}`}
-                  onClick={() => setSelectedPaymentMethodType('card')}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect width="20" height="14" x="2" y="5" rx="2"/>
-                    <line x1="2" x2="22" y1="10" y2="10"/>
-                  </svg>
-                  <span>Credit/Debit Card</span>
-                </button>
-                <button 
-                  className={`confirm-payment-option ${selectedPaymentMethodType === 'paypal' ? 'selected' : ''}`}
-                  onClick={() => setSelectedPaymentMethodType('paypal')}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                    <path d="M2 17l10 5 10-5"/>
-                    <path d="M2 12l10 5 10-5"/>
-                  </svg>
-                  <span>PayPal</span>
-                </button>
+              <h4>Payment Method</h4>
+              <div className="balance-payment-confirm">
+                <div className="balance-info-confirm">
+                  <p className="balance-label">Your Account Balance:</p>
+                  <p className="balance-amount-large">₱{userBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  {userBalance < grandTotal ? (
+                    <div className="insufficient-balance-alert">
+                      <p>⚠️ Insufficient balance. You need ₱{(grandTotal - userBalance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} more.</p>
+                    </div>
+                  ) : (
+                    <div className="sufficient-balance-success">
+                      <p>✅ Sufficient balance available</p>
+                    </div>
+                  )}
+                </div>
               </div>
-
-              {/* Card Payment Form */}
-              {selectedPaymentMethodType === 'card' && (
-                <div className="confirm-card-form">
-                  <div className="confirm-form-group">
-                    <label>Card Number</label>
-                    <input
-                      type="text"
-                      name="cardNumber"
-                      placeholder="1234 5678 9012 3456"
-                      value={paymentForm.cardNumber}
-                      onChange={handlePaymentFormChange}
-                      maxLength="19"
-                    />
-                  </div>
-                  <div className="confirm-form-group">
-                    <label>Card Holder Name</label>
-                    <input
-                      type="text"
-                      name="cardHolder"
-                      placeholder="John Doe"
-                      value={paymentForm.cardHolder}
-                      onChange={handlePaymentFormChange}
-                    />
-                  </div>
-                  <div className="confirm-form-row">
-                    <div className="confirm-form-group">
-                      <label>Expiry Date</label>
-                      <input
-                        type="text"
-                        name="expiryDate"
-                        placeholder="MM/YY"
-                        value={paymentForm.expiryDate}
-                        onChange={handlePaymentFormChange}
-                        maxLength="5"
-                      />
-                    </div>
-                    <div className="confirm-form-group">
-                      <label>CVV</label>
-                      <input
-                        type="text"
-                        name="cvv"
-                        placeholder="123"
-                        value={paymentForm.cvv}
-                        onChange={handlePaymentFormChange}
-                        maxLength="4"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* PayPal Payment */}
-              {selectedPaymentMethodType === 'paypal' && (
-                <div className="confirm-paypal-section" key="paypal-confirm-section">
-                  <p className="paypal-info-text">Complete your PayPal payment below to confirm your booking</p>
-                  <div id="paypal-button-container-confirm" style={{ minHeight: '200px', width: '100%', display: 'flex', justifyContent: 'center' }}>
-                    <PayPalButtons
-                      createOrder={(data, actions) => {
-                        // Ensure grandTotal is a number and properly formatted
-                        const amount = Number(grandTotal);
-                        
-                        if (isNaN(amount) || amount <= 0) {
-                          console.error('Invalid amount:', grandTotal);
-                          throw new Error('Invalid payment amount');
-                        }
-                        
-                        const formattedAmount = amount.toFixed(2);
-                        
-                        // Prepare purchase unit
-                        const purchaseUnit = {
-                          amount: {
-                            value: formattedAmount,
-                            currency_code: "PHP"
-                          },
-                          description: `Booking payment for ${listing.title} - ${nights} night(s)`
-                        };
-
-                        // Payment goes to platform account (no payee field)
-                        // We'll split it after payment capture using Payouts API
-                        // Host gets: subtotal
-                        // Admin/platform gets: serviceFee
-                        console.log('Payment will go to platform account. Split will be processed after capture.');
-                        
-                        console.log('Creating PayPal order (Confirm Dialog):', {
-                          amount: formattedAmount,
-                          currency: 'PHP',
-                          total: grandTotal,
-                          subtotal: subtotal,
-                          serviceFee: serviceFee,
-                          nights: nights,
-                          listingPrice: listing.price,
-                          note: 'Payment goes to platform. Will be split after capture.'
-                        });
-                        
-                        // Create order with the actual booking total
-                        return actions.order.create({
-                          purchase_units: [purchaseUnit],
-                          application_context: {
-                            brand_name: "StaySmart",
-                            landing_page: "NO_PREFERENCE",
-                            user_action: "PAY_NOW"
-                          }
-                        });
-                      }}
-                      onApprove={async (data, actions) => {
-                        console.log('PayPal onApprove triggered:', data);
-                        try {
-                          await handlePayPalSuccess(data, actions);
-                        } catch (error) {
-                          console.error('Error in PayPal onApprove:', error);
-                          handlePayPalError(error);
-                        }
-                      }}
-                      onError={(err) => {
-                        console.error('PayPal Error (Confirm Dialog):', err);
-                        handlePayPalError(err);
-                      }}
-                      onCancel={() => {
-                        console.log('PayPal payment cancelled (Confirm Dialog)');
-                        handlePayPalCancel();
-                      }}
-                      style={{
-                        layout: "vertical",
-                        color: "blue",
-                        shape: "rect",
-                        label: "paypal"
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           </div>
           <div className="confirm-dialog-actions">
             <button onClick={handleCloseConfirmDialog} className="confirm-cancel-btn">
               Cancel
             </button>
-            {selectedPaymentMethodType === 'card' && (
-              <button onClick={submitBooking} className="confirm-submit-btn">
-                Confirm Booking Request
+            {userBalance >= grandTotal ? (
+              <button onClick={handleBalancePayment} className="confirm-submit-btn">
+                Confirm Booking & Pay
               </button>
-            )}
-            {selectedPaymentMethodType === 'paypal' && (
-              <button onClick={submitBooking} className="confirm-submit-btn" disabled>
-                Complete PayPal Payment Above
-              </button>
-            )}
-            {!selectedPaymentMethodType && (
-              <button onClick={() => showError('Please select a payment method.')} className="confirm-submit-btn" disabled>
-                Select Payment Method
+            ) : (
+              <button 
+                onClick={() => {
+                  handleCloseConfirmDialog();
+                  alert('Please add funds to your account to complete this booking.');
+                }} 
+                className="confirm-submit-btn" 
+                style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                disabled
+              >
+                Insufficient Balance
               </button>
             )}
           </div>
         </div>
       </dialog>
-      </PayPalScriptProvider>
     </div>
   );
 };

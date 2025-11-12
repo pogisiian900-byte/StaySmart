@@ -666,7 +666,7 @@ const AdminProfile = () => {
           </div>
         </div>
 
-        {/* PayPal Balance Card - Digital Payment App Style */}
+        {/* Stay Smart Balance Card - Digital Payment App Style */}
         <div className="profile-info-card" style={{ 
           background: 'linear-gradient(135deg, #0070ba 0%, #003087 100%)',
           color: 'white',
@@ -701,219 +701,10 @@ const AdminProfile = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                   </svg>
-                  <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'white' }}>PayPal Balance</h3>
+                  <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'white' }}>Stay Smart Balance</h3>
                 </div>
                 <p style={{ margin: 0, fontSize: '14px', color: 'rgba(255, 255, 255, 0.8)' }}>Digital Wallet</p>
               </div>
-              <button
-                onClick={async () => {
-                  if (!authUser) return
-                  
-                  try {
-                    setIsSaving(true)
-                    const userRef = doc(db, 'Users', authUser.uid)
-                    const userSnap = await getDoc(userRef)
-                    
-                    if (!userSnap.exists()) {
-                      alert('User not found')
-                      return
-                    }
-                    
-                    const userData = userSnap.data()
-                    
-                    // Check if user has PayPal account connected
-                    const hasPayPalAccount = userData.paymentMethod?.paypalEmail || 
-                                            userData.paypalAccountId ||
-                                            userData.paymentMethod?.payerId
-                    
-                    if (!hasPayPalAccount) {
-                      // If no PayPal account, use manual entry
-                      const currentBalanceInput = prompt(
-                        'Sync PayPal Balance\n\n' +
-                        'No PayPal account connected. Enter your current PayPal account balance (PHP) to sync with Firebase:\n\n' +
-                        'Example: If you have ₱20,000 in your PayPal account, enter: 20000'
-                      )
-                      
-                      if (currentBalanceInput === null) return // User cancelled
-                      
-                      let newBalance = 0
-                      if (currentBalanceInput && currentBalanceInput.trim() !== '') {
-                        const parsedBalance = parseFloat(currentBalanceInput)
-                        if (!isNaN(parsedBalance) && parsedBalance >= 0) {
-                          newBalance = parsedBalance
-                        } else {
-                          alert('Please enter a valid number')
-                          return
-                        }
-                      }
-                      
-                      const currentBalance = userData.paypalBalance || 0
-                      const balanceDifference = newBalance - currentBalance
-                      
-                      // Update balance
-                      await updateDoc(userRef, {
-                        paypalBalance: newBalance,
-                        paypalLastUpdated: serverTimestamp(),
-                        balanceSyncedAt: serverTimestamp()
-                      })
-                      
-                      // Create transaction record for the balance adjustment
-                      if (balanceDifference !== 0) {
-                        await addDoc(collection(db, 'PayPalTransactions'), {
-                          userId: authUser.uid,
-                          userRole: 'admin',
-                          type: balanceDifference > 0 ? 'deposit' : 'withdrawal',
-                          amount: Math.abs(balanceDifference),
-                          currency: 'PHP',
-                          status: 'completed',
-                          description: `Balance sync - Updated to match PayPal account (${balanceDifference > 0 ? 'added' : 'adjusted'})`,
-                          paymentMethod: 'paypal',
-                          payerId: userData.paypalAccountId || null,
-                          accountId: userData.paypalAccountId || null,
-                          balanceBefore: currentBalance,
-                          balanceAfter: newBalance,
-                          isBalanceSync: true,
-                          createdAt: serverTimestamp(),
-                          updatedAt: serverTimestamp()
-                        })
-                      }
-                      
-                      alert(`Balance synced successfully!\n\nNew balance: ₱${newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-                    } else {
-                      // Try to get balance from PayPal API
-                      try {
-                        alert('Fetching balance from PayPal API... Please wait.')
-                        
-                        const syncResult = await syncPayPalBalanceToFirebase(authUser.uid, 'PHP')
-                        const paypalBalance = syncResult.balance
-                        const currentBalance = userData.paypalBalance || 0
-                        const balanceDifference = paypalBalance - currentBalance
-                        
-                        // Update balance in Firebase
-                        await updateDoc(userRef, {
-                          paypalBalance: paypalBalance,
-                          paypalLastUpdated: serverTimestamp(),
-                          balanceSyncedAt: serverTimestamp(),
-                          paypalBalanceData: syncResult.balanceData // Store full balance data
-                        })
-                        
-                        // Create transaction record for the balance adjustment if different
-                        if (Math.abs(balanceDifference) > 0.01) {
-                          await addDoc(collection(db, 'PayPalTransactions'), {
-                            userId: authUser.uid,
-                            userRole: 'admin',
-                            type: balanceDifference > 0 ? 'deposit' : 'withdrawal',
-                            amount: Math.abs(balanceDifference),
-                            currency: 'PHP',
-                            status: 'completed',
-                            description: `Balance sync from PayPal API - Auto-synced from actual PayPal account`,
-                            paymentMethod: 'paypal',
-                            payerId: userData.paypalAccountId || userData.paymentMethod?.payerId || null,
-                            accountId: userData.paypalAccountId || userData.paymentMethod?.payerId || null,
-                            balanceBefore: currentBalance,
-                            balanceAfter: paypalBalance,
-                            isBalanceSync: true,
-                            isApiSync: true, // Mark as API sync
-                            createdAt: serverTimestamp(),
-                            updatedAt: serverTimestamp()
-                          })
-                        }
-                        
-                        alert(`Balance synced from PayPal successfully!\n\nPayPal Balance: ₱${paypalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\nPrevious Balance: ₱${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-                      } catch (apiError) {
-                        console.error('Error syncing from PayPal API:', apiError)
-                        // Fallback to manual entry if API fails
-                        const currentBalanceInput = prompt(
-                          `Could not fetch balance from PayPal API.\n\nError: ${apiError.message || 'Unknown error'}\n\nPlease enter your current PayPal account balance (PHP) manually:\n\nExample: If you have ₱20,000, enter: 20000`
-                        )
-                        
-                        if (currentBalanceInput === null) return
-                        
-                        let newBalance = 0
-                        if (currentBalanceInput && currentBalanceInput.trim() !== '') {
-                          const parsedBalance = parseFloat(currentBalanceInput)
-                          if (!isNaN(parsedBalance) && parsedBalance >= 0) {
-                            newBalance = parsedBalance
-                          } else {
-                            alert('Please enter a valid number')
-                            return
-                          }
-                        }
-                        
-                        const currentBalance = userData.paypalBalance || 0
-                        const balanceDifference = newBalance - currentBalance
-                        
-                        await updateDoc(userRef, {
-                          paypalBalance: newBalance,
-                          paypalLastUpdated: serverTimestamp(),
-                          balanceSyncedAt: serverTimestamp()
-                        })
-                        
-                        if (balanceDifference !== 0) {
-                          await addDoc(collection(db, 'PayPalTransactions'), {
-                            userId: authUser.uid,
-                            userRole: 'admin',
-                            type: balanceDifference > 0 ? 'deposit' : 'withdrawal',
-                            amount: Math.abs(balanceDifference),
-                            currency: 'PHP',
-                            status: 'completed',
-                            description: `Balance sync - Manual entry (API sync failed)`,
-                            paymentMethod: 'paypal',
-                            payerId: userData.paypalAccountId || null,
-                            accountId: userData.paypalAccountId || null,
-                            balanceBefore: currentBalance,
-                            balanceAfter: newBalance,
-                            isBalanceSync: true,
-                            createdAt: serverTimestamp(),
-                            updatedAt: serverTimestamp()
-                          })
-                        }
-                        
-                        alert(`Balance synced manually!\n\nNew balance: ₱${newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-                      }
-                    }
-                  } catch (error) {
-                    console.error('Error syncing balance:', error)
-                    alert(`Error syncing balance: ${error.message || 'Please try again.'}`)
-                  } finally {
-                    setIsSaving(false)
-                  }
-                }}
-                disabled={isSaving}
-                style={{
-                  padding: '8px 12px',
-                  background: isSaving ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)',
-                  border: '1px solid rgba(255, 255, 255, 0.3)',
-                  borderRadius: '8px',
-                  color: 'white',
-                  cursor: isSaving ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  transition: 'all 0.3s ease',
-                  opacity: isSaving ? 0.6 : 1
-                }}
-                onMouseOver={(e) => {
-                  if (!isSaving) {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.3)'
-                  }
-                }}
-                onMouseOut={(e) => {
-                  if (!isSaving) {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.2)'
-                  }
-                }}
-                title="Sync balance from your actual PayPal account"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="23 4 23 10 17 10"/>
-                  <polyline points="1 20 1 14 7 14"/>
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                </svg>
-                {isSaving ? 'Syncing...' : 'Sync Balance'}
-              </button>
             </div>
 
             <div style={{ marginBottom: '32px' }}>
@@ -932,7 +723,7 @@ const AdminProfile = () => {
                 color: 'white',
                 letterSpacing: '-1px'
               }}>
-                ₱{(user?.paypalBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₱{((user?.balance || user?.walletBalance || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
 
@@ -979,7 +770,7 @@ const AdminProfile = () => {
                     fontWeight: '600', 
                     color: '#10b981'
                   }}>
-                    {user?.paymentMethod?.paypalEmail ? 'Active' : 'Not Connected'}
+                    Active
                   </p>
                   {user?.paymentMethod?.accountType === 'business' && (
                     <span style={{ 
@@ -997,82 +788,6 @@ const AdminProfile = () => {
                 </div>
               </div>
             </div>
-
-            {user?.paymentMethod?.paypalEmail && (
-              <div style={{ 
-                marginTop: '16px',
-                padding: '12px',
-                background: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/>
-                  <rect x="2" y="4" width="20" height="16" rx="2"/>
-                </svg>
-                <div style={{ flex: 1 }}>
-                  <p style={{ 
-                    margin: '0 0 2px 0', 
-                    fontSize: '12px', 
-                    color: 'rgba(255, 255, 255, 0.7)'
-                  }}>
-                    PayPal Email
-                  </p>
-                  <p style={{ 
-                    margin: 0, 
-                    fontSize: '14px', 
-                    fontWeight: '600', 
-                    color: 'white'
-                  }}>
-                    {user.paymentMethod.paypalEmail}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {!user?.paymentMethod?.paypalEmail && (
-              <div style={{ 
-                marginTop: '16px',
-                padding: '12px',
-                background: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px',
-                textAlign: 'center'
-              }}>
-                <p style={{ 
-                  margin: '0 0 12px 0', 
-                  fontSize: '14px', 
-                  color: 'rgba(255, 255, 255, 0.9)'
-                }}>
-                  Connect your PayPal account to view balance
-                </p>
-                <button
-                  onClick={handleOpenPaymentDialog}
-                  style={{
-                    padding: '10px 20px',
-                    background: 'white',
-                    color: '#0070ba',
-                    border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease'
-                  }}
-                  onMouseOver={(e) => {
-                    e.target.style.background = '#f3f4f6'
-                    e.target.style.transform = 'translateY(-2px)'
-                  }}
-                  onMouseOut={(e) => {
-                    e.target.style.background = 'white'
-                    e.target.style.transform = 'translateY(0)'
-                  }}
-                >
-                  Connect PayPal
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
