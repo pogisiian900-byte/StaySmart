@@ -4,7 +4,6 @@ import { collection, onSnapshot, orderBy, query, updateDoc, where, doc, serverTi
 import { db } from '../../config/firebase'
 // Removed PayPal payout import - using Firebase balance instead
 import ContinuousCalendar from '../../components/ContinuousCalendar'
-import { createOrGetConversation } from '../for-all/messages/createOrGetConversation'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
 import dialogPolyfill from 'dialog-polyfill'
 
@@ -59,19 +58,6 @@ const HostBookings = () => {
     return () => unsub()
   }, [hostId])
 
-  const handleMessageGuest = async () => {
-    if (!selectedReservation?.guestId) {
-      alert('Guest information not available')
-      return
-    }
-    try {
-      const conversationId = await createOrGetConversation(hostId, selectedReservation.guestId)
-      navigate(`/host/${hostId}/chat/${conversationId}`)
-    } catch (error) {
-      console.error('Error creating conversation:', error)
-      alert('Failed to start conversation. Please try again.')
-    }
-  }
 
   // Register dialog polyfill
   useEffect(() => {
@@ -464,21 +450,94 @@ const HostBookings = () => {
 
   return (
     <>
-    <br />
-      <button onClick={() => navigate(`/host/${hostId}`)} className="back-btn">
-        <span className="back-btn-arrow">❮</span>
-      </button>
     <div className="bookings-layout">
       <div>
-        <div className="bookings-header">
-          <div>
-            <h2 className="bookings-title">Incoming Reservations</h2>
-            <p className="bookings-subtext">Review and manage guest requests</p>
-          </div>
-          <div className="status-legend" style={{ display:'flex', gap:8, alignItems:'center' }}>
-            <span className="status-badge status-pending">Pending</span>
-            <span className="status-badge status-confirmed">Confirmed</span>
-            <span className="status-badge status-declined">Declined</span>
+        <div style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderRadius: '20px',
+          padding: '32px',
+          marginBottom: '32px',
+          boxShadow: '0 10px 40px rgba(102, 126, 234, 0.15)',
+          color: 'white'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
+            <div>
+              <h2 style={{
+                fontSize: '2rem',
+                fontWeight: 700,
+                margin: '0 0 8px 0',
+                color: 'white',
+                letterSpacing: '-0.5px'
+              }}>
+                Incoming Reservations
+              </h2>
+              <p style={{
+                fontSize: '1rem',
+                margin: 0,
+                color: 'rgba(255, 255, 255, 0.9)',
+                fontWeight: 400
+              }}>
+                Review and manage guest requests
+              </p>
+            </div>
+            <div style={{ 
+              display: 'flex', 
+              gap: '12px', 
+              alignItems: 'center',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#fbbf24'
+                }}></div>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Pending</span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#10b981'
+                }}></div>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Confirmed</span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#ef4444'
+                }}></div>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Declined</span>
+              </div>
+            </div>
           </div>
         </div>
         {filtered.length === 0 && (
@@ -555,15 +614,23 @@ const HostBookings = () => {
         </div>
       </div>
       <div>
-        <h3 style={{ margin: '0 0 12px 0' }}>Calendar</h3>
         <ContinuousCalendar 
           onClick={handleCalendarClick} 
           bookedDates={bookedDates} 
           selectedDate={selectedDate}
-          onBack={() => navigate(`/host/${hostId}`)}
         />
         {selectedDate && (
-          <div style={{ marginTop: 8, color: '#666' }}>Selected: {selectedDate.toDateString()}</div>
+          <div style={{ 
+            marginTop: 12, 
+            padding: '12px 16px',
+            background: '#f3f4f6',
+            borderRadius: '10px',
+            color: '#374151',
+            fontSize: '0.9rem',
+            fontWeight: 500
+          }}>
+            Selected: {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+          </div>
         )}
       </div>
       {selectedReservation && (
@@ -595,21 +662,6 @@ const HostBookings = () => {
             <div className="modal-footer" style={{ justifyContent:'space-between' }}>
               <button className="btn btn-ghost" onClick={() => setSelectedReservation(null)}>Close</button>
               <div style={{ display:'flex', gap:8 }}>
-                <button 
-                  className="btn btn-secondary" 
-                  onClick={handleMessageGuest}
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '8px',
-                    background: '#31326F',
-                    color: 'white',
-                    border: 'none'
-                  }}
-                >
-                  <span>💬</span>
-                  Message Guest
-                </button>
                 <button className="btn btn-primary" disabled={updating===selectedReservation.id || selectedReservation.status!=='pending'} onClick={() => showConfirmBookingDialog(selectedReservation)}>Confirm</button>
                 <button className="btn btn-danger" disabled={updating===selectedReservation.id || selectedReservation.status!=='pending'} onClick={() => showDeclineBookingDialog(selectedReservation)}>Decline</button>
               </div>

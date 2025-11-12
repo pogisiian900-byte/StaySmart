@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { db, auth } from "../../../config/firebase";
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import "./ConvoList.css";
 
 export default function GuestConvoList() {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const { guestId } = useParams();
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -119,22 +118,9 @@ export default function GuestConvoList() {
     );
   }
 
-  const handleBack = () => {
-    if (guestId) {
-      navigate(`/guest/${guestId}`);
-    } else {
-      navigate(-1);
-    }
-  };
-
   return (
     <div className="convo-list-container">
       <div className="convo-list-header">
-        <button className="convo-back-btn" onClick={handleBack} title="Go back">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-        </button>
         <div className="convo-header-content">
           <h1>Messages</h1>
           <p>Your conversations</p>

@@ -38,6 +38,7 @@ import GuestNotifications from './pages/guest/GuestNotifications.jsx';
 import HostNotifications from './pages/host/HostNotifications.jsx';
 import GuestSearch from './pages/guest/GuestSearch.jsx';
 import GuestFavourites from './pages/guest/GuestFavourites.jsx';
+import GuestAccountSettings from './pages/guest/GuestAccountSettings.jsx';
 import SharedListing from './pages/for-all/SharedListing.jsx';
 
 function App() {
@@ -71,10 +72,9 @@ function App() {
             }
           >
             <Route index element={<GuestMainLogged />} />
-            <Route path="profile" element={<Profile />} />
+            <Route path="account-settings" element={<GuestAccountSettings />} />
             <Route path="listing/:listingId" element={<SelectListingItem />} />
               <Route path="messages" element={<GuestConvoList />} />
-            <Route path="bookings" element={<GuestBookings />} />
             <Route path="favourites" element={<GuestFavourites />} />
             <Route path="notifications" element={<GuestNotifications />} />
             <Route path="search" element={<GuestSearch />} />
@@ -112,42 +112,42 @@ function App() {
 
           <Route path='/login' element={<LoginPage_Host />} />
       <Route path="/host">
-  <Route
-    path=":hostId"
-    index
-    element={
-      <ProtectedRoute allowedRole="host">
-        <HostMain />
-      </ProtectedRoute>
-    }
-  />
+        <Route
+          path=":hostId"
+          element={
+            <ProtectedRoute allowedRole="host">
+              <HostMain />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<div />} />
+          <Route path=":listingId" element={<ViewListing />} />
+          <Route path="startingListing" element={<SetupService />} />
+          <Route path="getStarted/:serviceType" element={<HostSetupForm />} />
+          <Route path="draft/:serviceType/:draftId" element={<HostSetupForm />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="bookings" element={<HostBookings />} />
+          <Route path="notifications" element={<HostNotifications />} />
 
-  <Route path=":hostId/:listingId" element={<ViewListing />} />
-  <Route path=":hostId/startingListing" element={<SetupService />} />
-  <Route path=":hostId/getStarted/:serviceType" element={<HostSetupForm />} />
-  <Route path=":hostId/draft/:serviceType/:draftId" element={<HostSetupForm />} />
-  <Route path=":hostId/profile" element={<Profile />} />
-  <Route path=":hostId/bookings" element={<HostBookings />} />
-  <Route path=":hostId/notifications" element={<HostNotifications />} />
-
-  {/* ✅ Host Messaging Routes */}
-  <Route
-    path=":hostId/messages"
-    element={
-      <ProtectedRoute allowedRole="host">
-        <HostConvoList />
-      </ProtectedRoute>
-    }
-  />
-  <Route
-    path=":hostId/chat/:conversationId"
-    element={
-      <ProtectedRoute allowedRole={["host", "guest"]}>
-        <ChatPage />
-      </ProtectedRoute>
-    }
-  />
-</Route>
+          {/* ✅ Host Messaging Routes */}
+          <Route
+            path="messages"
+            element={
+              <ProtectedRoute allowedRole="host">
+                <HostConvoList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="chat/:conversationId"
+            element={
+              <ProtectedRoute allowedRole={["host", "guest"]}>
+                <ChatPage />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+      </Route>
 
         
 

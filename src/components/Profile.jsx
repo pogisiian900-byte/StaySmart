@@ -334,11 +334,6 @@ const handleWithdrawal = async () => {
     return;
   }
 
-  if (!withdrawalAccount || withdrawalAccount.trim() === '') {
-    alert('Please enter your account details.');
-    return;
-  }
-
   try {
     setProcessingWithdrawal(true);
     
@@ -358,6 +353,134 @@ const handleWithdrawal = async () => {
     // Check if user has sufficient balance
     if (amount > currentBalance) {
       alert(`Insufficient balance. You have ₱${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available.`);
+      setProcessingWithdrawal(false);
+      return;
+    }
+
+    // Handle PayPal withdrawal differently - process directly via PayPal API
+    if (withdrawalMethod === 'paypal') {
+      // Get PayPal account info
+      const payoutEmail = withdrawalAccount.trim() || 
+                         paymentMethod?.paypalEmail ||
+                         userData.paymentMethod?.paypalEmail || 
+                         userData.paymentInfo?.payoutEmail || 
+                         userData?.payoutEmail;
+      const payerId = paymentMethod?.payerId ||
+                     userData.paymentMethod?.payerId || 
+                     userData.paypalAccountId ||
+                     userData.paymentMethod?.payer_id;
+
+      if (!payoutEmail && !payerId) {
+        alert('No PayPal account found. Please connect your PayPal account in your profile first or enter your PayPal email.');
+        setProcessingWithdrawal(false);
+        return;
+      }
+
+      if (!payoutEmail && !withdrawalAccount.trim()) {
+        alert('Please enter your PayPal email address.');
+        setProcessingWithdrawal(false);
+        return;
+      }
+
+      try {
+        // Import PayPal payout function
+        const { processPayPalPayout } = await import('../utils/paypalApi');
+        
+        console.log('Processing PayPal withdrawal...', {
+          payoutEmail: payoutEmail || withdrawalAccount.trim(),
+          amount,
+          payerId
+        });
+
+        // Process PayPal payout
+        const payoutResult = await processPayPalPayout(
+          payoutEmail || withdrawalAccount.trim(),
+          amount,
+          'PHP',
+          payerId || null
+        );
+
+        console.log('PayPal payout result:', payoutResult);
+
+        // Verify payout succeeded
+        if (!payoutResult.success || !payoutResult.payoutBatchId) {
+          throw new Error('PayPal withdrawal failed. Please try again or contact support.');
+        }
+
+        const batchStatus = payoutResult.batchStatus || 'PENDING';
+        const transactionStatus = payoutResult.transactionStatus || 'PENDING';
+
+        // Calculate new balance
+        const newBalance = currentBalance - amount;
+
+        // Create withdrawal transaction record
+        const withdrawalTransaction = {
+          userId: userId,
+          userRole: userData.role || 'guest',
+          type: 'withdrawal',
+          amount: amount,
+          currency: 'PHP',
+          status: transactionStatus === 'SUCCESS' ? 'completed' : 'pending',
+          description: `Withdrawal to PayPal${payoutEmail ? ` (${payoutEmail})` : ` (${withdrawalAccount.trim()})`}`,
+          paymentMethod: 'paypal',
+          payoutBatchId: payoutResult.payoutBatchId,
+          batchStatus: batchStatus,
+          payoutItemId: payoutResult.payoutItemId || null,
+          transactionId: payoutResult.transactionId || null,
+          transactionStatus: transactionStatus,
+          payerId: payerId || null,
+          paypalEmail: payoutEmail || withdrawalAccount.trim(),
+          balanceBefore: currentBalance,
+          balanceAfter: newBalance,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        };
+
+        // Add to PayPalTransactions collection
+        await addDoc(collection(db, 'PayPalTransactions'), withdrawalTransaction);
+        
+        // Also add to Transactions collection
+        await addDoc(collection(db, 'Transactions'), withdrawalTransaction);
+
+        // Update balance in user document
+        await updateDoc(userRef, {
+          balance: newBalance,
+          walletBalance: newBalance,
+          updatedAt: serverTimestamp()
+        });
+
+        // Create notification for user
+        await addDoc(collection(db, 'Notifications'), {
+          type: 'withdrawal_completed',
+          recipientId: userId,
+          title: 'PayPal Withdrawal Successful',
+          body: `Successfully withdrawn ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} to your PayPal account. The funds should arrive shortly.`,
+          message: `Withdrawal of ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} completed.`,
+          read: false,
+          createdAt: serverTimestamp()
+        });
+
+        alert(`✅ Successfully withdrawn ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} to your PayPal account!\n\nPayout Batch ID: ${payoutResult.payoutBatchId}\nStatus: ${batchStatus}\n\nThe funds should arrive in your PayPal account shortly.`);
+        
+        // Reset form and close dialog
+        setWithdrawalAmount('');
+        setWithdrawalAccount('');
+        setWithdrawalMethod('bank');
+        setShowWithdrawalDialog(false);
+        withdrawalDialogRef.current?.close();
+        
+        return;
+      } catch (paypalError) {
+        console.error('PayPal withdrawal error:', paypalError);
+        alert(`PayPal withdrawal failed: ${paypalError.message || 'Please try again or contact support.'}`);
+        setProcessingWithdrawal(false);
+        return;
+      }
+    }
+
+    // Handle other withdrawal methods (bank, gcash, paymaya) - create pending request
+    if (!withdrawalAccount || withdrawalAccount.trim() === '') {
+      alert('Please enter your account details.');
       setProcessingWithdrawal(false);
       return;
     }
@@ -852,15 +975,8 @@ const handlePayPalCancel = () => {
 
   return (
     <div className="profile-page-new">
-      {/* Header with Back Button */}
-      <div className="profile-header-new">
-        <button className='profile-back-btn-new' onClick={handleBack}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m12 19-7-7 7-7"/>
-            <path d="M19 12H5"/>
-          </svg>
-          Back
-        </button>
+      {/* Header with Edit Button */}
+      <div className="profile-header-new" style={{ justifyContent: 'flex-end' }}>
         <button className="profile-edit-btn-new" onClick={handleEditClick}>
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -2011,7 +2127,17 @@ const handlePayPalCancel = () => {
             </label>
             <select
               value={withdrawalMethod}
-              onChange={(e) => setWithdrawalMethod(e.target.value)}
+              onChange={(e) => {
+                setWithdrawalMethod(e.target.value);
+                // Auto-fill PayPal email if available
+                if (e.target.value === 'paypal' && paymentMethod?.paypalEmail) {
+                  setWithdrawalAccount(paymentMethod.paypalEmail);
+                } else if (e.target.value === 'paypal' && user?.paymentMethod?.paypalEmail) {
+                  setWithdrawalAccount(user.paymentMethod.paypalEmail);
+                } else if (e.target.value !== 'paypal') {
+                  setWithdrawalAccount('');
+                }
+              }}
               style={{
                 width: '100%',
                 padding: '12px',
@@ -2024,21 +2150,44 @@ const handlePayPalCancel = () => {
               disabled={processingWithdrawal}
             >
               <option value="bank">Bank Transfer</option>
-              <option value="paypal">PayPal</option>
+              <option value="paypal">PayPal (Instant Transfer)</option>
               <option value="gcash">GCash</option>
               <option value="paymaya">PayMaya</option>
             </select>
           </div>
 
+          {withdrawalMethod === 'paypal' && (paymentMethod?.paypalEmail || user?.paymentMethod?.paypalEmail) && (
+            <div style={{
+              marginBottom: '16px',
+              padding: '12px',
+              background: '#f0f9ff',
+              border: '1px solid #3b82f6',
+              borderRadius: '8px',
+              fontSize: '14px',
+              color: '#1e40af'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <path d="M9 12l2 2 4-4"/>
+                </svg>
+                <strong>Connected PayPal Account</strong>
+              </div>
+              <p style={{ margin: 0, fontSize: '13px' }}>
+                {paymentMethod?.paypalEmail || user?.paymentMethod?.paypalEmail}
+              </p>
+            </div>
+          )}
+
           <div style={{ marginBottom: '24px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-              Account Details
+              {withdrawalMethod === 'paypal' ? 'PayPal Email Address' : 'Account Details'}
             </label>
             <input
-              type="text"
+              type={withdrawalMethod === 'paypal' ? 'email' : 'text'}
               value={withdrawalAccount}
               onChange={(e) => setWithdrawalAccount(e.target.value)}
-              placeholder={withdrawalMethod === 'bank' ? 'Account name, Bank name, Account number' : withdrawalMethod === 'paypal' ? 'PayPal email' : 'Mobile number'}
+              placeholder={withdrawalMethod === 'bank' ? 'Account name, Bank name, Account number' : withdrawalMethod === 'paypal' ? 'PayPal email address' : 'Mobile number'}
               style={{
                 width: '100%',
                 padding: '12px',
@@ -2051,7 +2200,7 @@ const handlePayPalCancel = () => {
             />
             <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#6b7280' }}>
               {withdrawalMethod === 'bank' && 'Enter your bank account details'}
-              {withdrawalMethod === 'paypal' && 'Enter your PayPal email address'}
+              {withdrawalMethod === 'paypal' && 'Enter or confirm your PayPal email address. Funds will be transferred instantly to your PayPal account.'}
               {(withdrawalMethod === 'gcash' || withdrawalMethod === 'paymaya') && 'Enter your mobile number'}
             </p>
           </div>
@@ -2103,7 +2252,11 @@ const handlePayPalCancel = () => {
                 opacity: processingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) < 100 || parseFloat(withdrawalAmount) > (user?.balance || user?.walletBalance || 0) || !withdrawalAccount ? 0.6 : 1
               }}
             >
-              {processingWithdrawal ? 'Processing...' : 'Submit Withdrawal Request'}
+              {processingWithdrawal 
+                ? 'Processing...' 
+                : withdrawalMethod === 'paypal' 
+                  ? 'Withdraw to PayPal' 
+                  : 'Submit Withdrawal Request'}
             </button>
           </div>
         </div>

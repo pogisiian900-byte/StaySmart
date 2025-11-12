@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
-import photography from '/static/services Photos/photography.png'
-import servicesData from '../data.json'
 import '../pages/guest/guest.css'
+import '../pages/guest/guest-main-slide.css'
 import SlideshowWheel from './sildeshowWheel'
 import Loading from './Loading'
 import { useParams, useNavigate } from "react-router-dom";
@@ -58,29 +57,17 @@ const Experience = ({experienceData,loading}) => {
     }
   };
 
-  function getNumberAvailable(typeof_Service, Location){
-    return 0;
-  }
-  
   return (
-    <div className='main-Experience'>
-      <div className="top-Experience">
-        <div className="experience-Category">
-        </div>
-      </div>
-      
-      <div className="home-container">
-        {loading ? (
-          <Loading message="Loading listings..." />
-        ) : experienceData && experienceData.length > 0 ? (
-          <>
-            <div style={{ padding: "20px" }}>
-              <SlideshowWheel data={experienceData} useCase={"Experience new things around your area:"} />
-            </div>
-            <br />
-            <hr />
-            <br />
-            <div className="allHomes">
+    <div className="modern-listing-container">
+      {loading ? (
+        <Loading message="Loading listings..." />
+      ) : experienceData && experienceData.length > 0 ? (
+        <>
+          <div className="modern-slideshow-wrapper">
+            <SlideshowWheel data={experienceData} useCase={"Experience new things around your area:"} />
+          </div>
+          <div className="modern-listings-section">
+            <div className="modern-listings-grid">
               {experienceData.map((experience, index) => {
                 const isFavourite = favourites.includes(experience.id);
                 const isLoading = loadingFav[experience.id];
@@ -88,27 +75,28 @@ const Experience = ({experienceData,loading}) => {
                 return (
                   <div
                     key={index}
-                    className="roomCard"
+                    className="modern-listing-card"
                     onClick={() => navigate(`listing/${experience.id}`)}
                   >
-                    <div className="roomImageWrapper">
+                    <div className="modern-listing-image-wrapper">
                       <img
                         src={experience.photos?.[0] || "/static/no photo.webp"}
                         alt={experience.title || "Experience"}
-                        className="roomImage"
+                        className="modern-listing-image"
                       />
                       <button
-                        className={`heartButton ${isFavourite ? "active" : ""}`}
+                        className={`modern-heart-button ${isFavourite ? "active" : ""}`}
                         onClick={(e) => toggleFavourite(experience.id, e)}
                         disabled={isLoading}
+                        aria-label={isFavourite ? "Remove from favourites" : "Add to favourites"}
                       >
                         {isLoading ? (
-                          "..."
+                          <span className="modern-loading-spinner">...</span>
                         ) : isFavourite ? (
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            width="22"
-                            height="22"
+                            width="20"
+                            height="20"
                             viewBox="0 0 24 24"
                             fill="currentColor"
                           >
@@ -117,8 +105,8 @@ const Experience = ({experienceData,loading}) => {
                         ) : (
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            width="22"
-                            height="22"
+                            width="20"
+                            height="20"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
@@ -129,22 +117,24 @@ const Experience = ({experienceData,loading}) => {
                         )}
                       </button>
                     </div>
-                    <div className="roomInfo">
-                      <h3 className="roomTitle">{experience.title || "Untitled Experience"}</h3>
-                      <p className="roomLocation">{experience.location || "No location info"}</p>
-                      <p className="roomPrice">
-                        ₱{experience.price || "0"} <span className="perNight"></span>
+                    <div className="modern-listing-info">
+                      <h3 className="modern-listing-title">{experience.title || "Untitled Experience"}</h3>
+                      <p className="modern-listing-location">{experience.location || "No location info"}</p>
+                      <p className="modern-listing-price">
+                        ₱{experience.price || "0"} <span className="modern-price-label">per experience</span>
                       </p>
                     </div>
                   </div>
                 );
               })}
             </div>
-          </>
-        ) : (
-          <p className="noListings">No Experience listings found.</p>
-        )}
-      </div>
+          </div>
+        </>
+      ) : (
+        <div className="modern-empty-state">
+          <p className="modern-empty-text">No Experience listings found.</p>
+        </div>
+      )}
     </div>
   )
 }

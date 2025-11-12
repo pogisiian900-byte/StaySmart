@@ -4,7 +4,7 @@ import Logo from "/static/logo.png";
 import Services from "/static/services.png"; 
 import HomeIcon from "/static/home.png"; 
 import Work from "/static/work.png"
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { auth, db } from "../../config/firebase";
 import { signOut } from "firebase/auth";
 import { collectionGroup, getDocs, collection, query, where, onSnapshot, writeBatch, doc } from "firebase/firestore";
@@ -33,12 +33,16 @@ function Guest_Logged_Navigation({ userData }) {
     experience: [],
   });
   
-    const openMessages = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Check if we're on the main guest page (index route)
+  const isMainPage = location.pathname.match(/^\/guest\/[^/]+$/);
+  
+  const openMessages = () => {
     const guestId = auth.currentUser.uid;
     navigate(`/guest/${guestId}/messages`);
   };
-
-  const navigate = useNavigate();
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
   const notificationRef = useRef(null);
@@ -253,7 +257,13 @@ function Guest_Logged_Navigation({ userData }) {
         {/* Navigation Items */}
         <div
           className={selectedNav === "home" ? "navItem navActive" : "navItem"}
-          onClick={() => setSelectedNav("home")}
+          onClick={() => {
+            const guestId = auth.currentUser?.uid;
+            if (guestId) {
+              navigate(`/guest/${guestId}`);
+              setSelectedNav("home");
+            }
+          }}
         >
           <a href="#">
            <img src={HomeIcon} alt="" width={"50px"}/>
@@ -263,7 +273,13 @@ function Guest_Logged_Navigation({ userData }) {
 
         <div
           className={selectedNav === "service" ? "navItem navActive" : "navItem"}
-          onClick={() => setSelectedNav("service")}
+          onClick={() => {
+            const guestId = auth.currentUser?.uid;
+            if (guestId) {
+              navigate(`/guest/${guestId}`);
+              setSelectedNav("service");
+            }
+          }}
         >
           <a href="#">
            <img src={Services} alt="" width={"50px"}/>
@@ -273,7 +289,13 @@ function Guest_Logged_Navigation({ userData }) {
 
         <div
           className={selectedNav === "experience" ? "navItem navActive" : "navItem"}
-          onClick={() => setSelectedNav("experience")}
+          onClick={() => {
+            const guestId = auth.currentUser?.uid;
+            if (guestId) {
+              navigate(`/guest/${guestId}`);
+              setSelectedNav("experience");
+            }
+          }}
         >
           <a href="#">
            <img src={Work} alt="" width={"50px"}/>
@@ -292,16 +314,31 @@ function Guest_Logged_Navigation({ userData }) {
             className="search-button"
             aria-label="Search"
             style={{
-              background: "none",
+              background: "#f3f4f6",
               border: "none",
               cursor: "pointer",
-              padding: "8px",
+              padding: "10px",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center"
+              justifyContent: "center",
+              borderRadius: "12px",
+              transition: "all 0.2s ease",
+              width: "40px",
+              height: "40px",
+              color: "#374151"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#31326F"
+              e.currentTarget.style.transform = "scale(1.05)"
+              e.currentTarget.style.color = "white"
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#f3f4f6"
+              e.currentTarget.style.transform = "scale(1)"
+              e.currentTarget.style.color = "#374151"
             }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transition: "all 0.2s ease" }}>
               <circle cx="11" cy="11" r="8"/>
               <path d="m21 21-4.35-4.35"/>
             </svg>
@@ -407,23 +444,24 @@ function Guest_Logged_Navigation({ userData }) {
                   <path fillRule="evenodd" d="M8 9a5 5 0 0 0-5 5v1h10v-1a5 5 0 0 0-5-5Z" />
                 </svg>
               )}
-              <button onClick={() => navigate("profile")}>
-                {userData?.firstName || "My Profile"}
+              <button onClick={() => navigate("account-settings")}>
+                {userData?.firstName || "My Account"}
               </button>
             </div>
 
-            <button onClick={() => navigate("bookings")}>Bookings</button>
             <button onClick={() => { navigate("favourites"); setOpen(false); }}>Favorites</button>
             <button onClick={()=> openMessages()}>Messages</button>
-            <button>Account Settings</button>
+            <button onClick={() => navigate("account-settings")}>Account Settings</button>
             <button onClick={() => { handleNotificationClick(); setOpen(false); }}>Notifications {unreadCount > 0 && `(${unreadCount})`}</button>
             <button onClick={showLogoutConfirmation}>Logout</button>
           </div>
         )}
       </nav>
 
-      {/* Page Content */}
-      <div className="guest-main-page">{renderPage()}</div>
+      {/* Page Content - Only show on main guest page */}
+      {isMainPage && (
+        <div className="guest-main-page">{renderPage()}</div>
+      )}
 
       {/* Logout Confirmation Dialog */}
       {showLogoutDialog && (

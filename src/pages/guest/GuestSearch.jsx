@@ -140,12 +140,91 @@ const GuestSearch = () => {
           }
         }
       `}</style>
-      <div className="bookings-header">
-        <div>
-          <h2 className="bookings-title">Search</h2>
-          <p className="bookings-subtext">Find your perfect stay</p>
+      <style>{`
+        @media (max-width: 768px) {
+          .search-header-title {
+            font-size: 24px !important;
+          }
+          .search-header-icon {
+            width: 40px !important;
+            height: 40px !important;
+          }
+          .search-header-icon svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+          .search-header-subtitle {
+            font-size: 14px !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .search-header-title {
+            font-size: 22px !important;
+          }
+          .search-header-icon {
+            width: 36px !important;
+            height: 36px !important;
+          }
+          .search-header-icon svg {
+            width: 18px !important;
+            height: 18px !important;
+          }
+        }
+      `}</style>
+      <div style={{
+        background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+        padding: '48px 24px',
+        marginBottom: '32px',
+        borderRadius: '0 0 24px 24px',
+        borderBottom: '1px solid #e5e7eb'
+      }}>
+        <div style={{
+          maxWidth: '800px',
+          margin: '0 auto',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            marginBottom: '12px'
+          }}>
+            <div className="search-header-icon" style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: '#31326F',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(49, 50, 111, 0.2)'
+            }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.35-4.35"/>
+              </svg>
+            </div>
+            <h2 className="search-header-title" style={{
+              margin: 0,
+              fontSize: '32px',
+              fontWeight: '700',
+              color: '#1f2937',
+              letterSpacing: '-0.5px'
+            }}>
+              Search
+            </h2>
+          </div>
+          <p className="search-header-subtitle" style={{
+            margin: 0,
+            fontSize: '16px',
+            color: '#6b7280',
+            fontWeight: '400',
+            lineHeight: '1.5'
+          }}>
+            Find your perfect stay
+          </p>
         </div>
-        <button className="btn btn-ghost" onClick={() => navigate(-1)}>← Back</button>
       </div>
 
       <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
@@ -250,15 +329,39 @@ const GuestSearch = () => {
           {/* Search Button */}
           <div style={{ marginTop: 8 }}>
             <button
-              className="btn btn-primary"
               onClick={handleSearch}
               style={{
-                width: '105%',
-                padding: '16px',
-                fontSize: '18px',
-                fontWeight: 600
+                width: '100%',
+                padding: '16px 24px',
+                fontSize: '16px',
+                fontWeight: 500,
+                background: '#31326F',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 2px 8px rgba(49, 50, 111, 0.2)'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = '#252550'
+                e.target.style.transform = 'translateY(-1px)'
+                e.target.style.boxShadow = '0 4px 12px rgba(49, 50, 111, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = '#31326F'
+                e.target.style.transform = 'translateY(0)'
+                e.target.style.boxShadow = '0 2px 8px rgba(49, 50, 111, 0.2)'
               }}
             >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.35-4.35"/>
+              </svg>
               Search
             </button>
           </div>

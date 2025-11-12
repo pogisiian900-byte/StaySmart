@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import Guest_Logged_Navigation from "./guest-navigation-logged";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
@@ -60,8 +59,6 @@ const GuestMainLogged = () => {
 
   return (
     <div className="guest-main-logged">
-      <Guest_Logged_Navigation userData={userData} />
-      
       <Footer/>
     </div>
   );

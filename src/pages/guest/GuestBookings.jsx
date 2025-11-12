@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { collection, onSnapshot, orderBy, query, where, updateDoc, doc, serverTimestamp, addDoc } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import ContinuousCalendar from '../../components/ContinuousCalendar'
-import Guest_Logged_Navigation from './guest-navigation-logged'
 import './guest-bookingConfirmation.css'
 import '../booking-responsive.css'
 
@@ -182,38 +181,94 @@ const GuestBookings = () => {
   }
 
   return (
-    <>
-      {/* Back Button */}
-      <div style={{ padding: '20px 20px 0 20px' }}>
-        <button className="back-btn" onClick={() => navigate(`/guest/${guestId}`)} title="Go back">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="30"
-            height="30"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m12 19-7-7 7-7" />
-            <path d="M19 12H5" />
-          </svg>
-          <span className="back-btn-text">Back</span>
-        </button>
-      </div>
     <div className="bookings-layout">
       <div>
-        <div className="bookings-header">
-          <div>
-            <h2 className="bookings-title">Your Reservations</h2>
-            <p className="bookings-subtext">Manage and review your stays</p>
-          </div>
-          <div className="status-legend" style={{ display:'flex', gap:8, alignItems:'center' }}>
-            <span className="status-badge status-pending">Pending</span>
-            <span className="status-badge status-confirmed">Confirmed</span>
-            <span className="status-badge status-declined">Declined</span>
+        <div style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderRadius: '20px',
+          padding: '32px',
+          marginBottom: '32px',
+          boxShadow: '0 10px 40px rgba(102, 126, 234, 0.15)',
+          color: 'white'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
+            <div>
+              <h2 style={{
+                fontSize: '2rem',
+                fontWeight: 700,
+                margin: '0 0 8px 0',
+                color: 'white',
+                letterSpacing: '-0.5px'
+              }}>
+                Your Reservations
+              </h2>
+              <p style={{
+                fontSize: '1rem',
+                margin: 0,
+                color: 'rgba(255, 255, 255, 0.9)',
+                fontWeight: 400
+              }}>
+                Manage and review your stays
+              </p>
+            </div>
+            <div style={{ 
+              display: 'flex', 
+              gap: '12px', 
+              alignItems: 'center',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#fbbf24'
+                }}></div>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Pending</span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#10b981'
+                }}></div>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Confirmed</span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#ef4444'
+                }}></div>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Declined</span>
+              </div>
+            </div>
           </div>
         </div>
         {filtered.length === 0 && (
@@ -292,13 +347,30 @@ const GuestBookings = () => {
           onClick={handleCalendarClick} 
           bookedDates={bookedDates} 
           selectedDate={selectedDate}
-          onBack={() => navigate(`/guest/${guestId}`)}
         />
         {selectedDate && (
-          <div style={{ marginTop: 8, color: '#666' }}>Selected: {selectedDate.toDateString()}</div>
+          <div style={{ 
+            marginTop: 12, 
+            padding: '12px 16px',
+            background: '#f3f4f6',
+            borderRadius: '10px',
+            color: '#374151',
+            fontSize: '0.9rem',
+            fontWeight: 500
+          }}>
+            Selected: {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+          </div>
         )}
-        <div style={{ marginTop: 12, fontSize: 12, color: '#999' }}>
-          Dates with reservations are highlighted internally; click a date to filter.
+        <div style={{ 
+          marginTop: 12, 
+          padding: '10px 14px',
+          background: '#f9fafb',
+          borderRadius: '8px',
+          fontSize: '0.85rem', 
+          color: '#6b7280',
+          border: '1px solid #e5e7eb'
+        }}>
+          💡 Dates with reservations are highlighted; click a date to filter.
         </div>
       </div>
 
@@ -351,7 +423,6 @@ const GuestBookings = () => {
         </div>
       )}
     </div>
-      </>
   )
 }
 

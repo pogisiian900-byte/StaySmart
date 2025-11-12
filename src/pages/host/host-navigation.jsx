@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import "../host/host.css";
 import Logo from "/static/logo.png";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { auth, db } from "../../config/firebase";
 import { signOut } from "firebase/auth";
 import { collection, onSnapshot, query, where, writeBatch, doc } from "firebase/firestore";
@@ -23,10 +23,14 @@ function Host_Navigation({ hostId, userData }) {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const logoutDialogRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const menuRef = useRef(null); // ⬅️ for detecting outside clicks
   const buttonRef = useRef(null); // ⬅️ prevent immediate closing when clicking button
   const notificationRef = useRef(null);
   const notificationButtonRef = useRef(null);
+
+  // Check if we're on the main host page (index route)
+  const isMainPage = location.pathname.match(/^\/host\/[^/]+$/);
 
   // Register dialog polyfill
   useEffect(() => {
@@ -212,8 +216,11 @@ function Host_Navigation({ hostId, userData }) {
         <div
           className={selectedNav === "dashboard" ? "navItem navActive" : "navItem"}
           onClick={() => {
-            setRenderedPage("dashboard");
-            setSelectedNav("dashboard");
+            if (hostId) {
+              navigate(`/host/${hostId}`);
+              setRenderedPage("dashboard");
+              setSelectedNav("dashboard");
+            }
           }}
         >
           <a href="#">
@@ -227,8 +234,11 @@ function Host_Navigation({ hostId, userData }) {
         <div
           className={selectedNav === "listings" ? "navItem navActive" : "navItem"}
           onClick={() => {
-            setRenderedPage("listings");
-            setSelectedNav("listings");
+            if (hostId) {
+              navigate(`/host/${hostId}`);
+              setRenderedPage("listings");
+              setSelectedNav("listings");
+            }
           }}
         >
           <a href="#">
@@ -243,8 +253,11 @@ function Host_Navigation({ hostId, userData }) {
         <div
           className={selectedNav === "reservations" ? "navItem navActive" : "navItem"}
           onClick={() => {
-            setRenderedPage("reservations");
-            setSelectedNav("reservations");
+            if (hostId) {
+              navigate(`/host/${hostId}`);
+              setRenderedPage("reservations");
+              setSelectedNav("reservations");
+            }
           }}
         >
           <a href="#">
@@ -258,8 +271,11 @@ function Host_Navigation({ hostId, userData }) {
         <div
           className={selectedNav === "earnings" ? "navItem navActive" : "navItem"}
           onClick={() => {
-            setRenderedPage("earnings");
-            setSelectedNav("earnings");
+            if (hostId) {
+              navigate(`/host/${hostId}`);
+              setRenderedPage("earnings");
+              setSelectedNav("earnings");
+            }
           }}
         >
           <a href="#">
@@ -374,19 +390,24 @@ function Host_Navigation({ hostId, userData }) {
                   <path fillRule="evenodd" d="M8 9a5 5 0 0 0-5 5v1h10v-1a5 5 0 0 0-5-5Z" />
                 </svg>
               )}
-              <button onClick={() => navigate("profile")}>
-                {userData.firstName || "My Profile"}
+              <button onClick={() => navigate(`/host/${hostId}/profile`)}>
+                {userData?.firstName || "My Profile"}
               </button>
             </div>
 
-
-
           <button onClick={() => navigate(`/host/${hostId}/messages`)}>💬 Messages</button>
-            <button onClick={() => { handleNotificationClick(); setOpen(false); }}>🔔 Notifications {unreadCount > 0 && `(${unreadCount})`}</button>
+            <button onClick={() => { 
+              if (hostId) navigate(`/host/${hostId}/notifications`);
+              handleNotificationClick(); 
+              setOpen(false); 
+            }}>🔔 Notifications {unreadCount > 0 && `(${unreadCount})`}</button>
             <button
               onClick={() => {
-                setRenderedPage("points");
-                setSelectedNav("points");
+                if (hostId) {
+                  navigate(`/host/${hostId}`);
+                  setRenderedPage("points");
+                  setSelectedNav("points");
+                }
                 setOpen(false);
               }}
             >
@@ -398,7 +419,10 @@ function Host_Navigation({ hostId, userData }) {
         )}
       </nav>
 
-      <div className="host-main-page">{renderingPages()}</div>
+      {/* Page Content - Only show on main host page */}
+      {isMainPage && (
+        <div className="host-main-page">{renderingPages()}</div>
+      )}
       {/* Logout Confirmation Dialog */}
       {showLogoutDialog && (
         <dialog ref={logoutDialogRef} className="logout-confirmation-dialog" style={{ maxWidth: '500px', width: '90%', border: 'none', borderRadius: '16px', padding: 0, boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' }}>

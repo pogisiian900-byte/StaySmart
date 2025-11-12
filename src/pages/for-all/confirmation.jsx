@@ -59,8 +59,8 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         to_email: formData.emailAddress,
         verify_link:
           formData.role === 'host'
-            ? `https://staysmartlisting.netlify.app/getStarted/${user.uid}`
-            : `https://staysmartlisting.netlify.app/guest/${user.uid}`
+            ? `${window.location.origin}/getStarted/${user.uid}`
+            : `${window.location.origin}/guest/${user.uid}`
       }
 
       await emailjs.send(
@@ -122,31 +122,6 @@ const ConfirmationModal = ({ formData, onPrev }) => {
   return (
     <>
       <div className="confirmation-registration">
-        {!emailSent && (
-          <div className="back-group-verify">
-            <button 
-              onClick={onPrev} 
-              className="confirmation-back-btn"
-              aria-label="Go back"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="m12 19-7-7 7-7" />
-                <path d="M19 12H5" />
-              </svg>
-            </button>
-          </div>
-        )}
-
         <div className="confirmation-content">
           <div className="confirmation-icon-wrapper">
             <div className={`confirmation-icon-container ${emailSent ? 'email-sent' : ''}`}>

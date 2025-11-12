@@ -242,27 +242,11 @@ export default function ChatWindow({ conversationId }) {
       ? `${otherUser.firstName} ${otherUser.lastName}`
       : otherUser?.emailAddress || "User";
 
-  const handleBack = () => {
-    if (guestId) {
-      navigate(`/guest/${guestId}/messages`);
-    } else if (hostId) {
-      navigate(`/host/${hostId}/messages`);
-    } else {
-      // Fallback: navigate to home or previous page
-      navigate(-1);
-    }
-  };
-
   return (
     <div className="chat-window-container">
       {/* Chat Header */}
       <div className="chat-header">
         <div className="chat-header-left">
-          <button className="chat-back-btn" onClick={handleBack} title="Go back">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-          </button>
           <div className="chat-header-user">
             <div className="chat-avatar">
               {otherUserName.charAt(0).toUpperCase()}
