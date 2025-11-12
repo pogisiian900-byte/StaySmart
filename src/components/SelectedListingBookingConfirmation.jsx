@@ -7,6 +7,7 @@ import Loading from '../components/Loading';
 import 'dialog-polyfill/dist/dialog-polyfill.css';
 import dialogPolyfill from 'dialog-polyfill';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
+import { processPayPalPayout } from '../utils/paypalApi';
 
 const SelectedListingBookingConfirmation = () => {
   const { listingId, guestId } = useParams();
@@ -16,6 +17,7 @@ const SelectedListingBookingConfirmation = () => {
 
   const [userInfo, setUserInfo] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [loadingListing, setLoadingListing] = useState(false);
   const [message, setMessage] = useState('');
   const [paymentMethod, setPaymentMethod] = useState(null);
   const [paymentMethodType, setPaymentMethodType] = useState('card'); // 'card' or 'paypal'
@@ -29,6 +31,18 @@ const SelectedListingBookingConfirmation = () => {
   const [selectedPaymentMethodType, setSelectedPaymentMethodType] = useState(null); // For confirmation dialog
   const [showInsufficientBalanceDialog, setShowInsufficientBalanceDialog] = useState(false);
   const insufficientBalanceDialogRef = useRef(null);
+  const [hostPayPalEmail, setHostPayPalEmail] = useState(null);
+  const [hostPayerId, setHostPayerId] = useState(null);
+  const [hostEmail, setHostEmail] = useState(null);
+  const [adminPayPalEmail, setAdminPayPalEmail] = useState(null);
+  const [adminPayerId, setAdminPayerId] = useState(null);
+  const [adminEmail, setAdminEmail] = useState(null);
+  
+  // Booking data state (fallback if location.state is missing)
+  const [listing, setListing] = useState(bookingData?.listing || null);
+  const [checkIn, setCheckIn] = useState(bookingData?.checkIn || null);
+  const [checkOut, setCheckOut] = useState(bookingData?.checkOut || null);
+  const [guestCounts, setGuestCounts] = useState(bookingData?.guestCounts || { adults: 1, children: 0, infants: 0, pets: 0 });
   
   // Payment method form state
   const [paymentForm, setPaymentForm] = useState({
@@ -39,15 +53,141 @@ const SelectedListingBookingConfirmation = () => {
     billingAddress: ''
   });
 
-  if (!bookingData) {
-    return <Loading fullScreen message="No booking data found. Please go back and select again." />;
+  // Fetch listing from Firestore if bookingData is missing (e.g., page refresh)
+  useEffect(() => {
+    const fetchListingData = async () => {
+      // If we have bookingData from location.state, use it
+      if (bookingData && bookingData.listing) {
+        setListing(bookingData.listing);
+        setCheckIn(bookingData.checkIn);
+        setCheckOut(bookingData.checkOut);
+        setGuestCounts(bookingData.guestCounts || { adults: 1, children: 0, infants: 0, pets: 0 });
+        return;
+      }
+
+      // Otherwise, fetch from Firestore
+      if (listingId && !listing) {
+        try {
+          setLoadingListing(true);
+          const listingRef = doc(db, 'Listings', listingId);
+          const listingSnap = await getDoc(listingRef);
+          
+          if (listingSnap.exists()) {
+            const listingData = { id: listingSnap.id, ...listingSnap.data() };
+            setListing(listingData);
+            
+            // Try to get dates from URL search params if available
+            const searchParams = new URLSearchParams(location.search);
+            const urlCheckIn = searchParams.get('checkIn');
+            const urlCheckOut = searchParams.get('checkOut');
+            
+            if (urlCheckIn) setCheckIn(urlCheckIn);
+            if (urlCheckOut) setCheckOut(urlCheckOut);
+            
+            console.log('✅ Listing data fetched from Firestore');
+          } else {
+            console.error('Listing not found:', listingId);
+            setErrorMessage('Listing not found. Please go back and try again.');
+          }
+        } catch (error) {
+          console.error('Error fetching listing:', error);
+          setErrorMessage('Failed to load listing data. Please go back and try again.');
+        } finally {
+          setLoadingListing(false);
+        }
+      }
+    };
+
+    fetchListingData();
+  }, [listingId, bookingData, location.search]);
+
+  // Show loading if we don't have required data
+  if (loadingListing || (!listing && listingId)) {
+    return <Loading fullScreen message="Loading booking details..." />;
   }
 
-  const { listing, checkIn, checkOut, guestCounts } = bookingData;
+  // Show error if we still don't have listing after trying to fetch
+  if (!listing) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <h2>Booking Data Not Found</h2>
+        <p>Unable to load booking details. Please go back and select your dates again.</p>
+        <button onClick={() => navigate(-1)} style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}>
+          Go Back
+        </button>
+      </div>
+    );
+  }
 
-  // Calculate actual nights from dates
-  const checkInDate = new Date(checkIn);
-  const checkOutDate = new Date(checkOut);
+  // Show error if dates are missing (required for booking)
+  if (!checkIn || !checkOut) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <h2>Booking Dates Required</h2>
+        <p>Please go back and select your check-in and check-out dates.</p>
+        <button 
+          onClick={() => navigate(`/guest/${guestId}/listing/${listingId}`)} 
+          style={{ marginTop: '1rem', padding: '0.5rem 1rem', cursor: 'pointer' }}
+        >
+          Go Back to Listing
+        </button>
+      </div>
+    );
+  }
+
+  // Helper function to normalize dates consistently (midnight local time)
+  // This handles Firestore Timestamps, date strings (YYYY-MM-DD), ISO strings, and Date objects
+  const normalizeDate = (dateInput) => {
+    if (!dateInput) {
+      return null;
+    }
+    
+    let date;
+    
+    // Handle Firestore Timestamp
+    if (dateInput?.toDate && typeof dateInput.toDate === 'function') {
+      date = dateInput.toDate();
+    }
+    // Handle date string (YYYY-MM-DD format from input type="date")
+    else if (typeof dateInput === 'string' && dateInput.match(/^\d{4}-\d{2}-\d{2}/)) {
+      // Parse YYYY-MM-DD string in local timezone to avoid UTC conversion issues
+      const [year, month, day] = dateInput.split('-').map(Number);
+      date = new Date(year, month - 1, day);
+    }
+    // Handle Date object or ISO string
+    else {
+      date = new Date(dateInput);
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    
+    // Normalize to midnight in local timezone
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  };
+
+  // Calculate actual nights from dates - use normalizeDate for consistent parsing
+  const checkInDate = normalizeDate(checkIn);
+  const checkOutDate = normalizeDate(checkOut);
+  
+  // Validate dates
+  if (!checkInDate || !checkOutDate) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <h2>Invalid Booking Dates</h2>
+        <p>Please go back and select valid check-in and check-out dates.</p>
+        <button 
+          onClick={() => navigate(`/guest/${guestId}/listing/${listingId}`)} 
+          style={{ marginTop: '1rem', padding: '0.5rem 1rem', cursor: 'pointer' }}
+        >
+          Go Back to Listing
+        </button>
+      </div>
+    );
+  }
+  
   const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24)) || 1;
   
   // Calculate base price
@@ -65,8 +205,8 @@ const SelectedListingBookingConfirmation = () => {
   const total = subtotal;
 
   const formatStayDates = (checkIn, checkOut) => {
-  const checkInDate = new Date(checkIn);
-  const checkOutDate = new Date(checkOut);
+  const checkInDate = normalizeDate(checkIn);
+  const checkOutDate = normalizeDate(checkOut);
 
   const options = { month: 'short', day: 'numeric' };
 
@@ -214,6 +354,69 @@ const SelectedListingBookingConfirmation = () => {
     }
   }, [guestId]);
 
+  // Fetch host PayPal info for direct payment
+  useEffect(() => {
+    const fetchHostPayPalInfo = async () => {
+      if (listing?.hostId) {
+        try {
+          const hostRef = doc(db, 'Users', listing.hostId);
+          const hostSnap = await getDoc(hostRef);
+          if (hostSnap.exists()) {
+            const hostData = hostSnap.data();
+            const paypalEmail = hostData.paymentMethod?.paypalEmail || null;
+            const payerId = hostData.paymentMethod?.payerId || null;
+            const emailAddress = hostData.emailAddress || null;
+            setHostPayPalEmail(paypalEmail);
+            setHostPayerId(payerId);
+            setHostEmail(emailAddress);
+            console.log('Host PayPal info fetched:', { paypalEmail, payerId, emailAddress });
+            if (!paypalEmail && !payerId) {
+              console.warn('Host does not have PayPal email or payer ID configured. Payment will go to app account.');
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching host PayPal info:', error);
+        }
+      }
+    };
+
+    if (listing?.hostId) {
+      fetchHostPayPalInfo();
+    }
+  }, [listing?.hostId]);
+
+  // Fetch admin PayPal info for service fee
+  useEffect(() => {
+    const fetchAdminPayPalInfo = async () => {
+      try {
+        // Query for admin user
+        const adminQuery = query(collection(db, 'Users'), where('role', '==', 'admin'));
+        const adminSnapshot = await getDocs(adminQuery);
+        
+        if (!adminSnapshot.empty) {
+          const adminDoc = adminSnapshot.docs[0];
+          const adminData = adminDoc.data();
+          const paypalEmail = adminData.paymentMethod?.paypalEmail || null;
+          const payerId = adminData.paymentMethod?.payerId || null;
+          const emailAddress = adminData.emailAddress || null;
+          setAdminPayPalEmail(paypalEmail);
+          setAdminPayerId(payerId);
+          setAdminEmail(emailAddress);
+          console.log('Admin PayPal info fetched:', { paypalEmail, payerId, emailAddress });
+          if (!paypalEmail && !payerId) {
+            console.warn('Admin does not have PayPal email or payer ID configured.');
+          }
+        } else {
+          console.warn('No admin user found in database.');
+        }
+      } catch (error) {
+        console.error('Error fetching admin PayPal info:', error);
+      }
+    };
+
+    fetchAdminPayPalInfo();
+  }, []);
+
   const handlePaymentFormChange = (e) => {
     const { name, value } = e.target;
     let formattedValue = value;
@@ -286,6 +489,53 @@ const SelectedListingBookingConfirmation = () => {
       const details = await actions.order.capture();
       
       console.log('PayPal payment captured successfully:', details);
+      
+      // Split payment: Send subtotal to host, keep service fee in platform account
+      try {
+        console.log('=== SPLITTING PAYMENT ===');
+        console.log('Subtotal (to host):', subtotal);
+        console.log('Service Fee (to admin/platform):', serviceFee);
+        console.log('Total paid:', grandTotal);
+        console.log('--- RECIPIENTS ---');
+        console.log('Host Email:', hostEmail || 'Not available');
+        console.log('Host PayPal Email:', hostPayPalEmail || 'Not available');
+        console.log('Host Payer ID:', hostPayerId || 'Not available');
+        console.log('Admin Email:', adminEmail || 'Not available');
+        console.log('Admin PayPal Email:', adminPayPalEmail || 'Not available');
+        console.log('Admin Payer ID:', adminPayerId || 'Not available');
+
+        // Send subtotal to host via PayPal Payout
+        if (hostPayPalEmail || hostPayerId) {
+          try {
+            const payoutResult = await processPayPalPayout(
+              hostPayPalEmail || '',
+              subtotal,
+              'PHP',
+              hostPayerId || null
+            );
+            console.log('✅ Host payout successful:', payoutResult);
+            console.log('💰 Sent ₱' + subtotal + ' to Host:', hostEmail || hostPayPalEmail || 'Host Account');
+          } catch (payoutError) {
+            console.error('❌ Error sending payout to host:', payoutError);
+            console.error('Host recipient:', hostEmail || hostPayPalEmail || 'Not available');
+            // Don't fail the booking - log error and continue
+            // You may want to retry this later or notify admin
+            console.warn('⚠️ Booking will continue despite payout error. Payout can be retried later.');
+          }
+        } else {
+          console.warn('⚠️ Host PayPal info not available. Payout skipped. Host will need to be paid manually.');
+          console.warn('Host Email:', hostEmail || 'Not available');
+        }
+
+        // Service fee stays in platform account (admin)
+        // No action needed - it's already in the platform account
+        console.log('✅ Service fee (₱' + serviceFee + ') remains in platform account');
+        console.log('💰 Admin recipient:', adminEmail || adminPayPalEmail || 'Platform Account');
+      } catch (splitError) {
+        console.error('Error splitting payment:', splitError);
+        // Log error but don't fail the booking
+        console.warn('⚠️ Payment split failed, but booking will continue. Split can be processed manually later.');
+      }
       
       // Set payment method for booking
       const paymentData = {
@@ -423,8 +673,8 @@ const SelectedListingBookingConfirmation = () => {
     }
 
     // Build reservation payload
-    const checkInDate = new Date(checkIn);
-    const checkOutDate = new Date(checkOut);
+    const checkInDate = normalizeDate(checkIn);
+    const checkOutDate = normalizeDate(checkOut);
 
     // Validate dates
     if (checkOutDate <= checkInDate) {
@@ -453,23 +703,31 @@ const SelectedListingBookingConfirmation = () => {
         return false;
       }
 
-      const existingCheckIn = reservation.checkIn?.toDate 
-        ? reservation.checkIn.toDate() 
-        : new Date(reservation.checkIn);
-      const existingCheckOut = reservation.checkOut?.toDate 
-        ? reservation.checkOut.toDate() 
-        : new Date(reservation.checkOut);
+      // Normalize existing reservation dates consistently
+      const existingCheckInNormalized = normalizeDate(reservation.checkIn);
+      const existingCheckOutNormalized = normalizeDate(reservation.checkOut);
 
-      // Normalize dates to midnight for comparison
-      const existingCheckInNormalized = new Date(existingCheckIn.getFullYear(), existingCheckIn.getMonth(), existingCheckIn.getDate());
-      const existingCheckOutNormalized = new Date(existingCheckOut.getFullYear(), existingCheckOut.getMonth(), existingCheckOut.getDate());
-      const newCheckInNormalized = new Date(checkInDate.getFullYear(), checkInDate.getMonth(), checkInDate.getDate());
-      const newCheckOutNormalized = new Date(checkOutDate.getFullYear(), checkOutDate.getMonth(), checkOutDate.getDate());
+      // Check for overlap: 
+      // Dates overlap if the new booking's stay period intersects with existing booking's stay period.
+      // A booking occupies nights from check-in (inclusive) to check-out (exclusive).
+      // So: new check-in must be >= existing check-out OR new check-out must be <= existing check-in for NO overlap.
+      // Overlap exists when: new check-in < existing check-out AND new check-out > existing check-in
+      const overlaps = checkInDate.getTime() < existingCheckOutNormalized.getTime() && 
+                       checkOutDate.getTime() > existingCheckInNormalized.getTime();
 
-      // Check for overlap: dates overlap if new check-in is before existing check-out 
-      // AND new check-out is after existing check-in
-      const overlaps = newCheckInNormalized < existingCheckOutNormalized && 
-                       newCheckOutNormalized > existingCheckInNormalized;
+      if (overlaps) {
+        console.log('Date conflict detected:', {
+          existing: {
+            checkIn: existingCheckInNormalized.toISOString().split('T')[0],
+            checkOut: existingCheckOutNormalized.toISOString().split('T')[0],
+            status: reservation.status
+          },
+          new: {
+            checkIn: checkInDate.toISOString().split('T')[0],
+            checkOut: checkOutDate.toISOString().split('T')[0]
+          }
+        });
+      }
 
       return overlaps;
     });
@@ -546,9 +804,9 @@ const SelectedListingBookingConfirmation = () => {
       // Determine hostId from listing
       const hostId = listing.hostId || null;
 
-      // Build reservation payload
-      const checkInDate = new Date(checkIn);
-      const checkOutDate = new Date(checkOut);
+      // Build reservation payload - use normalizeDate for consistent parsing
+      const checkInDate = normalizeDate(checkIn);
+      const checkOutDate = normalizeDate(checkOut);
 
       // Use provided payment data or card payment data (already defined above for balance check)
       const finalPaymentMethodForReservation = paymentData || (selectedPaymentMethodType === 'card' ? {
@@ -656,11 +914,7 @@ const SelectedListingBookingConfirmation = () => {
           read: false,
           createdAt: serverTimestamp(),
         };
-        console.log('🔔 Creating host notification:', hostNotification);
         const hostNotificationRef = await addDoc(collection(db, 'Notifications'), hostNotification);
-        console.log('✅ Host notification created with ID:', hostNotificationRef.id);
-      } else {
-        console.log('⚠️ No hostId available, skipping host notification');
       }
 
       // Create a notification for the guest confirming their booking request was submitted
@@ -678,11 +932,7 @@ const SelectedListingBookingConfirmation = () => {
           read: false,
           createdAt: serverTimestamp(),
         };
-        console.log('🔔 Creating guest notification:', guestNotification);
         const guestNotificationRef = await addDoc(collection(db, 'Notifications'), guestNotification);
-        console.log('✅ Guest notification created with ID:', guestNotificationRef.id);
-      } else {
-        console.log('⚠️ No guestId available, skipping guest notification');
       }
 
       alert('Booking request sent successfully!');
@@ -988,23 +1238,35 @@ const SelectedListingBookingConfirmation = () => {
                       
                       const formattedAmount = amount.toFixed(2);
                       
-                      console.log('Creating PayPal order:', {
+                      // Prepare purchase unit
+                      const purchaseUnit = {
+                        amount: {
+                          value: formattedAmount,
+                          currency_code: "PHP"
+                        },
+                        description: `Booking payment for ${listing.title} - ${nights} night(s)`
+                      };
+
+                      // Payment goes to platform account (no payee field)
+                      // We'll split it after payment capture using Payouts API
+                      // Host gets: subtotal
+                      // Admin/platform gets: serviceFee
+                      console.log('Payment will go to platform account. Split will be processed after capture.');
+                      
+                      console.log('Creating PayPal order (Payment Dialog):', {
                         amount: formattedAmount,
                         currency: 'PHP',
                         total: grandTotal,
+                        subtotal: subtotal,
+                        serviceFee: serviceFee,
                         nights: nights,
-                        listingPrice: listing.price
+                        listingPrice: listing.price,
+                        note: 'Payment goes to platform. Will be split after capture.'
                       });
                       
                       // Create order with the actual booking total
                       return actions.order.create({
-                        purchase_units: [{
-                          amount: {
-                            value: formattedAmount, // Use actual booking total
-                            currency_code: "PHP" // PayPal supports PHP
-                          },
-                          description: `Booking payment for ${listing.title} - ${nights} night(s)`
-                        }],
+                        purchase_units: [purchaseUnit],
                         application_context: {
                           brand_name: "StaySmart",
                           landing_page: "NO_PREFERENCE",
@@ -1377,23 +1639,35 @@ const SelectedListingBookingConfirmation = () => {
                         
                         const formattedAmount = amount.toFixed(2);
                         
+                        // Prepare purchase unit
+                        const purchaseUnit = {
+                          amount: {
+                            value: formattedAmount,
+                            currency_code: "PHP"
+                          },
+                          description: `Booking payment for ${listing.title} - ${nights} night(s)`
+                        };
+
+                        // Payment goes to platform account (no payee field)
+                        // We'll split it after payment capture using Payouts API
+                        // Host gets: subtotal
+                        // Admin/platform gets: serviceFee
+                        console.log('Payment will go to platform account. Split will be processed after capture.');
+                        
                         console.log('Creating PayPal order (Confirm Dialog):', {
                           amount: formattedAmount,
                           currency: 'PHP',
                           total: grandTotal,
+                          subtotal: subtotal,
+                          serviceFee: serviceFee,
                           nights: nights,
-                          listingPrice: listing.price
+                          listingPrice: listing.price,
+                          note: 'Payment goes to platform. Will be split after capture.'
                         });
                         
                         // Create order with the actual booking total
                         return actions.order.create({
-                          purchase_units: [{
-                            amount: {
-                              value: formattedAmount, // Use actual booking total
-                              currency_code: "PHP" // PayPal supports PHP
-                            },
-                            description: `Booking payment for ${listing.title} - ${nights} night(s)`
-                          }],
+                          purchase_units: [purchaseUnit],
                           application_context: {
                             brand_name: "StaySmart",
                             landing_page: "NO_PREFERENCE",

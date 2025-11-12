@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react'
 import me from '/static/no photo.webp'
 import bgBlue from '/static/Bluebg.png'
 import { useNavigate, useParams } from 'react-router-dom'
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, onSnapshot, serverTimestamp, orderBy, addDoc } from "firebase/firestore";
 import { db } from ".././config/firebase";
 import "../pages/host/profile-new.css";
 import 'dialog-polyfill/dist/dialog-polyfill.css';
@@ -32,7 +32,9 @@ const [paymentForm, setPaymentForm] = useState({
   cardHolder: '',
   expiryDate: '',
   cvv: '',
-  billingAddress: ''
+  billingAddress: '',
+  paypalBusinessEmail: '',
+  paypalBusinessName: ''
 });
 
 
@@ -105,34 +107,83 @@ useEffect(() => {
     dialogPolyfill.registerDialog(paymentDialogRef.current);
   }
 
-  const fetchUserData = async () => {
-    try {
-      const userId = hostId || guestId;
-      const docRef = doc(db, "Users", userId);
-      const snapshot = await getDoc(docRef);
+  const userId = hostId || guestId;
+  if (!userId) {
+    setLoading(false);
+    return;
+  }
 
-      if (snapshot.exists()) {
-        console.log("User data:", snapshot.data());
-        const userData = snapshot.data();
-        setUser(userData);
-        setEditedUser(userData);
+  // Real-time listener for user data (for balance updates)
+  const userRef = doc(db, "Users", userId);
+  const unsubscribeUser = onSnapshot(userRef, async (userSnap) => {
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      
+      console.log('=== USER DATA LOADED (Profile Component) ===');
+      console.log('User ID:', userId);
+      console.log('Firebase paypalBalance:', userData.paypalBalance);
+      console.log('PayPal Account ID:', userData.paypalAccountId);
+      console.log('Payment Method:', userData.paymentMethod);
+      
+      // If user has PayPal account connected, fetch actual balance from PayPal API
+      if (userData.paypalAccountId || userData.paymentMethod?.payerId) {
+        console.log('=== FETCHING ACTUAL PAYPAL SANDBOX BALANCE ===');
+        console.log('PayPal Account ID:', userData.paypalAccountId || userData.paymentMethod?.payerId);
+        console.log('PayPal Email:', userData.paymentMethod?.paypalEmail);
         
-        // Set payment method if exists
-        if (userData.paymentMethod) {
-          setPaymentMethod(userData.paymentMethod);
-          setPaymentMethodType(userData.paymentMethod.type || 'card');
+        try {
+          const { getPayPalBalance } = await import('../utils/paypalApi');
+          console.log('Calling Firebase Function to get PayPal balance for user:', userId);
+          const balanceResult = await getPayPalBalance(userId, 'PHP');
+          const actualPayPalBalance = balanceResult.balance;
+          
+          console.log('💰💰💰 ACTUAL PAYPAL SANDBOX ACCOUNT BALANCE (from API via Firebase Function):', actualPayPalBalance);
+          console.log('📊📊📊 FIREBASE BALANCE:', userData.paypalBalance);
+          console.log('Difference:', actualPayPalBalance - (userData.paypalBalance || 0));
+          console.log('Full PayPal balance data:', balanceResult.balanceData);
+          
+          if (Math.abs(actualPayPalBalance - (userData.paypalBalance || 0)) > 0.01) {
+            console.warn('⚠️⚠️⚠️ BALANCE MISMATCH DETECTED!');
+            console.warn('PayPal Sandbox Account Balance:', actualPayPalBalance);
+            console.warn('Firebase Balance:', userData.paypalBalance);
+            console.warn('Difference:', actualPayPalBalance - (userData.paypalBalance || 0));
+            console.warn('Consider using "Sync Balance" button to sync them.');
+          } else {
+            console.log('✅✅✅ Balances are in sync!');
+          }
+        } catch (balanceError) {
+          console.warn('⚠️ Could not fetch PayPal balance from API (via Firebase Function):', balanceError.message);
+          console.warn('Error code:', balanceError.code);
+          console.warn('This might be expected if:');
+          console.warn('  1. Firebase Functions are not deployed');
+          console.warn('  2. The balance API requires different permissions');
+          console.warn('  3. PayPal credentials are not configured in Firebase Functions');
+          console.warn('Error details:', balanceError);
         }
       } else {
-        console.log("No such user found!");
+        console.log('No PayPal account connected yet.');
       }
-    } catch (err) {
-      console.error("Error fetching user:", err);
-    } finally {
-      setLoading(false);
+      
+      setUser(userData);
+      setEditedUser(userData);
+      
+      // Set payment method if exists
+      if (userData.paymentMethod) {
+        setPaymentMethod(userData.paymentMethod);
+        setPaymentMethodType(userData.paymentMethod.type || 'card');
+      }
+    } else {
+      console.log("No such user found!");
     }
-  };
+    setLoading(false);
+  }, (error) => {
+    console.error("❌ Error fetching user data:", error);
+    setLoading(false);
+  });
 
-  fetchUserData();
+  return () => {
+    unsubscribeUser();
+  };
 }, [hostId, guestId]);
 
 // Separate useEffect for loading recent bookings
@@ -293,7 +344,9 @@ const handleClosePaymentDialog = () => {
     cardHolder: '',
     expiryDate: '',
     cvv: '',
-    billingAddress: ''
+    billingAddress: '',
+    paypalBusinessEmail: '',
+    paypalBusinessName: ''
   });
   setPaymentMethodType('card');
 };
@@ -393,44 +446,255 @@ const handleSavePaymentMethod = async () => {
   }
 };
 
-const handlePayPalSuccess = async (data, actions) => {
+const handlePayPalBusinessSuccess = async (data, actions) => {
+  // This is for business accounts (hosts)
   const details = await actions.order.capture();
   
   try {
     setIsSaving(true);
     const userId = hostId || guestId;
     const userRef = doc(db, 'Users', userId);
-    
-    // Always using sandbox environment
+
     const paymentData = {
       type: 'paypal',
+      accountType: 'business',
       paypalEmail: details.payer.email_address,
       payerId: details.payer.payer_id,
       payerName: `${details.payer.name.given_name} ${details.payer.name.surname}`,
       transactionId: details.id,
       status: details.status,
-      // PayPal Sandbox tracking (always sandbox)
       environment: 'sandbox',
-      sandboxAccountId: details.payer.payer_id,
-      sandboxEmail: details.payer.email_address,
       connectedAt: new Date().toISOString(),
-      // Additional PayPal account info
-      accountId: details.payer.payer_id,
-      accountStatus: details.status,
+      // Business account specific fields
+      businessAccount: true,
+      merchantId: details.payer.payer_id,
+      // PayPal API connection - verified through payment
+      connectionMethod: 'paypal_api',
+      verified: true,
       // Store order details for reference
       orderId: details.id,
       intent: details.intent || 'CAPTURE'
     };
 
     await updateDoc(userRef, {
-      paymentMethod: paymentData
+      paymentMethod: paymentData,
+      paypalAccountId: details.payer.payer_id, // Store account ID for quick access
+      paypalLastUpdated: serverTimestamp()
     });
 
     setPaymentMethod(paymentData);
     setPaymentMethodType('paypal');
-    setUser(prev => ({ ...prev, paymentMethod: paymentData }));
+    setUser(prev => ({ ...prev, paymentMethod: paymentData, paypalAccountId: details.payer.payer_id }));
+    setPaymentForm({
+      cardNumber: '',
+      cardHolder: '',
+      expiryDate: '',
+      cvv: '',
+      billingAddress: '',
+      paypalBusinessEmail: '',
+      paypalBusinessName: ''
+    });
     handleClosePaymentDialog();
-    alert('PayPal account connected successfully!');
+    alert('PayPal Business account connected successfully via PayPal Sandbox!\n\nAccount verified through PayPal API.');
+  } catch (error) {
+    console.error('Error saving PayPal payment method:', error);
+    alert('Failed to save PayPal payment method. Please try again.');
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+const handlePayPalSuccess = async (data, actions) => {
+  // This is only for personal accounts (guests)
+  console.log('=== PAYPAL ACCOUNT CONNECTION STARTED ===');
+  console.log('PayPal approval data:', data);
+  
+  let details;
+  try {
+    details = await actions.order.capture();
+    console.log('✅ PayPal payment captured successfully:', details);
+  } catch (captureError) {
+    console.error('❌ Error capturing PayPal payment:', captureError);
+    alert('Failed to capture PayPal payment. Please try again.');
+    return;
+  }
+  
+  try {
+    setIsSaving(true);
+    const userId = hostId || guestId;
+    const userRef = doc(db, 'Users', userId);
+    
+    console.log('=== PAYPAL ACCOUNT CONNECTION DETAILS ===');
+    console.log('User ID:', userId);
+    console.log('PayPal Email:', details.payer.email_address);
+    console.log('PayPal Payer ID:', details.payer.payer_id);
+    console.log('PayPal Name:', `${details.payer.name.given_name} ${details.payer.name.surname}`);
+    console.log('Transaction ID:', details.id);
+    console.log('Order ID:', data.orderID);
+    console.log('Status:', details.status);
+    
+    // Personal account for guests
+    const paymentData = {
+      type: 'paypal',
+      accountType: 'personal',
+      paypalEmail: details.payer.email_address,
+      payerId: details.payer.payer_id,
+      payerName: `${details.payer.name.given_name} ${details.payer.name.surname}`,
+      transactionId: details.id,
+      status: details.status,
+      environment: 'sandbox',
+      sandboxAccountId: details.payer.payer_id,
+      sandboxEmail: details.payer.email_address,
+      connectedAt: new Date().toISOString(),
+      accountId: details.payer.payer_id,
+      accountStatus: details.status,
+      orderId: details.id,
+      intent: details.intent || 'CAPTURE'
+    };
+
+    // Try to fetch actual PayPal balance from API
+    console.log('=== ATTEMPTING TO FETCH ACTUAL PAYPAL BALANCE ===');
+    let actualPayPalBalance = null;
+    let balanceFetchError = null;
+    
+    try {
+      // Import the balance sync function
+      const { syncPayPalBalanceToFirebase } = await import('../utils/paypalApi');
+      console.log('Fetching balance from PayPal API for account:', details.payer.email_address);
+      
+      const balanceResult = await syncPayPalBalanceToFirebase(userId, 'PHP');
+      actualPayPalBalance = balanceResult.balance;
+      
+      console.log('✅ ACTUAL PAYPAL ACCOUNT BALANCE (from PayPal API):', actualPayPalBalance);
+      console.log('Full balance data from PayPal:', balanceResult.balanceData);
+      
+      if (actualPayPalBalance !== null && actualPayPalBalance !== undefined) {
+        console.log(`💰 Guest's PayPal Sandbox Account Balance: ₱${actualPayPalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      }
+    } catch (balanceError) {
+      console.warn('⚠️ Could not fetch balance from PayPal API:', balanceError);
+      console.warn('Error code:', balanceError.code);
+      console.warn('Error message:', balanceError.message);
+      console.warn('Error details:', balanceError.details);
+      
+      // Check if it's a permissions/API availability issue
+      if (balanceError.message && (
+        balanceError.message.includes('Reporting API') || 
+        balanceError.message.includes('not available') ||
+        balanceError.message.includes('forbidden') ||
+        balanceError.message.includes('403')
+      )) {
+        console.warn('⚠️ PayPal Reporting API is not available. This is normal for sandbox accounts or accounts without Reporting API permissions.');
+        console.warn('⚠️ You can still manually enter your PayPal balance.');
+      } else if (balanceError.code === 'functions/not-found') {
+        console.warn('⚠️ Firebase Functions not deployed. Please deploy functions first.');
+      } else if (balanceError.code === 'functions/failed-precondition') {
+        console.warn('⚠️ PayPal credentials not configured in Firebase Functions.');
+      }
+      
+      balanceFetchError = balanceError.message;
+      actualPayPalBalance = null;
+    }
+
+    // Prompt user to enter their current PayPal account balance to sync with Firebase
+    let promptMessage = 'PayPal account connected successfully!\n\n';
+    promptMessage += `PayPal Email: ${details.payer.email_address}\n`;
+    promptMessage += `PayPal Payer ID: ${details.payer.payer_id}\n\n`;
+    
+    if (actualPayPalBalance !== null) {
+      promptMessage += `💰 Your PayPal Sandbox Account Balance: ₱${actualPayPalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n`;
+      promptMessage += 'This balance will be synced to Firebase.\n\n';
+      promptMessage += 'Press OK to use this balance, or enter a different amount:';
+    } else {
+      promptMessage += 'To sync your PayPal balance with Firebase, please enter your current PayPal account balance (PHP):\n\n';
+      promptMessage += 'Example: If you have ₱20,000 in your PayPal account, enter: 20000\n\n';
+      promptMessage += '(Leave empty or 0 if starting fresh)';
+    }
+    
+    const currentBalanceInput = prompt(promptMessage);
+    
+    let initialBalance = 0;
+    if (actualPayPalBalance !== null && (!currentBalanceInput || currentBalanceInput.trim() === '')) {
+      // Use the fetched balance if user didn't enter anything
+      initialBalance = actualPayPalBalance;
+      console.log('Using fetched PayPal balance:', initialBalance);
+    } else if (currentBalanceInput && currentBalanceInput.trim() !== '') {
+      const parsedBalance = parseFloat(currentBalanceInput);
+      if (!isNaN(parsedBalance) && parsedBalance >= 0) {
+        initialBalance = parsedBalance;
+        console.log('Using manually entered balance:', initialBalance);
+      }
+    }
+    
+    console.log('=== BALANCE SYNC INFORMATION ===');
+    console.log('Actual PayPal Account Balance (from API):', actualPayPalBalance);
+    console.log('Initial Balance to set in Firebase:', initialBalance);
+    console.log('Balance difference:', actualPayPalBalance !== null ? (initialBalance - actualPayPalBalance) : 'N/A');
+
+    // Update user document with PayPal info and initial balance
+    console.log('=== UPDATING FIRESTORE USER DOCUMENT ===');
+    console.log('Setting paypalBalance to:', initialBalance);
+    console.log('Setting paypalAccountId to:', details.payer.payer_id);
+    
+    await updateDoc(userRef, {
+      paymentMethod: paymentData,
+      paypalAccountId: details.payer.payer_id,
+      paypalBalance: initialBalance, // Set initial balance to match actual PayPal account
+      paypalLastUpdated: serverTimestamp(),
+      balanceSyncedAt: serverTimestamp(), // Mark when balance was synced
+      paypalBalanceData: actualPayPalBalance !== null ? { 
+        actualBalance: actualPayPalBalance,
+        firebaseBalance: initialBalance,
+        syncedAt: new Date().toISOString()
+      } : null
+    });
+    
+    console.log('✅ Firestore user document updated');
+    
+    // Verify the update
+    const verifySnap = await getDoc(userRef);
+    if (verifySnap.exists()) {
+      const verifyData = verifySnap.data();
+      console.log('=== VERIFICATION: FIRESTORE BALANCE ===');
+      console.log('paypalBalance in Firestore:', verifyData.paypalBalance);
+      console.log('paypalAccountId in Firestore:', verifyData.paypalAccountId);
+      console.log('paymentMethod in Firestore:', verifyData.paymentMethod);
+      
+      if (verifyData.paypalBalance !== initialBalance) {
+        console.error('❌ WARNING: Balance mismatch!');
+        console.error('Expected:', initialBalance);
+        console.error('Actual in Firestore:', verifyData.paypalBalance);
+      } else {
+        console.log('✅ Balance matches! Firebase balance updated correctly.');
+      }
+    }
+
+    // If user entered a balance, create an initial balance sync transaction record
+    if (initialBalance > 0) {
+      await addDoc(collection(db, 'PayPalTransactions'), {
+        userId: userId,
+        userRole: user?.role || 'guest',
+        type: 'deposit',
+        amount: initialBalance,
+        currency: 'PHP',
+        status: 'completed',
+        description: 'Initial PayPal balance sync - Balance from actual PayPal account',
+        paymentMethod: 'paypal',
+        payerId: details.payer.payer_id,
+        accountId: details.payer.payer_id,
+        balanceBefore: 0,
+        balanceAfter: initialBalance,
+        isInitialSync: true, // Mark as initial sync from actual PayPal account
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    setPaymentMethod(paymentData);
+    setPaymentMethodType('paypal');
+    setUser(prev => ({ ...prev, paymentMethod: paymentData, paypalAccountId: details.payer.payer_id, paypalBalance: initialBalance }));
+    handleClosePaymentDialog();
+    alert(`PayPal Personal account connected successfully!\n\n${initialBalance > 0 ? `Balance synced: ₱${initialBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Balance set to ₱0. You can sync your balance later.'}`);
   } catch (error) {
     console.error('Error saving PayPal payment method:', error);
     alert('Failed to save PayPal payment method. Please try again.');
@@ -665,6 +929,441 @@ const handlePayPalCancel = () => {
           )}
         </div>
 
+        {/* PayPal Balance Card - Only for Hosts (Business Accounts) */}
+        {user?.role === 'host' && (
+          <div className="profile-info-card" style={{ 
+            background: 'linear-gradient(135deg, #0070ba 0%, #003087 100%)',
+            color: 'white',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: '-50px',
+              right: '-50px',
+              width: '200px',
+              height: '200px',
+              borderRadius: '50%',
+              background: 'rgba(255, 255, 255, 0.1)',
+              zIndex: 0
+            }}></div>
+            <div style={{
+              position: 'absolute',
+              bottom: '-30px',
+              left: '-30px',
+              width: '150px',
+              height: '150px',
+              borderRadius: '50%',
+              background: 'rgba(255, 255, 255, 0.05)',
+              zIndex: 0
+            }}></div>
+            
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    <h3 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: 'white' }}>PayPal Balance</h3>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '14px', color: 'rgba(255, 255, 255, 0.8)' }}>Digital Wallet</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    const userId = hostId || guestId
+                    if (!userId) return
+                    
+                    try {
+                      setIsSaving(true)
+                      const userRef = doc(db, 'Users', userId)
+                      const userSnap = await getDoc(userRef)
+                      
+                      if (!userSnap.exists()) {
+                        alert('User not found')
+                        return
+                      }
+                      
+                      const userData = userSnap.data()
+                      
+                      // Check if user has PayPal account connected
+                      const hasPayPalAccount = userData.paymentMethod?.paypalEmail || 
+                                              userData.paypalAccountId ||
+                                              userData.paymentMethod?.payerId
+                      
+                      if (!hasPayPalAccount) {
+                        // If no PayPal account, use manual entry
+                        const currentBalanceInput = prompt(
+                          'Sync PayPal Balance\n\n' +
+                          'No PayPal account connected. Enter your current PayPal account balance (PHP) to sync with Firebase:\n\n' +
+                          'Example: If you have ₱20,000 in your PayPal account, enter: 20000'
+                        )
+                        
+                        if (currentBalanceInput === null) return // User cancelled
+                        
+                        let newBalance = 0
+                        if (currentBalanceInput && currentBalanceInput.trim() !== '') {
+                          const parsedBalance = parseFloat(currentBalanceInput)
+                          if (!isNaN(parsedBalance) && parsedBalance >= 0) {
+                            newBalance = parsedBalance
+                          } else {
+                            alert('Please enter a valid number')
+                            return
+                          }
+                        }
+                        
+                        const currentBalance = userData.paypalBalance || 0
+                        const balanceDifference = newBalance - currentBalance
+                        
+                        // Update balance
+                        await updateDoc(userRef, {
+                          paypalBalance: newBalance,
+                          paypalLastUpdated: serverTimestamp(),
+                          balanceSyncedAt: serverTimestamp()
+                        })
+                        
+                        // Create transaction record for the balance adjustment
+                        if (balanceDifference !== 0) {
+                          await addDoc(collection(db, 'PayPalTransactions'), {
+                            userId: userId,
+                            userRole: userData.role || 'guest',
+                            type: balanceDifference > 0 ? 'deposit' : 'withdrawal',
+                            amount: Math.abs(balanceDifference),
+                            currency: 'PHP',
+                            status: 'completed',
+                            description: `Balance sync - Updated to match PayPal account (${balanceDifference > 0 ? 'added' : 'adjusted'})`,
+                            paymentMethod: 'paypal',
+                            payerId: userData.paypalAccountId || null,
+                            accountId: userData.paypalAccountId || null,
+                            balanceBefore: currentBalance,
+                            balanceAfter: newBalance,
+                            isBalanceSync: true,
+                            createdAt: serverTimestamp(),
+                            updatedAt: serverTimestamp()
+                          })
+                        }
+                        
+                        alert(`Balance synced successfully!\n\nNew balance: ₱${newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+                      } else {
+                        // Try to get balance from PayPal API
+                        try {
+                          // Import sync function dynamically to avoid issues if not available
+                          const { syncPayPalBalanceToFirebase } = await import('../utils/paypalApi')
+                          
+                          alert('Fetching balance from PayPal... Please wait.')
+                          
+                          const syncResult = await syncPayPalBalanceToFirebase(userId, 'PHP')
+                          const paypalBalance = syncResult.balance
+                          const currentBalance = userData.paypalBalance || 0
+                          const balanceDifference = paypalBalance - currentBalance
+                          
+                          // Update balance in Firebase
+                          await updateDoc(userRef, {
+                            paypalBalance: paypalBalance,
+                            paypalLastUpdated: serverTimestamp(),
+                            balanceSyncedAt: serverTimestamp(),
+                            paypalBalanceData: syncResult.balanceData // Store full balance data
+                          })
+                          
+                          // Create transaction record for the balance adjustment if different
+                          if (Math.abs(balanceDifference) > 0.01) {
+                            await addDoc(collection(db, 'PayPalTransactions'), {
+                              userId: userId,
+                              userRole: userData.role || 'guest',
+                              type: balanceDifference > 0 ? 'deposit' : 'withdrawal',
+                              amount: Math.abs(balanceDifference),
+                              currency: 'PHP',
+                              status: 'completed',
+                              description: `Balance sync from PayPal API - Auto-synced from actual PayPal account`,
+                              paymentMethod: 'paypal',
+                              payerId: userData.paypalAccountId || userData.paymentMethod?.payerId || null,
+                              accountId: userData.paypalAccountId || userData.paymentMethod?.payerId || null,
+                              balanceBefore: currentBalance,
+                              balanceAfter: paypalBalance,
+                              isBalanceSync: true,
+                              isApiSync: true, // Mark as API sync
+                              createdAt: serverTimestamp(),
+                              updatedAt: serverTimestamp()
+                            })
+                          }
+                          
+                          alert(`Balance synced from PayPal successfully!\n\nPayPal Balance: ₱${paypalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\nPrevious Balance: ₱${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+                        } catch (apiError) {
+                          console.error('Error syncing from PayPal API:', apiError)
+                          // Fallback to manual entry if API fails
+                          const currentBalanceInput = prompt(
+                            `Could not fetch balance from PayPal API.\n\nError: ${apiError.message || 'Unknown error'}\n\nPlease enter your current PayPal account balance (PHP) manually:\n\nExample: If you have ₱20,000, enter: 20000`
+                          )
+                          
+                          if (currentBalanceInput === null) return
+                          
+                          let newBalance = 0
+                          if (currentBalanceInput && currentBalanceInput.trim() !== '') {
+                            const parsedBalance = parseFloat(currentBalanceInput)
+                            if (!isNaN(parsedBalance) && parsedBalance >= 0) {
+                              newBalance = parsedBalance
+                            } else {
+                              alert('Please enter a valid number')
+                              return
+                            }
+                          }
+                          
+                          const currentBalance = userData.paypalBalance || 0
+                          const balanceDifference = newBalance - currentBalance
+                          
+                          await updateDoc(userRef, {
+                            paypalBalance: newBalance,
+                            paypalLastUpdated: serverTimestamp(),
+                            balanceSyncedAt: serverTimestamp()
+                          })
+                          
+                          if (balanceDifference !== 0) {
+                            await addDoc(collection(db, 'PayPalTransactions'), {
+                              userId: userId,
+                              userRole: userData.role || 'guest',
+                              type: balanceDifference > 0 ? 'deposit' : 'withdrawal',
+                              amount: Math.abs(balanceDifference),
+                              currency: 'PHP',
+                              status: 'completed',
+                              description: `Balance sync - Manual entry (API sync failed)`,
+                              paymentMethod: 'paypal',
+                              payerId: userData.paypalAccountId || null,
+                              accountId: userData.paypalAccountId || null,
+                              balanceBefore: currentBalance,
+                              balanceAfter: newBalance,
+                              isBalanceSync: true,
+                              createdAt: serverTimestamp(),
+                              updatedAt: serverTimestamp()
+                            })
+                          }
+                          
+                          alert(`Balance synced manually!\n\nNew balance: ₱${newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Error syncing balance:', error)
+                      alert(`Error syncing balance: ${error.message || 'Please try again.'}`)
+                    } finally {
+                      setIsSaving(false)
+                    }
+                  }}
+                  disabled={isSaving}
+                  style={{
+                    padding: '8px 12px',
+                    background: isSaving ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)',
+                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                    borderRadius: '8px',
+                    color: 'white',
+                    cursor: isSaving ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    transition: 'all 0.3s ease',
+                    opacity: isSaving ? 0.6 : 1
+                  }}
+                  onMouseOver={(e) => {
+                    if (!isSaving) {
+                      e.target.style.background = 'rgba(255, 255, 255, 0.3)'
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (!isSaving) {
+                      e.target.style.background = 'rgba(255, 255, 255, 0.2)'
+                    }
+                  }}
+                  title="Sync balance from your actual PayPal account"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <polyline points="1 20 1 14 7 14"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                  </svg>
+                  {isSaving ? 'Syncing...' : 'Sync Balance'}
+                </button>
+              </div>
+
+              <div style={{ marginBottom: '32px' }}>
+                <p style={{ 
+                  margin: '0 0 8px 0', 
+                  fontSize: '14px', 
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  fontWeight: '500'
+                }}>
+                  Available Balance
+                </p>
+                <p style={{ 
+                  margin: 0, 
+                  fontSize: '42px', 
+                  fontWeight: '700', 
+                  color: 'white',
+                  letterSpacing: '-1px'
+                }}>
+                  ₱{(user?.paypalBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: '1fr 1fr', 
+                gap: '16px',
+                padding: '16px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                borderRadius: '12px',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <div>
+                  <p style={{ 
+                    margin: '0 0 4px 0', 
+                    fontSize: '12px', 
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontWeight: '500'
+                  }}>
+                    Total Earnings
+                  </p>
+                  <p style={{ 
+                    margin: 0, 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    color: 'white'
+                  }}>
+                    ₱{(user?.totalEarnings || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ 
+                    margin: '0 0 4px 0', 
+                    fontSize: '12px', 
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontWeight: '500'
+                  }}>
+                    Account Status
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <p style={{ 
+                      margin: 0, 
+                      fontSize: '18px', 
+                      fontWeight: '600', 
+                      color: '#10b981'
+                    }}>
+                      {user?.paymentMethod?.paypalEmail ? 'Active' : 'Not Connected'}
+                    </p>
+                    {user?.paymentMethod?.accountType === 'business' && (
+                      <span style={{ 
+                        background: 'rgba(255, 255, 255, 0.3)', 
+                        color: 'white', 
+                        padding: '2px 6px', 
+                        borderRadius: '4px', 
+                        fontSize: '10px',
+                        fontWeight: '600',
+                        textTransform: 'uppercase'
+                      }}>
+                        Business
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {user?.paymentMethod?.paypalEmail && (
+                <div style={{ 
+                  marginTop: '16px',
+                  padding: '12px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/>
+                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                  </svg>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ 
+                      margin: '0 0 2px 0', 
+                      fontSize: '12px', 
+                      color: 'rgba(255, 255, 255, 0.7)'
+                    }}>
+                      PayPal Email
+                    </p>
+                    <p style={{ 
+                      margin: 0, 
+                      fontSize: '14px', 
+                      fontWeight: '600', 
+                      color: 'white'
+                    }}>
+                      {user.paymentMethod.paypalEmail}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!user?.paymentMethod?.paypalEmail && (
+                <div style={{ 
+                  marginTop: '16px',
+                  padding: '16px',
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  borderRadius: '12px',
+                  textAlign: 'center',
+                  border: '2px solid rgba(255, 255, 255, 0.2)'
+                }}>
+                  <p style={{ 
+                    margin: '0 0 8px 0', 
+                    fontSize: '16px', 
+                    color: 'white',
+                    fontWeight: '600'
+                  }}>
+                    No Business Account Connected
+                  </p>
+                  <p style={{ 
+                    margin: '0 0 16px 0', 
+                    fontSize: '14px', 
+                    color: 'rgba(255, 255, 255, 0.9)'
+                  }}>
+                    Connect your PayPal Business account to receive payments and view your balance
+                  </p>
+                  <button
+                    onClick={handleOpenPaymentDialog}
+                    style={{
+                      padding: '12px 24px',
+                      background: 'white',
+                      color: '#0070ba',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.2)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseOver={(e) => {
+                      e.target.style.background = '#f3f4f6'
+                      e.target.style.transform = 'translateY(-2px)'
+                      e.target.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.3)'
+                    }}
+                    onMouseOut={(e) => {
+                      e.target.style.background = 'white'
+                      e.target.style.transform = 'translateY(0)'
+                      e.target.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.2)'
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20 7h-4V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2H2a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1z"/>
+                      <path d="M9 12h6M9 16h6"/>
+                    </svg>
+                    Create Business Account
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Payment Method Card */}
         <div className="profile-info-card">
           <div className="card-header">
@@ -685,7 +1384,22 @@ const handlePayPalCancel = () => {
                       <line x1="7" y1="7" x2="7.01" y2="7"/>
                     </svg>
                     <div className="payment-method-info-profile">
-                      <p className="payment-method-type">PayPal Account</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <p className="payment-method-type">
+                          PayPal {paymentMethod.accountType === 'business' ? 'Business' : 'Personal'} Account
+                        </p>
+                        <span style={{ 
+                          background: paymentMethod.accountType === 'business' ? '#31326F' : '#3b82f6', 
+                          color: 'white', 
+                          padding: '2px 8px', 
+                          borderRadius: '4px', 
+                          fontSize: '10px',
+                          fontWeight: '600',
+                          textTransform: 'uppercase'
+                        }}>
+                          {paymentMethod.accountType === 'business' ? 'Business' : 'Personal'}
+                        </span>
+                      </div>
                       <p className="payment-method-detail">{paymentMethod.paypalEmail}</p>
                       <p className="payment-method-name">{paymentMethod.payerName}</p>
                       {paymentMethod.connectedAt && (
@@ -726,10 +1440,82 @@ const handlePayPalCancel = () => {
             </div>
           ) : (
             <div className="no-payment-method-profile">
-              <p className="no-payment-text">No payment method added</p>
-              <button className="add-payment-btn-profile" onClick={handleOpenPaymentDialog}>
-                Add Payment Method
-              </button>
+              {user?.role === 'host' ? (
+                <>
+                  <div style={{ 
+                    background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.1) 0%, rgba(49, 50, 111, 0.05) 100%)',
+                    padding: '16px',
+                    borderRadius: '12px',
+                    marginBottom: '16px',
+                    border: '2px solid rgba(49, 50, 111, 0.2)',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      gap: '8px',
+                      marginBottom: '8px'
+                    }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#31326F" strokeWidth="2">
+                        <path d="M20 7h-4V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2H2a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1z"/>
+                        <path d="M9 12h6M9 16h6"/>
+                      </svg>
+                      <strong style={{ color: '#31326F', fontSize: '16px' }}>Business Account Required</strong>
+                    </div>
+                    <p className="no-payment-text" style={{ margin: '0 0 12px 0', color: '#6b7280' }}>
+                      Connect your PayPal Business account to receive payments from bookings
+                    </p>
+                    <button 
+                      className="add-payment-btn-profile" 
+                      onClick={handleOpenPaymentDialog}
+                      style={{
+                        background: 'linear-gradient(135deg, #31326F 0%, #5758a2 100%)',
+                        color: 'white',
+                        border: 'none',
+                        padding: '12px 24px',
+                        borderRadius: '8px',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        boxShadow: '0 4px 6px rgba(49, 50, 111, 0.3)'
+                      }}
+                      onMouseOver={(e) => {
+                        e.target.style.background = 'linear-gradient(135deg, #252550 0%, #4a4b8f 100%)'
+                        e.target.style.transform = 'translateY(-2px)'
+                        e.target.style.boxShadow = '0 6px 12px rgba(49, 50, 111, 0.4)'
+                      }}
+                      onMouseOut={(e) => {
+                        e.target.style.background = 'linear-gradient(135deg, #31326F 0%, #5758a2 100%)'
+                        e.target.style.transform = 'translateY(0)'
+                        e.target.style.boxShadow = '0 4px 6px rgba(49, 50, 111, 0.3)'
+                      }}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px', verticalAlign: 'middle', display: 'inline-block' }}>
+                        <path d="M20 7h-4V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2H2a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1z"/>
+                        <path d="M9 12h6M9 16h6"/>
+                      </svg>
+                      Create Business Account
+                    </button>
+                  </div>
+                  <p style={{ 
+                    textAlign: 'center', 
+                    fontSize: '12px', 
+                    color: '#9ca3af',
+                    marginTop: '8px'
+                  }}>
+                    Or add a credit/debit card as an alternative payment method
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="no-payment-text">No payment method added</p>
+                  <button className="add-payment-btn-profile" onClick={handleOpenPaymentDialog}>
+                    Add Payment Method
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1001,34 +1787,132 @@ const handlePayPalCancel = () => {
 
             {paymentMethodType === 'paypal' ? (
               <div className="paypal-section">
-                <p className="paypal-description">Connect your PayPal account to use for payments.</p>
-                <PayPalButtons
-                  createOrder={(data, actions) => {
-                    return actions.order.create({
-                      purchase_units: [{
-                        amount: {
-                          value: "0.01",
-                          currency_code: "PHP"
-                        },
-                        description: "Connect PayPal Account"
-                      }],
-                      application_context: {
-                        brand_name: "StaySmart",
-                        landing_page: "NO_PREFERENCE",
-                        user_action: "PAY_NOW"
-                      }
-                    });
-                  }}
-                  onApprove={handlePayPalSuccess}
-                  onError={handlePayPalError}
-                  onCancel={handlePayPalCancel}
-                  style={{
-                    layout: "vertical",
-                    color: "blue",
-                    shape: "rect",
-                    label: "paypal"
-                  }}
-                />
+                {user?.role === 'host' ? (
+                  <>
+                    <div style={{ 
+                      background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.1) 0%, rgba(49, 50, 111, 0.05) 100%)',
+                      padding: '16px',
+                      borderRadius: '12px',
+                      marginBottom: '20px',
+                      border: '2px solid rgba(49, 50, 111, 0.2)'
+                    }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        gap: '8px',
+                        marginBottom: '12px'
+                      }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#31326F" strokeWidth="2">
+                          <path d="M20 7h-4V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v2H2a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1z"/>
+                          <path d="M9 12h6M9 16h6"/>
+                        </svg>
+                        <strong style={{ color: '#31326F', fontSize: '16px' }}>Business Account Required</strong>
+                      </div>
+                      <p className="paypal-description" style={{ margin: '0 0 8px 0', color: '#6b7280' }}>
+                        Connect your PayPal Business account through PayPal Sandbox to receive payments from bookings and manage payouts.
+                      </p>
+                      <p style={{ margin: 0, color: '#9ca3af', fontSize: '12px' }}>
+                        This will verify your PayPal Business account through PayPal's API and enable payment processing.
+                      </p>
+                    </div>
+                    <PayPalButtons
+                      createOrder={(data, actions) => {
+                        return actions.order.create({
+                          purchase_units: [{
+                            amount: {
+                              value: "1.00",
+                              currency_code: "PHP"
+                            },
+                            description: "Verify PayPal Business Account - StaySmart"
+                          }],
+                          application_context: {
+                            brand_name: "StaySmart",
+                            landing_page: "BILLING",
+                            user_action: "PAY_NOW",
+                            shipping_preference: "NO_SHIPPING"
+                          }
+                        });
+                      }}
+                      onApprove={handlePayPalBusinessSuccess}
+                      onError={handlePayPalError}
+                      onCancel={handlePayPalCancel}
+                      style={{
+                        layout: "vertical",
+                        color: "blue",
+                        shape: "rect",
+                        label: "paypal",
+                        tagline: false
+                      }}
+                    />
+                    <p style={{ 
+                      marginTop: '12px', 
+                      fontSize: '12px', 
+                      color: '#6b7280',
+                      fontStyle: 'italic',
+                      textAlign: 'center'
+                    }}>
+                      A ₱1.00 verification payment will be processed to verify your PayPal Business account
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ 
+                      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%)',
+                      padding: '16px',
+                      borderRadius: '12px',
+                      marginBottom: '20px',
+                      border: '2px solid rgba(59, 130, 246, 0.2)'
+                    }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        gap: '8px',
+                        marginBottom: '12px'
+                      }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                          <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                        <strong style={{ color: '#3b82f6', fontSize: '16px' }}>Personal Account</strong>
+                      </div>
+                      <p className="paypal-description" style={{ margin: '0 0 8px 0', color: '#6b7280' }}>
+                        Connect your PayPal Personal account to make payments for bookings.
+                      </p>
+                      <p style={{ margin: 0, color: '#9ca3af', fontSize: '12px' }}>
+                        Personal accounts are perfect for making payments and managing your booking transactions.
+                      </p>
+                    </div>
+                    <PayPalButtons
+                      createOrder={(data, actions) => {
+                        return actions.order.create({
+                          purchase_units: [{
+                            amount: {
+                              value: "0.01",
+                              currency_code: "PHP"
+                            },
+                            description: "Connect PayPal Personal Account"
+                          }],
+                          application_context: {
+                            brand_name: "StaySmart",
+                            landing_page: "NO_PREFERENCE",
+                            user_action: "PAY_NOW"
+                          }
+                        });
+                      }}
+                      onApprove={handlePayPalSuccess}
+                      onError={handlePayPalError}
+                      onCancel={handlePayPalCancel}
+                      style={{
+                        layout: "vertical",
+                        color: "blue",
+                        shape: "rect",
+                        label: "paypal"
+                      }}
+                    />
+                  </>
+                )}
               </div>
             ) : (
               <>
@@ -1103,9 +1987,11 @@ const handlePayPalCancel = () => {
                   <button onClick={handleClosePaymentDialog} className="cancel-payment-btn" disabled={isSaving}>
                     Cancel
                   </button>
-                  <button onClick={handleSavePaymentMethod} className="save-payment-btn" disabled={isSaving}>
-                    {isSaving ? 'Saving...' : 'Save Payment Method'}
-                  </button>
+                  {paymentMethodType === 'card' && (
+                    <button onClick={handleSavePaymentMethod} className="save-payment-btn" disabled={isSaving}>
+                      {isSaving ? 'Saving...' : 'Save Payment Method'}
+                    </button>
+                  )}
                 </div>
               </>
             )}

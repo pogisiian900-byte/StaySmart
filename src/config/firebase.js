@@ -26,5 +26,28 @@ const analytics = getAnalytics(app);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
+
+// Initialize Functions (use default region, or specify if needed)
 export const functions = getFunctions(app);
+// Connect to functions emulator for local development (optional)
+// connectFunctionsEmulator(functions, 'localhost', 5001);
+
+// PayPal Cloud Functions (server-side)
+// NOTE: PayPal credentials are stored securely in Firebase Functions config
+// Client-side code should NOT have access to PayPal secrets
+
+// Create PayPal payout function callable (using SDK)
 export const processPayPalPayout = httpsCallable(functions, 'processPayPalPayout');
+
+// PayPal payout using REST API (server-side)
+export const processPayPalPayoutRest = httpsCallable(functions, 'processPayPalPayoutRest');
+
+// Get PayPal balance from API (server-side)
+export const getPayPalBalance = httpsCallable(functions, 'getPayPalBalance');
+
+// Sync PayPal balance to Firebase (server-side)
+export const syncPayPalBalanceToFirebase = httpsCallable(functions, 'syncPayPalBalanceToFirebase');
+
+// PayPal API Configuration - REMOVED FROM CLIENT-SIDE
+// PayPal credentials should only be in Firebase Functions environment variables
+// DO NOT expose PayPal secrets in client-side code

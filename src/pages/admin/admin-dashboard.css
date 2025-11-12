@@ -634,4 +634,111 @@
   }
 }
 
+/* Status Badges */
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.confirmed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.declined {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.cancelled {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* Booking Management Table Styles */
+.admin-section-card table {
+  font-size: 14px;
+}
+
+.admin-section-card table th {
+  background: #f9fafb;
+  position: sticky;
+  top: 0;
+}
+
+.admin-section-card table tbody tr:hover {
+  background: #f9fafb;
+}
+
+@media (max-width: 768px) {
+  .admin-section-card table {
+    font-size: 12px;
+  }
+  
+  .admin-section-card table th,
+  .admin-section-card table td {
+    padding: 8px;
+  }
+}
+
+/* PayPal Button Styling for Admin Profile */
+.admin-paypal-button-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  position: relative;
+  border-radius: 8px;
+  background: rgba(49, 50, 111, 0.02);
+}
+
+/* Since PayPal buttons are in iframes, we use CSS filters to shift the color */
+/* This attempts to change PayPal's blue/yellow to match brand color #31326F */
+.admin-paypal-button-wrapper iframe,
+.admin-paypal-button-wrapper [id*="paypal-button"],
+.admin-paypal-button-wrapper [data-paypal-button] {
+  /* Adjust filter to shift colors toward brand color */
+  filter: hue-rotate(200deg) saturate(1.4) brightness(0.75) contrast(1.15) !important;
+  border-radius: 8px;
+}
+
+/* Style the container to give brand-colored appearance */
+.admin-paypal-button-wrapper::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  background: linear-gradient(135deg, rgba(49, 50, 111, 0.1) 0%, rgba(49, 50, 111, 0.05) 100%);
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.5;
+}
+
+/* Ensure PayPal button container is positioned correctly */
+.admin-paypal-button-wrapper > div {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 300px;
+}
+
+/* Override any PayPal default styling */
+.admin-paypal-button-wrapper [class*="paypal"],
+.admin-paypal-button-wrapper [id*="paypal"] {
+  border-radius: 8px !important;
+}
+
 

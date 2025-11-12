@@ -151,72 +151,50 @@ function Guest_Logged_Navigation({ userData }) {
   // ✅ Subscribe to notifications for guest
   useEffect(() => {
     const uid = auth.currentUser?.uid;
-    console.log('🔔 GuestNav: useEffect triggered, uid:', uid);
     
     if (!uid) {
-      console.log('⚠️ GuestNav: No uid, returning early');
       return;
     }
     
     const q = query(collection(db, 'Notifications'), where('recipientId', '==', uid));
-    console.log('🔔 GuestNav: Setting up Firestore listener for uid:', uid);
     
     const unsub = onSnapshot(
       q, 
       (snap) => {
-        console.log('🔔 GuestNav: Snapshot received!');
-        console.log('🔔 GuestNav: Snapshot size:', snap.size);
-        console.log('🔔 GuestNav: Snapshot empty:', snap.empty);
-        
         try {
           const list = [];
           snap.forEach((d) => {
             try {
               const data = d.data();
-              console.log('🔔 GuestNav: Document ID:', d.id);
-              console.log('🔔 GuestNav: Document data:', data);
-              console.log('🔔 GuestNav: recipientId in doc:', data.recipientId);
-              console.log('🔔 GuestNav: uid from auth:', uid);
-              console.log('🔔 GuestNav: recipientId matches?', data.recipientId === uid);
               list.push({ id: d.id, ...data });
             } catch (err) {
-              console.error('❌ GuestNav: Error processing notification document:', err);
+              // Error processing notification document
             }
           });
-          
-          console.log('🔔 GuestNav: Total notifications found:', list.length);
-          console.log('🔔 GuestNav: Notifications list:', list);
           
           list.sort((a, b) => {
             try {
               const toMs = (v) => (v?.toMillis ? v.toMillis() : (v?.seconds ? v.seconds * 1000 : (Date.parse(v) || 0)));
               return toMs(b.createdAt) - toMs(a.createdAt);
             } catch (err) {
-              console.error('❌ GuestNav: Error sorting:', err);
               return 0;
             }
           });
           
           const unread = list.filter(n => !n.read);
-          console.log('🔔 GuestNav: Unread notifications:', unread.length);
-          console.log('🔔 GuestNav: Setting notifications state with', list.length, 'items');
-          console.log('🔔 GuestNav: Setting unread count to', unread.length);
           
           setNotifications(list);
           setUnreadCount(unread.length);
         } catch (error) {
-          console.error('❌ GuestNav: Error processing notifications:', error);
+          // Error processing notifications
         }
       },
       (error) => {
-        console.error('❌ GuestNav: Firestore snapshot error:', error);
-        console.error('❌ GuestNav: Error code:', error.code);
-        console.error('❌ GuestNav: Error message:', error.message);
+        // Firestore snapshot error
       }
     );
     
     return () => {
-      console.log('🔔 GuestNav: Cleaning up listener');
       if (unsub) unsub();
     };
   }, []);
@@ -237,16 +215,16 @@ function Guest_Logged_Navigation({ userData }) {
             try {
               batch.update(doc(db, 'Notifications', n.id), { read: true });
             } catch (err) {
-              console.error('Error adding notification to batch:', err);
+              // Error adding notification to batch
             }
           });
           await batch.commit();
         } catch (e) {
-          console.error('Failed to mark notifications read', e);
+          // Failed to mark notifications read
         }
       }
     } catch (error) {
-      console.error('Error in handleNotificationClick:', error);
+      // Error in handleNotificationClick
     }
   };
 

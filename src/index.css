@@ -692,8 +692,7 @@ footer{
 
 /* Highlight for Selected Day */
 .calendar-day.selected {
-  background: linear-gradient(135deg, #31326F 0%, #5758a2 100%);
-  color: white;
+  background: linear-gradient(135deg, #3e3f98 0%, #5758a2 100%);
   border: 3px solid #1e3a5f;
   box-shadow: 0 6px 20px rgba(49, 50, 111, 0.6);
   transform: scale(1.05);

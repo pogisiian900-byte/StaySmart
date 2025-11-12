@@ -4,6 +4,10 @@ import { signOut } from 'firebase/auth'
 import { auth } from '../../config/firebase'
 import Logo from '../../../public/static/ss.png'
 import Admin_MainContent from './admin-mainContent'
+import AdminBookings from './AdminBookings'
+import AdminPayouts from './AdminPayouts'
+import AdminUsers from './AdminUsers'
+import AdminProfile from './AdminProfile'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
 import dialogPolyfill from 'dialog-polyfill'
 
@@ -63,16 +67,14 @@ const Admin_Navigation = () => {
     switch(selectedNav) {
       case 'dashboard':
         return <Admin_MainContent />
-      case 'subscription':
-        return <div>Subscription Management</div>
-      case 'review':
-        return <div>Review Management</div>
       case 'booking':
-        return <div>Booking Management</div>
+        return <AdminBookings />
       case 'payout':
-        return <div>Payout Control</div>
+        return <AdminPayouts />
       case 'user':
-        return <div>User Management</div>
+        return <AdminUsers />
+      case 'profile':
+        return <AdminProfile />
       default:
         return <Admin_MainContent />
     }
@@ -117,26 +119,6 @@ const Admin_Navigation = () => {
             <span className="label">Dashboard</span>
           </button>
           <button 
-            className={`admin-nav-button ${selectedNav === 'subscription' ? 'admin-nav-selected' : ''}`}
-            onClick={() => {
-              handleNavClick('subscription')
-              setIsMobileMenuOpen(false)
-            }}
-          >
-            <span className="icon">💳</span>
-            <span className="label">Subscription Management</span>
-          </button>
-          <button 
-            className={`admin-nav-button ${selectedNav === 'review' ? 'admin-nav-selected' : ''}`}
-            onClick={() => {
-              handleNavClick('review')
-              setIsMobileMenuOpen(false)
-            }}
-          >
-            <span className="icon">⭐</span>
-            <span className="label">Review Management</span>
-          </button>
-          <button 
             className={`admin-nav-button ${selectedNav === 'booking' ? 'admin-nav-selected' : ''}`}
             onClick={() => {
               handleNavClick('booking')
@@ -165,6 +147,16 @@ const Admin_Navigation = () => {
           >
             <span className="icon">👤</span>
             <span className="label">User Management</span>
+          </button>
+          <button 
+            className={`admin-nav-button ${selectedNav === 'profile' ? 'admin-nav-selected' : ''}`}
+            onClick={() => {
+              handleNavClick('profile')
+              setIsMobileMenuOpen(false)
+            }}
+          >
+            <span className="icon">⚙️</span>
+            <span className="label">Profile</span>
           </button>
         </div>
         

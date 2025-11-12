@@ -95,12 +95,7 @@ function Host_Navigation({ hostId, userData }) {
 
   // ✅ Subscribe to notifications for host
   useEffect(() => {
-    console.log('🔔 HostNav: useEffect triggered, hostId:', hostId);
-    console.log('🔔 HostNav: hostId type:', typeof hostId);
-    console.log('🔔 HostNav: hostId value:', JSON.stringify(hostId));
-    
     if (!hostId) {
-      console.log('⚠️ HostNav: No hostId, returning early');
       return;
     }
     
@@ -108,15 +103,10 @@ function Host_Navigation({ hostId, userData }) {
     // Old format: has hostId but no recipientId
     // New format: has recipientId
     const allNotificationsQuery = query(collection(db, 'Notifications'));
-    console.log('🔔 HostNav: Setting up Firestore listener for hostId:', hostId);
-    console.log('🔔 HostNav: Querying ALL notifications (will filter client-side)');
     
     const unsub = onSnapshot(
       allNotificationsQuery, 
       (snap) => {
-        console.log('🔔 HostNav: Snapshot received!');
-        console.log('🔔 HostNav: Total notifications in DB:', snap.size);
-        
         try {
           const list = [];
           snap.forEach((d) => {
@@ -127,60 +117,41 @@ function Host_Navigation({ hostId, userData }) {
               
               // Include if: new format (recipientId matches) OR old format (hostId matches but no recipientId)
               if (hasRecipientId || hasOldFormatHostId) {
-                console.log('✅ HostNav: Including notification:', {
-                  id: d.id,
-                  recipientId: data.recipientId,
-                  hostId: data.hostId,
-                  title: data.title,
-                  format: hasRecipientId ? 'new' : 'old'
-                });
-                
                 // If old format, add recipientId for consistency
                 if (hasOldFormatHostId && !data.recipientId) {
                   data.recipientId = data.hostId;
-                  console.log('🔄 HostNav: Adding recipientId to old format notification');
                 }
                 
                 list.push({ id: d.id, ...data });
               }
             } catch (err) {
-              console.error('❌ HostNav: Error processing notification document:', err);
+              // Error processing notification document
             }
           });
-          
-          console.log('🔔 HostNav: Total notifications found after filtering:', list.length);
-          console.log('🔔 HostNav: Notifications list:', list);
           
           list.sort((a, b) => {
             try {
               const toMs = (v) => (v?.toMillis ? v.toMillis() : (v?.seconds ? v.seconds * 1000 : (Date.parse(v) || 0)));
               return toMs(b.createdAt) - toMs(a.createdAt);
             } catch (err) {
-              console.error('❌ HostNav: Error sorting:', err);
               return 0;
             }
           });
           
           const unread = list.filter(n => !n.read);
-          console.log('🔔 HostNav: Unread notifications:', unread.length);
-          console.log('🔔 HostNav: Setting notifications state with', list.length, 'items');
-          console.log('🔔 HostNav: Setting unread count to', unread.length);
           
           setNotifications(list);
           setUnreadCount(unread.length);
         } catch (error) {
-          console.error('❌ HostNav: Error processing notifications:', error);
+          // Error processing notifications
         }
       },
       (error) => {
-        console.error('❌ HostNav: Firestore snapshot error:', error);
-        console.error('❌ HostNav: Error code:', error.code);
-        console.error('❌ HostNav: Error message:', error.message);
+        // Firestore snapshot error
       }
     );
     
     return () => {
-      console.log('🔔 HostNav: Cleaning up listener');
       if (unsub) unsub();
     };
   }, [hostId]);
@@ -199,16 +170,16 @@ function Host_Navigation({ hostId, userData }) {
             try {
               batch.update(doc(db, 'Notifications', n.id), { read: true });
             } catch (err) {
-              console.error('Error adding notification to batch:', err);
+              // Error adding notification to batch
             }
           });
           await batch.commit();
         } catch (e) {
-          console.error('Failed to mark notifications read', e);
+          // Failed to mark notifications read
         }
       }
     } catch (error) {
-      console.error('Error in handleNotificationClick:', error);
+      // Error in handleNotificationClick
     }
   };
 

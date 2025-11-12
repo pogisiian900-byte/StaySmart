@@ -1490,6 +1490,53 @@
   font-weight: 500;
 }
 
+/* PayPal Spinner Animation */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.confirm-paypal-section .spinner {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #0070ba;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+.confirm-paypal-section .paypal-warning {
+  padding: 12px;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  margin-top: 15px;
+  text-align: left;
+}
+
+.confirm-paypal-section .paypal-warning p {
+  margin: 0;
+  font-size: 13px;
+  color: #856404;
+  font-weight: 500;
+}
+
+.confirm-paypal-section .paypal-info {
+  padding: 12px;
+  background-color: #f0f8ff;
+  border: 1px solid #0070ba;
+  border-radius: 6px;
+  margin-bottom: 15px;
+}
+
+.confirm-paypal-section .paypal-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #0070ba;
+  font-weight: 500;
+}
+
 .confirm-submit-btn:disabled {
   background: #ccc !important;
   color: #666 !important;

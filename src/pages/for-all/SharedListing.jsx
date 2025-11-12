@@ -874,7 +874,9 @@ const handleAddGuest = (key) => {
               loginModalRef.current?.open();
               return;
             }
-            navigate(`/guest/${guestId}/listing/${listingId}/booking`, {
+            // Include dates in URL so they persist after page refresh
+            const bookingUrl = `/guest/${guestId}/listing/${listingId}/booking${checkIn && checkOut ? `?checkIn=${checkIn}&checkOut=${checkOut}` : ''}`;
+            navigate(bookingUrl, {
               state: {
                 listing: selectedListing,
                 checkIn,

@@ -44,7 +44,7 @@
 }
 .floating-buttons {
   position: sticky;
-  bottom: 30px; 
+  top: 30px; 
   display: flex;
   justify-content: space-between;
   width: 100%;
@@ -80,7 +80,7 @@
 /* When scrolled (add a class via JS) */
 .floating-buttons.stuck {
   position: sticky;
-  top:5px;
+  top: 5px;
   bottom: auto;
   background-color: rgba(255, 255, 255, 0.9);
   padding: 5px 20px;
