@@ -53,6 +53,11 @@ const SelectListingItem = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [imageIndex, setImageIndex] = useState(0);
 
+  // Calendar state
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+
   // Reservations state for unavailable dates
   const [reservations, setReservations] = useState([]);
   const [reservationsLoading, setReservationsLoading] = useState(true);
@@ -776,7 +781,7 @@ const SelectListingItem = () => {
         <button 
           className="shareListing-view-mobile"
           onClick={async () => {
-            const shareUrl = `${window.location.origin}/guest/${guestId}/listing/${listingId}`;
+            const shareUrl = `${window.location.origin}/listing/${listingId}`;
             const shareTitle = selectedListing?.title || 'Check out this listing';
             const shareText = `${selectedListing?.description?.slice(0, 100)}...` || 'Found this great place on StaySmart!';
             
@@ -1155,6 +1160,350 @@ const SelectListingItem = () => {
               />
             </div>
           </div>
+
+          {/* Calendar Toggle Button */}
+          <div style={{ marginTop: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setShowCalendar(!showCalendar)}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                background: showCalendar 
+                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                  : 'white',
+                color: showCalendar ? 'white' : '#374151',
+                border: '2px solid #e5e7eb',
+                borderRadius: '10px',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                if (!showCalendar) {
+                  e.target.style.borderColor = '#667eea'
+                  e.target.style.background = '#f9fafb'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!showCalendar) {
+                  e.target.style.borderColor = '#e5e7eb'
+                  e.target.style.background = 'white'
+                }
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              {showCalendar ? 'Hide Calendar' : 'Show Availability Calendar'}
+            </button>
+          </div>
+
+          {/* Calendar Component */}
+          {showCalendar && (
+            <div style={{
+              marginTop: '20px',
+              padding: '20px',
+              background: 'white',
+              borderRadius: '16px',
+              border: '2px solid #e5e7eb',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '20px'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (calendarMonth === 0) {
+                      setCalendarMonth(11);
+                      setCalendarYear(calendarYear - 1);
+                    } else {
+                      setCalendarMonth(calendarMonth - 1);
+                    }
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    background: '#f3f4f6',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '1.2rem',
+                    color: '#374151',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#e5e7eb'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = '#f3f4f6'
+                  }}
+                >
+                  ❮
+                </button>
+                <h3 style={{
+                  margin: 0,
+                  fontSize: '1.25rem',
+                  fontWeight: 700,
+                  color: '#111827'
+                }}>
+                  {new Date(calendarYear, calendarMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (calendarMonth === 11) {
+                      setCalendarMonth(0);
+                      setCalendarYear(calendarYear + 1);
+                    } else {
+                      setCalendarMonth(calendarMonth + 1);
+                    }
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    background: '#f3f4f6',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '1.2rem',
+                    color: '#374151',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#e5e7eb'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = '#f3f4f6'
+                  }}
+                >
+                  ❯
+                </button>
+              </div>
+
+              {/* Calendar Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: '8px',
+                marginBottom: '12px'
+              }}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <div key={day} style={{
+                    textAlign: 'center',
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    color: '#6b7280',
+                    padding: '8px 0'
+                  }}>
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: '8px'
+              }}>
+                {(() => {
+                  const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+                  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+                  const days = [];
+                  
+                  // Empty cells for days before month starts
+                  for (let i = 0; i < firstDay; i++) {
+                    days.push(
+                      <div key={`empty-${i}`} style={{ aspectRatio: '1', minHeight: '40px' }}></div>
+                    );
+                  }
+                  
+                  // Days of the month
+                  for (let day = 1; day <= daysInMonth; day++) {
+                    const dateStr = formatDate(new Date(calendarYear, calendarMonth, day));
+                    const isUnavailable = unavailableDates.dates.has(dateStr);
+                    const isPast = new Date(calendarYear, calendarMonth, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const isToday = day === today.getDate() && 
+                                   calendarMonth === today.getMonth() && 
+                                   calendarYear === today.getFullYear();
+                    const isSelected = (checkIn && dateStr === checkIn) || (checkOut && dateStr === checkOut);
+                    
+                    // Find reservation for this date
+                    const reservationForDate = unavailableDates.ranges.find(range => {
+                      const rangeStart = formatDate(range.checkIn);
+                      const rangeEnd = formatDate(new Date(range.checkOut.getTime() - 86400000)); // Check-out is exclusive
+                      return dateStr >= rangeStart && dateStr <= rangeEnd;
+                    });
+
+                    days.push(
+                      <div
+                        key={day}
+                        onClick={() => {
+                          if (isPast || isUnavailable) return;
+                          if (!checkIn || (checkIn && checkOut)) {
+                            // Set check-in
+                            setCheckIn(dateStr);
+                            setCheckOut('');
+                          } else if (checkIn && !checkOut) {
+                            // Set check-out
+                            const checkInDate = new Date(checkIn);
+                            const selectedDate = new Date(calendarYear, calendarMonth, day);
+                            if (selectedDate <= checkInDate) {
+                              alert('Check-out date must be after check-in date');
+                              return;
+                            }
+                            const minCheckout = new Date(checkInDate);
+                            minCheckout.setDate(checkInDate.getDate() + 2);
+                            if (selectedDate < minCheckout) {
+                              alert('Minimum stay is 2 nights');
+                              setCheckOut(formatDate(minCheckout));
+                            } else {
+                              setCheckOut(dateStr);
+                            }
+                          }
+                        }}
+                        style={{
+                          aspectRatio: '1',
+                          minHeight: '40px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '8px',
+                          cursor: isPast || isUnavailable ? 'not-allowed' : 'pointer',
+                          background: isUnavailable 
+                            ? '#fee2e2' 
+                            : isPast 
+                            ? '#f3f4f6' 
+                            : isSelected
+                            ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                            : 'white',
+                          color: isUnavailable 
+                            ? '#991b1b' 
+                            : isPast 
+                            ? '#9ca3af' 
+                            : isSelected
+                            ? 'white'
+                            : '#111827',
+                          border: isUnavailable 
+                            ? '2px solid #f87171' 
+                            : isPast 
+                            ? '2px solid #d1d5db' 
+                            : isSelected
+                            ? '2px solid #667eea'
+                            : '2px solid #e5e7eb',
+                          fontWeight: isSelected ? 700 : isUnavailable ? 600 : 500,
+                          fontSize: '0.9rem',
+                          transition: 'all 0.2s ease',
+                          position: 'relative'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isPast && !isUnavailable && !isSelected) {
+                            e.target.style.background = '#f9fafb'
+                            e.target.style.borderColor = '#667eea'
+                            e.target.style.transform = 'scale(1.05)'
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isPast && !isUnavailable && !isSelected) {
+                            e.target.style.background = 'white'
+                            e.target.style.borderColor = '#e5e7eb'
+                            e.target.style.transform = 'scale(1)'
+                          }
+                        }}
+                      >
+                        <span>{day}</span>
+                        {isUnavailable && reservationForDate && (
+                          <span style={{
+                            fontSize: '0.65rem',
+                            marginTop: '2px',
+                            opacity: 0.8
+                          }}>
+                            {reservationForDate.status === 'confirmed' ? '✓' : '○'}
+                          </span>
+                        )}
+                        {isToday && !isUnavailable && (
+                          <span style={{
+                            fontSize: '0.65rem',
+                            marginTop: '2px',
+                            color: '#667eea',
+                            fontWeight: 700
+                          }}>
+                            Today
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }
+                  
+                  return days;
+                })()}
+              </div>
+
+              {/* Legend */}
+              <div style={{
+                marginTop: '20px',
+                padding: '12px',
+                background: '#f9fafb',
+                borderRadius: '8px',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '16px',
+                fontSize: '0.875rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    background: 'white',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '4px'
+                  }}></div>
+                  <span>Available</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    background: '#fee2e2',
+                    border: '2px solid #f87171',
+                    borderRadius: '4px'
+                  }}></div>
+                  <span>Booked</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: '2px solid #667eea',
+                    borderRadius: '4px'
+                  }}></div>
+                  <span>Selected</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    background: '#f3f4f6',
+                    border: '2px solid #d1d5db',
+                    borderRadius: '4px'
+                  }}></div>
+                  <span>Past</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Unavailable Dates Display */}
           {unavailableDates.ranges.length > 0 && (
