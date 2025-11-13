@@ -30,7 +30,7 @@ const ConfirmationModal = ({ formData, onPrev }) => {
 
       
       // ✅ Save user info in Firestore
-      await setDoc(doc(db, 'Users', user.uid), {
+      const userData = {
         uid: user.uid,
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -46,7 +46,17 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         zipCode: formData.zipCode,
         profilePicture: formData.profilePicture || null,
         favourites: []
-      })
+      }
+
+      // ✅ Add default 700 points for host accounts
+      if (formData.role === 'host') {
+        userData.loyaltyPoints = 700
+        userData.points = 700 // Legacy support
+        userData.lifetimeLoyaltyPoints = 700
+        userData.lifetimePoints = 700 // Legacy support
+      }
+
+      await setDoc(doc(db, 'Users', user.uid), userData)
 
       // ✅ Create Host record if applicable
       if (formData.role === 'host') {

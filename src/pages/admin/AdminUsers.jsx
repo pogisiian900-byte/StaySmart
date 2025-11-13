@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react'
-import { collection, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, onSnapshot, doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import './admin-dashboard.css'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
@@ -170,13 +170,37 @@ const AdminUsers = () => {
     try {
       setUpdatingRole(userId)
       const userRef = doc(db, 'Users', userId)
+      const userSnap = await getDoc(userRef)
       
-      await updateDoc(userRef, {
+      const updateData = {
         role: newRole,
         updatedAt: serverTimestamp()
-      })
+      }
 
-      alert(`User role updated to ${newRole}`)
+      // ✅ Add default 700 points when role is changed to 'host' (if user doesn't already have points)
+      if (newRole === 'host') {
+        const userData = userSnap.exists() ? userSnap.data() : {}
+        const currentPoints = userData.loyaltyPoints || userData.points || 0
+        
+        // Only add default points if user has no points or very low points (less than 10)
+        if (currentPoints < 10) {
+          updateData.loyaltyPoints = 700
+          updateData.points = 700 // Legacy support
+          updateData.lifetimeLoyaltyPoints = 700
+          updateData.lifetimePoints = 700 // Legacy support
+        }
+        
+        // Create Host record if it doesn't exist
+        const hostRef = doc(db, 'Host', userId)
+        const hostSnap = await getDoc(hostRef)
+        if (!hostSnap.exists()) {
+          await setDoc(hostRef, { userId: userId })
+        }
+      }
+      
+      await updateDoc(userRef, updateData)
+
+      alert(`User role updated to ${newRole}${newRole === 'host' && updateData.loyaltyPoints ? ' (700 points added)' : ''}`)
       handleCloseDetailsDialog()
     } catch (error) {
       console.error('Error updating user role:', error)

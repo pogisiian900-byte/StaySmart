@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   collection,
   doc,
@@ -13,6 +13,8 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { db } from "../../config/firebase";
+import 'dialog-polyfill/dist/dialog-polyfill.css';
+import dialogPolyfill from 'dialog-polyfill';
 
 const TIER_LEVELS = [
   { id: "member", label: "Member", minPoints: 0, multiplier: 1 },
@@ -35,9 +37,18 @@ const Points = ({ hostId }) => {
   const [converting, setConverting] = useState(false);
   const [conversionError, setConversionError] = useState(null);
   const [conversionSuccess, setConversionSuccess] = useState(null);
+  const [showConversionDialog, setShowConversionDialog] = useState(false);
+  const conversionDialogRef = useRef(null);
   
   // Conversion rate: 1 point = 1 peso (you can adjust this)
   const CONVERSION_RATE = 1; // 1 point = 1 peso
+
+  // Register dialog polyfill
+  useEffect(() => {
+    if (conversionDialogRef.current && !conversionDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(conversionDialogRef.current);
+    }
+  }, [showConversionDialog]);
 
   useEffect(() => {
     if (!hostId) return;
@@ -142,8 +153,8 @@ const Points = ({ hostId }) => {
     return (points * CONVERSION_RATE).toFixed(2);
   };
 
-  // Handle points to cash conversion
-  const handleConvertPoints = async () => {
+  // Show conversion confirmation dialog
+  const handleShowConversionDialog = () => {
     if (!hostId) {
       setConversionError("User ID not found");
       return;
@@ -168,6 +179,32 @@ const Points = ({ hostId }) => {
       return;
     }
 
+    setShowConversionDialog(true);
+    if (conversionDialogRef.current) {
+      try {
+        if (typeof conversionDialogRef.current.showModal === 'function') {
+          conversionDialogRef.current.showModal();
+        } else {
+          dialogPolyfill.registerDialog(conversionDialogRef.current);
+          conversionDialogRef.current.showModal();
+        }
+      } catch (err) {
+        console.error('Error showing conversion dialog:', err);
+        conversionDialogRef.current.style.display = 'block';
+      }
+    }
+  };
+
+  // Close conversion dialog
+  const handleCloseConversionDialog = () => {
+    setShowConversionDialog(false);
+    conversionDialogRef.current?.close();
+  };
+
+  // Handle points to cash conversion (after confirmation)
+  const handleConvertPoints = async () => {
+    handleCloseConversionDialog();
+    
     setConverting(true);
     setConversionError(null);
     setConversionSuccess(null);
@@ -581,7 +618,7 @@ const Points = ({ hostId }) => {
             }}>
               <button
                 type="button"
-                onClick={handleConvertPoints}
+                onClick={handleShowConversionDialog}
                 disabled={converting || loadingAccount || !conversionAmount || parseFloat(conversionAmount) <= 0}
                 style={{
                   width: '100%',
@@ -950,6 +987,127 @@ const Points = ({ hostId }) => {
           </ul>
         ) : null}
       </section>
+
+      {/* Conversion Confirmation Dialog */}
+      {showConversionDialog && (
+        <dialog 
+          ref={conversionDialogRef} 
+          className="conversion-confirmation-dialog" 
+          style={{ 
+            maxWidth: '500px', 
+            width: '90%', 
+            border: 'none', 
+            borderRadius: '16px', 
+            padding: 0, 
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' 
+          }}
+        >
+          <style>
+            {`.conversion-confirmation-dialog::backdrop {
+              background: rgba(0, 0, 0, 0.5);
+              backdrop-filter: blur(4px);
+            }`}
+          </style>
+          <div style={{ padding: '30px', textAlign: 'center' }}>
+            <div style={{ fontSize: '48px', marginBottom: '20px' }}>💰</div>
+            <h2 style={{ margin: '0 0 15px 0', fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
+              Confirm Points Conversion
+            </h2>
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.05), rgba(49, 50, 111, 0.02))',
+              borderRadius: '12px',
+              padding: '20px',
+              margin: '20px 0',
+              border: '2px solid rgba(49, 50, 111, 0.1)'
+            }}>
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Points to Convert
+                </p>
+                <p style={{ margin: 0, fontSize: '28px', fontWeight: '700', color: '#31326f' }}>
+                  {parseFloat(conversionAmount || 0).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })} <span style={{ fontSize: '18px', color: '#6b7280' }}>pts</span>
+                </p>
+              </div>
+              <div style={{
+                width: '100%',
+                height: '1px',
+                background: 'rgba(49, 50, 111, 0.2)',
+                margin: '16px 0'
+              }} />
+              <div>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Cash Value
+                </p>
+                <p style={{ margin: 0, fontSize: '32px', fontWeight: '700', color: '#10b981' }}>
+                  ₱{parseFloat(calculateCashValue(parseFloat(conversionAmount || 0))).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                </p>
+              </div>
+            </div>
+            <p style={{ margin: '0 0 30px 0', fontSize: '16px', color: '#6b7280', lineHeight: '1.5' }}>
+              Are you sure you want to convert these points to cash? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+              <button
+                onClick={handleCloseConversionDialog}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
+                  background: 'white',
+                  color: '#374151',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#f9fafb';
+                  e.target.style.borderColor = '#d1d5db';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'white';
+                  e.target.style.borderColor = '#e5e7eb';
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConvertPoints}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #31326F, #637AB9)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 4px 12px rgba(49, 50, 111, 0.3)'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = 'linear-gradient(135deg, #252550, #4a5a8a)';
+                  e.target.style.transform = 'translateY(-1px)';
+                  e.target.style.boxShadow = '0 6px 16px rgba(49, 50, 111, 0.4)';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'linear-gradient(135deg, #31326F, #637AB9)';
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 4px 12px rgba(49, 50, 111, 0.3)';
+                }}
+              >
+                Confirm Conversion
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
     </div>
   );
 };

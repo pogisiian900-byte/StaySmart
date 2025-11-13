@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { collection, getDocs, query, doc, getDoc } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import Loading from '../../components/Loading'
@@ -17,6 +18,82 @@ const AdminReports = () => {
   })
   const [generating, setGenerating] = useState(false)
   const [hosts, setHosts] = useState([])
+  const [showStartCalendar, setShowStartCalendar] = useState(false)
+  const [showEndCalendar, setShowEndCalendar] = useState(false)
+  const [startCalendarMonth, setStartCalendarMonth] = useState(new Date().getMonth())
+  const [startCalendarYear, setStartCalendarYear] = useState(new Date().getFullYear())
+  const [endCalendarMonth, setEndCalendarMonth] = useState(new Date().getMonth())
+  const [endCalendarYear, setEndCalendarYear] = useState(new Date().getFullYear())
+  const startCalendarRef = useRef(null)
+  const endCalendarRef = useRef(null)
+  const startButtonRef = useRef(null)
+  const endButtonRef = useRef(null)
+  const [startCalendarPosition, setStartCalendarPosition] = useState({ top: 0, left: 0 })
+  const [endCalendarPosition, setEndCalendarPosition] = useState({ top: 0, left: 0 })
+
+  // Position calendars when they open
+  useEffect(() => {
+    if (showStartCalendar && startButtonRef.current) {
+      const rect = startButtonRef.current.getBoundingClientRect()
+      setStartCalendarPosition({
+        top: rect.bottom + window.scrollY + 8,
+        left: rect.left + window.scrollX
+      })
+    }
+  }, [showStartCalendar])
+
+  useEffect(() => {
+    if (showEndCalendar && endButtonRef.current) {
+      const rect = endButtonRef.current.getBoundingClientRect()
+      setEndCalendarPosition({
+        top: rect.bottom + window.scrollY + 8,
+        left: rect.left + window.scrollX
+      })
+    }
+  }, [showEndCalendar])
+
+  // Close calendars when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showStartCalendar &&
+        startCalendarRef.current &&
+        !startCalendarRef.current.contains(event.target) &&
+        startButtonRef.current &&
+        !startButtonRef.current.contains(event.target)
+      ) {
+        setShowStartCalendar(false)
+      }
+      if (
+        showEndCalendar &&
+        endCalendarRef.current &&
+        !endCalendarRef.current.contains(event.target) &&
+        endButtonRef.current &&
+        !endButtonRef.current.contains(event.target)
+      ) {
+        setShowEndCalendar(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showStartCalendar, showEndCalendar])
+
+  // Helper function to format date as YYYY-MM-DD
+  const formatDate = (date) => {
+    if (!date) return ''
+    const d = date instanceof Date ? date : new Date(date)
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayStr = formatDate(today)
 
   // Fetch all listings
   useEffect(() => {
@@ -221,8 +298,8 @@ const AdminReports = () => {
     }
   }, [selectedHost, selectedListing, listings])
 
-  // Format date helper
-  const formatDate = (dateValue) => {
+  // Format date helper for PDF display
+  const formatDateForDisplay = (dateValue) => {
     if (!dateValue) return 'N/A'
     const date = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue)
     return date.toLocaleDateString('en-US', {
@@ -352,8 +429,8 @@ const AdminReports = () => {
         (booking.listingTitle || 'N/A').substring(0, 20),
         (booking.hostName || 'Host').substring(0, 18),
         (booking.guestName || 'Guest').substring(0, 18),
-        formatDate(booking.checkIn).substring(0, 10),
-        formatDate(booking.checkOut).substring(0, 10),
+        formatDateForDisplay(booking.checkIn).substring(0, 10),
+        formatDateForDisplay(booking.checkOut).substring(0, 10),
         String(booking.nights || 0),
         (booking.status || 'N/A').substring(0, 10),
         amountText
@@ -514,7 +591,7 @@ const AdminReports = () => {
         (review.userName || 'Anonymous').substring(0, 15),
         '⭐'.repeat(review.rating || 0),
         comment,
-        formatDate(review.timestamp).substring(0, 10)
+        formatDateForDisplay(review.timestamp).substring(0, 10)
       ]
 
       rowData.forEach((cell, i) => {
@@ -858,7 +935,7 @@ const AdminReports = () => {
         amountText,
         serviceFeeText,
         totalText,
-        formatDate(bookingDate).substring(0, 10),
+        formatDateForDisplay(bookingDate).substring(0, 10),
         (booking.status || 'N/A').substring(0, 10)
       ]
 
@@ -928,7 +1005,6 @@ const AdminReports = () => {
   }
 
   // Get today's date in YYYY-MM-DD format for max date restriction
-  const today = new Date().toISOString().split('T')[0]
 
   return (
     <div style={{
@@ -1078,7 +1154,9 @@ const AdminReports = () => {
         borderRadius: '12px',
         padding: '24px',
         marginBottom: '24px',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)'
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+        position: 'relative',
+        zIndex: 1
       }}>
         <h3 style={{
           fontSize: '1.125rem',
@@ -1185,8 +1263,8 @@ const AdminReports = () => {
             </select>
           </div>
 
-          {/* Start Date */}
-          <div>
+          {/* Start Date - Calendar Picker */}
+          <div style={{ position: 'relative' }}>
             <label style={{
               display: 'block',
               fontSize: '0.875rem',
@@ -1196,31 +1274,292 @@ const AdminReports = () => {
             }}>
               Start Date
             </label>
-            <input
-              type="date"
-              value={dateRange.startDate}
-              onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-              max={today}
+            <div
+              ref={startButtonRef}
+              onClick={() => setShowStartCalendar(true)}
               style={{
                 width: '100%',
                 padding: '12px 16px',
                 border: '2px solid #e5e7eb',
                 borderRadius: '10px',
                 fontSize: '0.95rem',
-                outline: 'none',
+                background: 'white',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 boxSizing: 'border-box'
               }}
-              onFocus={(e) => {
-                e.target.style.borderColor = '#667eea'
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#667eea'
+                e.currentTarget.style.background = '#f9fafb'
               }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#e5e7eb'
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb'
+                e.currentTarget.style.background = 'white'
               }}
-            />
+            >
+              <span style={{ color: dateRange.startDate ? '#1f2937' : '#9ca3af' }}>
+                {dateRange.startDate 
+                  ? new Date(dateRange.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  : 'Select start date'}
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </div>
+
+            {/* Start Date Calendar */}
+            {showStartCalendar && createPortal(
+              <div 
+                ref={startCalendarRef}
+                style={{
+                  position: 'fixed',
+                  zIndex: 99999,
+                  top: `${startCalendarPosition.top}px`,
+                  left: `${startCalendarPosition.left}px`,
+                  padding: '20px',
+                  background: 'white',
+                  borderRadius: '16px',
+                  border: '2px solid #e5e7eb',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+                  width: '400px',
+                  maxHeight: '90vh',
+                  overflowY: 'auto'
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '20px'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (startCalendarMonth === 0) {
+                        setStartCalendarMonth(11)
+                        setStartCalendarYear(startCalendarYear - 1)
+                      } else {
+                        setStartCalendarMonth(startCalendarMonth - 1)
+                      }
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      background: '#f3f4f6',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '1.2rem',
+                      color: '#374151',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#e5e7eb'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = '#f3f4f6'
+                    }}
+                  >
+                    ❮
+                  </button>
+                  <h3 style={{
+                    margin: 0,
+                    fontSize: '1.25rem',
+                    fontWeight: 700,
+                    color: '#111827'
+                  }}>
+                    {new Date(startCalendarYear, startCalendarMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (startCalendarMonth === 11) {
+                        setStartCalendarMonth(0)
+                        setStartCalendarYear(startCalendarYear + 1)
+                      } else {
+                        setStartCalendarMonth(startCalendarMonth + 1)
+                      }
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      background: '#f3f4f6',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '1.2rem',
+                      color: '#374151',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#e5e7eb'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = '#f3f4f6'
+                    }}
+                  >
+                    ❯
+                  </button>
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                  gap: '8px',
+                  marginBottom: '12px'
+                }}>
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div key={day} style={{
+                      textAlign: 'center',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      color: '#6b7280',
+                      padding: '8px 0'
+                    }}>
+                      {day}
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                  gap: '8px'
+                }}>
+                  {(() => {
+                    const firstDay = new Date(startCalendarYear, startCalendarMonth, 1).getDay()
+                    const daysInMonth = new Date(startCalendarYear, startCalendarMonth + 1, 0).getDate()
+                    const days = []
+                    
+                    for (let i = 0; i < firstDay; i++) {
+                      days.push(
+                        <div key={`empty-${i}`} style={{ aspectRatio: '1', minHeight: '40px' }}></div>
+                      )
+                    }
+                    
+                    for (let day = 1; day <= daysInMonth; day++) {
+                      const dateStr = formatDate(new Date(startCalendarYear, startCalendarMonth, day))
+                      const dateObj = new Date(startCalendarYear, startCalendarMonth, day)
+                      dateObj.setHours(0, 0, 0, 0)
+                      const isPast = dateObj > today
+                      const isToday = day === today.getDate() && 
+                                     startCalendarMonth === today.getMonth() && 
+                                     startCalendarYear === today.getFullYear()
+                      const isSelected = dateRange.startDate === dateStr
+
+                      days.push(
+                        <div
+                          key={day}
+                          onClick={() => {
+                            if (isPast) return
+                            setDateRange(prev => ({ ...prev, startDate: dateStr }))
+                            setShowStartCalendar(false)
+                            // If end date is before new start date, clear it
+                            if (dateRange.endDate && dateStr > dateRange.endDate) {
+                              setDateRange(prev => ({ ...prev, endDate: '' }))
+                            }
+                          }}
+                          style={{
+                            aspectRatio: '1',
+                            minHeight: '40px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '8px',
+                            cursor: isPast ? 'not-allowed' : 'pointer',
+                            background: isSelected
+                              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                              : isPast
+                              ? '#f3f4f6'
+                              : 'white',
+                            color: isSelected
+                              ? 'white'
+                              : isPast
+                              ? '#9ca3af'
+                              : '#111827',
+                            border: isSelected
+                              ? '2px solid #667eea'
+                              : isPast
+                              ? '2px solid #d1d5db'
+                              : '2px solid #e5e7eb',
+                            fontWeight: isSelected ? 700 : 500,
+                            fontSize: '0.9rem',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isPast && !isSelected) {
+                              e.target.style.background = '#f9fafb'
+                              e.target.style.borderColor = '#667eea'
+                              e.target.style.transform = 'scale(1.05)'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isPast && !isSelected) {
+                              e.target.style.background = 'white'
+                              e.target.style.borderColor = '#e5e7eb'
+                              e.target.style.transform = 'scale(1)'
+                            }
+                          }}
+                        >
+                          <span>{day}</span>
+                          {isToday && !isSelected && (
+                            <span style={{
+                              fontSize: '0.65rem',
+                              marginTop: '2px',
+                              color: '#667eea',
+                              fontWeight: 700
+                            }}>
+                              Today
+                            </span>
+                          )}
+                        </div>
+                      )
+                    }
+                    
+                    return days
+                  })()}
+                </div>
+
+                <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowStartCalendar(false)}
+                    style={{
+                      padding: '10px 20px',
+                      background: '#667eea',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '0.95rem',
+                      fontWeight: 600,
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#5568d3'
+                      e.target.style.transform = 'translateY(-1px)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = '#667eea'
+                      e.target.style.transform = 'translateY(0)'
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>,
+              document.body
+            )}
           </div>
 
-          {/* End Date */}
-          <div>
+          {/* End Date - Calendar Picker */}
+          <div style={{ position: 'relative' }}>
             <label style={{
               display: 'block',
               fontSize: '0.875rem',
@@ -1230,28 +1569,285 @@ const AdminReports = () => {
             }}>
               End Date
             </label>
-            <input
-              type="date"
-              value={dateRange.endDate}
-              onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-              min={dateRange.startDate}
-              max={today}
+            <div
+              ref={endButtonRef}
+              onClick={() => setShowEndCalendar(true)}
               style={{
                 width: '100%',
                 padding: '12px 16px',
                 border: '2px solid #e5e7eb',
                 borderRadius: '10px',
                 fontSize: '0.95rem',
-                outline: 'none',
+                background: 'white',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 boxSizing: 'border-box'
               }}
-              onFocus={(e) => {
-                e.target.style.borderColor = '#667eea'
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#667eea'
+                e.currentTarget.style.background = '#f9fafb'
               }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#e5e7eb'
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb'
+                e.currentTarget.style.background = 'white'
               }}
-            />
+            >
+              <span style={{ color: dateRange.endDate ? '#1f2937' : '#9ca3af' }}>
+                {dateRange.endDate 
+                  ? new Date(dateRange.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  : 'Select end date'}
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </div>
+
+            {/* End Date Calendar */}
+            {showEndCalendar && createPortal(
+              <div 
+                ref={endCalendarRef}
+                style={{
+                  position: 'fixed',
+                  zIndex: 99999,
+                  top: `${endCalendarPosition.top}px`,
+                  left: `${endCalendarPosition.left}px`,
+                  padding: '20px',
+                  background: 'white',
+                  borderRadius: '16px',
+                  border: '2px solid #e5e7eb',
+                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+                  width: '400px',
+                  maxHeight: '90vh',
+                  overflowY: 'auto'
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '20px'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (endCalendarMonth === 0) {
+                        setEndCalendarMonth(11)
+                        setEndCalendarYear(endCalendarYear - 1)
+                      } else {
+                        setEndCalendarMonth(endCalendarMonth - 1)
+                      }
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      background: '#f3f4f6',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '1.2rem',
+                      color: '#374151',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#e5e7eb'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = '#f3f4f6'
+                    }}
+                  >
+                    ❮
+                  </button>
+                  <h3 style={{
+                    margin: 0,
+                    fontSize: '1.25rem',
+                    fontWeight: 700,
+                    color: '#111827'
+                  }}>
+                    {new Date(endCalendarYear, endCalendarMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (endCalendarMonth === 11) {
+                        setEndCalendarMonth(0)
+                        setEndCalendarYear(endCalendarYear + 1)
+                      } else {
+                        setEndCalendarMonth(endCalendarMonth + 1)
+                      }
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      background: '#f3f4f6',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '1.2rem',
+                      color: '#374151',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#e5e7eb'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = '#f3f4f6'
+                    }}
+                  >
+                    ❯
+                  </button>
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                  gap: '8px',
+                  marginBottom: '12px'
+                }}>
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                    <div key={day} style={{
+                      textAlign: 'center',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      color: '#6b7280',
+                      padding: '8px 0'
+                    }}>
+                      {day}
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                  gap: '8px'
+                }}>
+                  {(() => {
+                    const firstDay = new Date(endCalendarYear, endCalendarMonth, 1).getDay()
+                    const daysInMonth = new Date(endCalendarYear, endCalendarMonth + 1, 0).getDate()
+                    const days = []
+                    
+                    for (let i = 0; i < firstDay; i++) {
+                      days.push(
+                        <div key={`empty-${i}`} style={{ aspectRatio: '1', minHeight: '40px' }}></div>
+                      )
+                    }
+                    
+                    for (let day = 1; day <= daysInMonth; day++) {
+                      const dateStr = formatDate(new Date(endCalendarYear, endCalendarMonth, day))
+                      const dateObj = new Date(endCalendarYear, endCalendarMonth, day)
+                      dateObj.setHours(0, 0, 0, 0)
+                      const isPast = dateObj > today
+                      const isBeforeStart = dateRange.startDate && dateStr < dateRange.startDate
+                      const isToday = day === today.getDate() && 
+                                     endCalendarMonth === today.getMonth() && 
+                                     endCalendarYear === today.getFullYear()
+                      const isSelected = dateRange.endDate === dateStr
+
+                      days.push(
+                        <div
+                          key={day}
+                          onClick={() => {
+                            if (isPast || isBeforeStart) return
+                            setDateRange(prev => ({ ...prev, endDate: dateStr }))
+                            setShowEndCalendar(false)
+                          }}
+                          style={{
+                            aspectRatio: '1',
+                            minHeight: '40px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '8px',
+                            cursor: isPast || isBeforeStart ? 'not-allowed' : 'pointer',
+                            background: isSelected
+                              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                              : isPast || isBeforeStart
+                              ? '#f3f4f6'
+                              : 'white',
+                            color: isSelected
+                              ? 'white'
+                              : isPast || isBeforeStart
+                              ? '#9ca3af'
+                              : '#111827',
+                            border: isSelected
+                              ? '2px solid #667eea'
+                              : isPast || isBeforeStart
+                              ? '2px solid #d1d5db'
+                              : '2px solid #e5e7eb',
+                            fontWeight: isSelected ? 700 : 500,
+                            fontSize: '0.9rem',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isPast && !isBeforeStart && !isSelected) {
+                              e.target.style.background = '#f9fafb'
+                              e.target.style.borderColor = '#667eea'
+                              e.target.style.transform = 'scale(1.05)'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isPast && !isBeforeStart && !isSelected) {
+                              e.target.style.background = 'white'
+                              e.target.style.borderColor = '#e5e7eb'
+                              e.target.style.transform = 'scale(1)'
+                            }
+                          }}
+                        >
+                          <span>{day}</span>
+                          {isToday && !isSelected && (
+                            <span style={{
+                              fontSize: '0.65rem',
+                              marginTop: '2px',
+                              color: '#667eea',
+                              fontWeight: 700
+                            }}>
+                              Today
+                            </span>
+                          )}
+                        </div>
+                      )
+                    }
+                    
+                    return days
+                  })()}
+                </div>
+
+                <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowEndCalendar(false)}
+                    style={{
+                      padding: '10px 20px',
+                      background: '#667eea',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '0.95rem',
+                      fontWeight: 600,
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#5568d3'
+                      e.target.style.transform = 'translateY(-1px)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = '#667eea'
+                      e.target.style.transform = 'translateY(0)'
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>,
+              document.body
+            )}
           </div>
         </div>
       </div>
@@ -1262,7 +1858,9 @@ const AdminReports = () => {
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           gap: '16px',
-          marginBottom: '24px'
+          marginBottom: '24px',
+          position: 'relative',
+          zIndex: 1
         }}>
           <div style={{
             background: 'white',
@@ -1410,7 +2008,9 @@ const AdminReports = () => {
         borderRadius: '12px',
         padding: '24px',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-        textAlign: 'center'
+        textAlign: 'center',
+        position: 'relative',
+        zIndex: 1
       }}>
         <button
           onClick={reportType === 'bookings' ? generateBookingsReport : generateReviewsReport}
