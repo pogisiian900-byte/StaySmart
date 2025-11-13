@@ -450,6 +450,7 @@ function Guest_Logged_Navigation({ userData }) {
             </div>
 
             <button onClick={() => { navigate("favourites"); setOpen(false); }}>Favorites</button>
+            <button onClick={() => { navigate("reviews"); setOpen(false); }}>Reviews & Ratings</button>
             <button onClick={()=> openMessages()}>Messages</button>
             <button onClick={() => navigate("account-settings")}>Account Settings</button>
             <button onClick={() => { handleNotificationClick(); setOpen(false); }}>Notifications {unreadCount > 0 && `(${unreadCount})`}</button>

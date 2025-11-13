@@ -31,6 +31,11 @@ const SelectedListingBookingConfirmation = () => {
   const [selectedPaymentMethodType, setSelectedPaymentMethodType] = useState(null); // For confirmation dialog
   const [showInsufficientBalanceDialog, setShowInsufficientBalanceDialog] = useState(false);
   const insufficientBalanceDialogRef = useRef(null);
+  // Recommendations dialog state
+  const [showRecommendationsDialog, setShowRecommendationsDialog] = useState(false);
+  const recommendationsDialogRef = useRef(null);
+  const [recommendedListings, setRecommendedListings] = useState([]);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   // Removed PayPal-related states - using Firebase balance instead
   
   // Booking data state (fallback if location.state is missing)
@@ -232,6 +237,9 @@ const SelectedListingBookingConfirmation = () => {
     }
     if (insufficientBalanceDialogRef.current && !insufficientBalanceDialogRef.current.showModal) {
       dialogPolyfill.registerDialog(insufficientBalanceDialogRef.current);
+    }
+    if (recommendationsDialogRef.current && !recommendationsDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(recommendationsDialogRef.current);
     }
   }, []);
 
@@ -760,7 +768,10 @@ const SelectedListingBookingConfirmation = () => {
         last4: paymentForm.cardNumber.replace(/\D/g, '').slice(-4),
         cardHolder: paymentForm.cardHolder,
         expiryDate: paymentForm.expiryDate
-      } : finalPaymentMethod);
+      } : {
+        type: 'balance',
+        transactionId: paymentData?.transactionId || null
+      });
 
       const reservation = {
         status: 'pending', // pending -> confirmed/cancelled
@@ -840,13 +851,99 @@ const SelectedListingBookingConfirmation = () => {
         const guestNotificationRef = await addDoc(collection(db, 'Notifications'), guestNotification);
       }
 
-      alert('Booking request sent successfully!');
-      // Navigate to guest bookings page or reservation details
-      navigate(`/guest/${guestId}/bookings`);
+      // Fetch recommended listings before showing dialog
+      await fetchRecommendedListings();
+      
+      // Show recommendations dialog
+      setShowRecommendationsDialog(true);
+      setTimeout(() => {
+        if (recommendationsDialogRef.current) {
+          try {
+            if (typeof recommendationsDialogRef.current.showModal === 'function') {
+              recommendationsDialogRef.current.showModal();
+            } else {
+              dialogPolyfill.registerDialog(recommendationsDialogRef.current);
+              recommendationsDialogRef.current.showModal();
+            }
+          } catch (err) {
+            console.error('Error showing recommendations dialog:', err);
+            recommendationsDialogRef.current.style.display = 'block';
+          }
+        }
+      }, 100);
     } catch (err) {
       console.error('Error creating reservation:', err);
       showError('Failed to create reservation. Please try again.');
     }
+  };
+
+  // Fetch recommended listings based on serviceType
+  const fetchRecommendedListings = async () => {
+    try {
+      setLoadingRecommendations(true);
+      const currentListingId = listing.id || listingId;
+      const currentServiceType = listing.serviceType || '';
+      
+      console.log('Fetching recommendations for serviceType:', currentServiceType);
+      
+      if (!currentServiceType) {
+        console.log('No serviceType found in current listing');
+        setRecommendedListings([]);
+        setLoadingRecommendations(false);
+        return;
+      }
+
+      // Fetch all listings
+      const listingsRef = collection(db, 'Listings');
+      const snapshot = await getDocs(listingsRef);
+      
+      // Filter listings with exact same serviceType, exclude current listing
+      const allListings = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(item => {
+          // Exclude current listing
+          if (item.id === currentListingId) return false;
+          
+          // Get serviceType from item (handle different possible field names)
+          const itemServiceType = (item.serviceType || item.service || '').toString().trim().toLowerCase();
+          const currentServiceTypeLower = currentServiceType.toString().trim().toLowerCase();
+          
+          // Exact match for serviceType (case-insensitive)
+          const matches = itemServiceType === currentServiceTypeLower;
+          
+          if (matches) {
+            console.log('Found matching listing:', item.id, item.title || item.name, 'serviceType:', item.serviceType);
+          }
+          
+          return matches;
+        });
+
+      console.log(`Found ${allListings.length} listings with serviceType "${currentServiceType}"`);
+
+      // Shuffle and get 3 random listings
+      const shuffled = allListings.sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, 3);
+      
+      console.log('Selected recommendations:', selected.length);
+      setRecommendedListings(selected);
+    } catch (error) {
+      console.error('Error fetching recommended listings:', error);
+      setRecommendedListings([]);
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  };
+
+  const handleCloseRecommendationsDialog = () => {
+    setShowRecommendationsDialog(false);
+    recommendationsDialogRef.current?.close();
+    // Navigate to bookings page after closing
+    navigate(`/guest/${guestId}/bookings`);
+  };
+
+  const handleViewRecommendedListing = (recommendedListingId) => {
+    handleCloseRecommendationsDialog();
+    navigate(`/guest/${guestId}/listing/${recommendedListingId}`);
   };
 
   const submitBooking = async () => {
@@ -1391,6 +1488,98 @@ const SelectedListingBookingConfirmation = () => {
                 Insufficient Balance
               </button>
             )}
+          </div>
+        </div>
+      </dialog>
+
+      {/* Recommendations Dialog */}
+      <dialog ref={recommendationsDialogRef} className="recommendations-dialog">
+        <div className="recommendations-dialog-content">
+          <div className="recommendations-dialog-header">
+            <div className="recommendations-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+              </svg>
+            </div>
+            <h3 className="recommendations-dialog-title">🎉 Booking Confirmed!</h3>
+            <button onClick={handleCloseRecommendationsDialog} className="close-recommendations-dialog-btn" aria-label="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div className="recommendations-dialog-body">
+            <p className="recommendations-success-message">
+              Your booking request has been sent successfully! The host will review and confirm your reservation.
+            </p>
+            <div className="recommendations-section">
+              <h4 className="recommendations-section-title">
+                🌟 You might also like these {listing.serviceType || 'similar'} listings:
+              </h4>
+              {loadingRecommendations ? (
+                <div className="recommendations-loading">
+                  <div className="spinner-small"></div>
+                  <p>Loading recommendations...</p>
+                </div>
+              ) : recommendedListings.length > 0 ? (
+                <div className="recommendations-grid">
+                  {recommendedListings.map((recommendedListing) => (
+                    <div 
+                      key={recommendedListing.id} 
+                      className="recommended-listing-card"
+                      onClick={() => handleViewRecommendedListing(recommendedListing.id)}
+                    >
+                      <div className="recommended-listing-image">
+                        {recommendedListing.photos?.[0] || recommendedListing.images?.[0] ? (
+                          <img 
+                            src={recommendedListing.photos?.[0] || recommendedListing.images?.[0]} 
+                            alt={recommendedListing.title || recommendedListing.name}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div className="recommended-image-placeholder" style={{ display: (recommendedListing.photos?.[0] || recommendedListing.images?.[0]) ? 'none' : 'flex' }}>
+                          <span>🏠</span>
+                        </div>
+                      </div>
+                      <div className="recommended-listing-info">
+                        <h5 className="recommended-listing-title">
+                          {recommendedListing.title || recommendedListing.name || 'Untitled Listing'}
+                        </h5>
+                        <div className="recommended-listing-details">
+                          {recommendedListing.rating && (
+                            <div className="recommended-listing-rating">
+                              <span className="star-filled">★</span>
+                              <span>{Number(recommendedListing.rating).toFixed(1)}</span>
+                            </div>
+                          )}
+                          {recommendedListing.price && (
+                            <div className="recommended-listing-price">
+                              <span className="price-amount">₱{Number(recommendedListing.price).toLocaleString()}</span>
+                              <span className="price-period">/night</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="recommendations-empty">
+                  <p>No similar listings found at the moment.</p>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="recommendations-dialog-actions">
+            <button onClick={handleCloseRecommendationsDialog} className="recommendations-close-btn">
+              View My Bookings
+            </button>
           </div>
         </div>
       </dialog>
