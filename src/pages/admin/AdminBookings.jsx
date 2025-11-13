@@ -199,7 +199,8 @@ const AdminBookings = () => {
       // If confirmed, process payments (host gets subtotal, admin gets service fee)
       if (newStatus === 'confirmed' && bookingData.pricing) {
         const hostEarnings = bookingData.pricing.subtotal || 0 // Host gets subtotal
-        const serviceFee = bookingData.pricing.serviceFee || 300 // Service fee goes to admin
+        // Service fee is 10% of subtotal (fallback for old bookings)
+        const serviceFee = bookingData.pricing.serviceFee || Math.round(hostEarnings * 0.1)
         const hostId = bookingData.hostId
 
         if (hostEarnings > 0 && hostId) {

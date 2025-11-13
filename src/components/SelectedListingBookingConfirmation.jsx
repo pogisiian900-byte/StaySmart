@@ -189,11 +189,14 @@ const SelectedListingBookingConfirmation = () => {
   const basePrice = listing.price || 0;
   const baseTotal = basePrice * nights;
   
-  // Apply discount from listing (if available)
-  const discountPercent = listing.discount || 0;
+  // Apply discount ONLY if promo code was entered by user
+  // Check if user entered a promo code (appliedPromoCode exists in listing)
+  const hasEnteredPromoCode = listing.appliedPromoCode && listing.appliedPromoCode.trim() !== '';
+  const discountPercent = (hasEnteredPromoCode && listing.discount) ? listing.discount : 0;
   const discountAmount = discountPercent > 0 ? (baseTotal * discountPercent / 100) : 0;
   const subtotal = baseTotal - discountAmount;
-  const serviceFee = 300;
+  // Service fee is 10% of the booking subtotal
+  const serviceFee = Math.round(subtotal * 0.1);
   const grandTotal = subtotal + serviceFee;
   
   // Legacy total for backwards compatibility (used in some places)
@@ -962,8 +965,8 @@ const SelectedListingBookingConfirmation = () => {
                   </svg>
                   <div>
                     <p className="discount-badge-title">{discountPercent}% DISCOUNT APPLIED</p>
-                    {listing.promoCode && (
-                      <p className="discount-badge-code">Promo Code: {listing.promoCode}</p>
+                    {listing.appliedPromoCode && (
+                      <p className="discount-badge-code">Promo Code: {listing.appliedPromoCode}</p>
                     )}
                   </div>
                 </div>
@@ -1288,10 +1291,10 @@ const SelectedListingBookingConfirmation = () => {
                       -₱{discountAmount.toLocaleString()}
                     </span>
                   </div>
-                  {listing.promoCode && (
+                  {listing.appliedPromoCode && (
                     <div className="confirm-detail-row" style={{ fontSize: '0.9rem', color: '#666' }}>
                       <span className="confirm-label">Promo Code:</span>
-                      <span className="confirm-value"><strong>{listing.promoCode}</strong></span>
+                      <span className="confirm-value"><strong>{listing.appliedPromoCode}</strong></span>
                     </div>
                   )}
                 </>

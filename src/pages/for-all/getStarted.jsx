@@ -1,27 +1,25 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { auth } from '../../config/firebase'
-import { onAuthStateChanged } from 'firebase/auth'
+import { db } from '../../config/firebase'
+import { doc, getDoc } from 'firebase/firestore'
 import getStartedICON from '/static/getStarted.gif'
 
 const GetStarted = () => {
   const { hostId } = useParams()
   const navigate = useNavigate()
-  const [isVerified, setIsVerified] = useState(false)
+  const [isValidHost, setIsValidHost] = useState(false)
   const [checking, setChecking] = useState(true)
 
   const handleStarted = () => {
-    if (hostId && isVerified) {
+    if (hostId && isValidHost) {
       navigate('setupService')
-    } else if (!isVerified) {
-      alert('Please verify your email before proceeding.')
     } else {
       navigate('/error')
     }
   }
 
   const handleLater = () => {
-    if (hostId) {
+    if (hostId && isValidHost) {
       navigate(`/host/${hostId}`)
     } else {
       alert('ACCOUNT NOT FOUND | OR ERROR')
@@ -34,24 +32,30 @@ const GetStarted = () => {
       return
     }
 
-    // ✅ Listen for Firebase auth changes
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        await user.reload() // refresh user info
-        if (user.emailVerified) {
-          console.log('✅ Email verified for host:', user.uid)
-          setIsVerified(true)
+    // Check if hostId exists in Host collection
+    const checkHostId = async () => {
+      try {
+        const hostDocRef = doc(db, 'Host', hostId)
+        const hostDoc = await getDoc(hostDocRef)
+        
+        if (hostDoc.exists()) {
+          console.log('✅ Valid host ID:', hostId)
+          setIsValidHost(true)
         } else {
-          console.log('❌ Email not verified yet.')
-          setIsVerified(false)
+          console.log('❌ Host ID not found:', hostId)
+          setIsValidHost(false)
+          navigate('/error')
         }
-      } else {
-        console.log('⚠️ No user signed in.')
+      } catch (error) {
+        console.error('Error checking host ID:', error)
+        setIsValidHost(false)
+        navigate('/error')
+      } finally {
+        setChecking(false)
       }
-      setChecking(false)
-    })
+    }
 
-    return () => unsubscribe()
+    checkHostId()
   }, [hostId, navigate])
 
   return (
@@ -67,10 +71,10 @@ const GetStarted = () => {
               <div className="loading-spinner-container">
                 <div className="loading-spinner"></div>
               </div>
-              <h1>Checking your verification status...</h1>
-              <p>Please wait a moment while we verify your account.</p>
+              <h1>Loading...</h1>
+              <p>Please wait a moment.</p>
             </>
-          ) : isVerified ? (
+          ) : isValidHost ? (
             <>
               <div className="success-icon">✨</div>
               <h1>
@@ -95,22 +99,13 @@ const GetStarted = () => {
             </>
           ) : (
             <>
-              <div className="verification-icon">🔒</div>
-              <h1>Please verify your email</h1>
+              <div className="verification-icon">❌</div>
+              <h1>Invalid Host ID</h1>
               <p className="subtitle-text">
-                We've sent a verification link to your email address.
+                The host ID provided is not valid.
                 <br />
-                Click the link to verify your account, then return here to continue.
+                Please check your link and try again.
               </p>
-              <button
-                className="btn-start"
-                onClick={() => window.location.reload()}
-              >
-                <span>I've Verified My Email</span>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
-              </button>
             </>
           )}
         </div>

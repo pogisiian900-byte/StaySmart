@@ -20,6 +20,7 @@ import meeting from "/static/selectionsIcon/land-plot.png";
 import category from "/static/selectionsIcon/sticker.png";
 import Loading from "../../components/Loading";
 import ListingDetailDialog from "../../components/ListingDetailDialog";
+import { createOrGetConversation } from "./messages/createOrGetConversation";
 const SharedListing = () => {
   const { listingId } = useParams();
   const [selectedListing, setSelectedListing] = useState(null);
@@ -46,6 +47,10 @@ const SharedListing = () => {
   // Reservations state for unavailable dates
   const [reservations, setReservations] = useState([]);
   const [reservationsLoading, setReservationsLoading] = useState(true);
+
+  // Image lightbox states
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imageIndex, setImageIndex] = useState(0);
 
     const handleMessageHost = async (hostId, guestId) => {
       if (!guestId) {
@@ -346,22 +351,6 @@ useEffect(() => {
 
   const ListingHeader = () => (
     <div className="listing-header">
-      <button className="backButton-view" onClick={() => navigate(-1)}>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="m12 19-7-7 7-7" />
-          <path d="M19 12H5" />
-        </svg>
-      </button>
       <div className="rightBookingGroup">
 
       <button 
@@ -426,32 +415,142 @@ useEffect(() => {
   const ImageGroup = ({ photos = [] }) => {
     const mainPhoto = photos[0] || nothing;
     const subPhotos = photos.slice(1, 5);
+    const allPhotos = useMemo(() => 
+      photos.filter(photo => photo && photo !== nothing), 
+      [photos]
+    );
+
+    const handleImageClick = (photo, index) => {
+      if (photo && photo !== nothing) {
+        // Find the actual index in allPhotos array
+        const actualIndex = allPhotos.findIndex(p => p === photo);
+        setSelectedImage(photo);
+        setImageIndex(actualIndex >= 0 ? actualIndex : 0);
+      }
+    };
+
+    const closeLightbox = () => {
+      setSelectedImage(null);
+    };
+
+    const nextImage = (e) => {
+      e.stopPropagation();
+      if (allPhotos.length > 0) {
+        const nextIndex = (imageIndex + 1) % allPhotos.length;
+        setImageIndex(nextIndex);
+        setSelectedImage(allPhotos[nextIndex]);
+      }
+    };
+
+    const prevImage = (e) => {
+      e.stopPropagation();
+      if (allPhotos.length > 0) {
+        const prevIndex = (imageIndex - 1 + allPhotos.length) % allPhotos.length;
+        setImageIndex(prevIndex);
+        setSelectedImage(allPhotos[prevIndex]);
+      }
+    };
+
+    useEffect(() => {
+      if (!selectedImage) return;
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          closeLightbox();
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          if (allPhotos.length > 0) {
+            const nextIdx = (imageIndex + 1) % allPhotos.length;
+            setImageIndex(nextIdx);
+            setSelectedImage(allPhotos[nextIdx]);
+          }
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          if (allPhotos.length > 0) {
+            const prevIdx = (imageIndex - 1 + allPhotos.length) % allPhotos.length;
+            setImageIndex(prevIdx);
+            setSelectedImage(allPhotos[prevIdx]);
+          }
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown);
+        document.body.style.overflow = 'unset';
+      };
+    }, [selectedImage, imageIndex, allPhotos]);
 
     return (
-      <div className="image-group-container">
-        <div className="main-image">
-          <img
-            src={mainPhoto}
-            alt="Main Listing"
-            width="100%"
-            onError={(e) => (e.target.src = nothing)}
-          />
+      <>
+        <div className="image-group-container">
+          <div className="main-image" onClick={() => handleImageClick(mainPhoto, 0)}>
+            <img
+              src={mainPhoto}
+              alt="Main Listing"
+              width="100%"
+              onError={(e) => (e.target.src = nothing)}
+              style={{ cursor: mainPhoto !== nothing ? 'zoom-in' : 'default' }}
+            />
+          </div>
+
+          <div className="sub-images-grid">
+            {subPhotos.map((photo, index) => (
+              <img
+                key={index}
+                src={photo || nothing}
+                alt={`Listing ${index + 1}`}
+                onError={(e) => (e.target.src = nothing)}
+                onClick={() => handleImageClick(photo, index + 1)}
+                style={{ cursor: photo && photo !== nothing ? 'zoom-in' : 'default' }}
+              />
+            ))}
+            {Array.from({ length: 4 - subPhotos.length }).map((_, i) => (
+              <img key={`empty-${i}`} src={nothing} alt="Empty slot" />
+            ))}
+          </div>
         </div>
 
-        <div className="sub-images-grid">
-          {subPhotos.map((photo, index) => (
-            <img
-              key={index}
-              src={photo || nothing}
-              alt={`Listing ${index + 1}`}
-              onError={(e) => (e.target.src = nothing)}
-            />
-          ))}
-          {Array.from({ length: 4 - subPhotos.length }).map((_, i) => (
-            <img key={`empty-${i}`} src={nothing} alt="Empty slot" />
-          ))}
-        </div>
-      </div>
+        {selectedImage && (
+          <div className="image-lightbox-overlay" onClick={closeLightbox}>
+            <button className="lightbox-close" onClick={closeLightbox} aria-label="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            {allPhotos.length > 1 && (
+              <>
+                <button className="lightbox-nav lightbox-prev" onClick={prevImage} aria-label="Previous image">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m15 18-6-6 6-6"/>
+                  </svg>
+                </button>
+                <button className="lightbox-nav lightbox-next" onClick={nextImage} aria-label="Next image">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m9 18 6-6-6-6"/>
+                  </svg>
+                </button>
+              </>
+            )}
+            <div className="lightbox-image-container" onClick={(e) => e.stopPropagation()}>
+              <img
+                src={selectedImage}
+                alt="Zoomed listing"
+                className="lightbox-image"
+                onError={(e) => (e.target.src = nothing)}
+              />
+              {allPhotos.length > 1 && (
+                <div className="lightbox-counter">
+                  {imageIndex + 1} / {allPhotos.length}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </>
     );
   };
 
@@ -656,23 +755,6 @@ const handleAddGuest = (key) => {
   return (
     <div className="view-listing">
       <div class="floating-buttons">
-
-      <button className="backButton-view-mobile" onClick={() => navigate(-1)}>
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="30"
-          height="30"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="m12 19-7-7 7-7" />
-          <path d="M19 12H5" />
-        </svg>
-      </button>
       <button 
         className="shareListing-view-mobile"
         onClick={async () => {
@@ -864,42 +946,7 @@ const handleAddGuest = (key) => {
      
         {/* Reservation Box */}
         <div className="reservationBox">
-          <div className="promo-div">
-            {selectedListing.discount ? (
-              <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="lucide lucide-gem-icon"
-                >
-                  <path d="M10.5 3 8 9l4 13 4-13-2.5-6" />
-                  <path d="M17 3a2 2 0 0 1 1.6.8l3 4a2 2 0 0 1 .013 2.382l-7.99 10.986a2 2 0 0 1-3.247 0l-7.99-10.986A2 2 0 0 1 2.4 7.8l2.998-3.997A2 2 0 0 1 7 3z" />
-                  <path d="M2 9h20" />
-                </svg>
-                <p> with {selectedListing.discount || "Discount"} %</p>
-              </>
-            ) : (
-              <>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  height="24px"
-                  viewBox="0 -960 960 960"
-                  width="24px"
-                  fill="#393b92"
-                >
-                  <path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z" />
-                </svg>
-                <p>No Discount</p>
-              </>
-            )}
-          </div>
+          {/* Promo div removed - discount percentage no longer displayed */}
 
           <div className="price-header">
             <h2>

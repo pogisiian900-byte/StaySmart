@@ -17,7 +17,7 @@ const SetupService = ({ useCase }) => {
   const handleNext = () => {
     if (!selected) return alert("Please select a category!");
     if (useCase === "getStarted") {
-      navigate(`../${selected}`);
+      navigate(`/getStarted/${hostId}/setupService/${selected}`);
     } else {
       navigate(`/host/${hostId}/getStarted/${selected}`);
     }

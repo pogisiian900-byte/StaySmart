@@ -107,6 +107,9 @@ function App() {
 
               {/* ✅ Create new listing */}
               <Route path="setupService/:serviceType" element={<HostSetupForm />} />
+              
+              {/* ✅ Support direct pattern for backwards compatibility */}
+              <Route path=":serviceType" element={<HostSetupForm />} />
 
           
           

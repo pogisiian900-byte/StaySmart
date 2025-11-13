@@ -308,7 +308,8 @@ const HostBookings = () => {
         // IMPORTANT: Only add subtotal to host account, NOT the total (grandTotal)
         // The total includes service fee which goes to ADMIN
         const hostEarnings = reservationData.pricing.subtotal || 0 // Host gets subtotal (excluding service fee)
-        const serviceFee = reservationData.pricing.serviceFee || 300 // Service fee goes to admin (default 300)
+        // Service fee is 10% of subtotal (fallback for old bookings)
+        const serviceFee = reservationData.pricing.serviceFee || Math.round(hostEarnings * 0.1)
         // DO NOT use reservationData.pricing.total or grandTotal - that includes service fee
         
         console.log('Reservation pricing data:', reservationData.pricing)

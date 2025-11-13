@@ -29,8 +29,9 @@ const GuestLayout = () => {
             const data = docSnap.data()
             setUserData(data)
             
-            // Check if email is verified and policy is accepted
-            if (user.emailVerified) {
+            // Check if email is verified (Firebase or Firestore) and policy is accepted
+            const isEmailVerified = user.emailVerified || data.emailVerified;
+            if (isEmailVerified) {
               if (data.policyAccepted && data.policyAcceptedAt) {
                 setPolicyAccepted(true)
               }
@@ -52,7 +53,8 @@ const GuestLayout = () => {
   }
 
   // Block access if email is verified but policy not accepted
-  if (user && user.emailVerified && !policyAccepted) {
+  const isEmailVerified = user && (user.emailVerified || (userData && userData.emailVerified));
+  if (isEmailVerified && !policyAccepted) {
     return (
       <div style={{ 
         minHeight: '100vh', 
