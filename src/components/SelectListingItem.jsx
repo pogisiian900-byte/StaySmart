@@ -838,7 +838,7 @@ const SelectListingItem = () => {
           <button 
             className="shareListing-view"
             onClick={async () => {
-              const shareUrl = `${window.location.origin}/guest/${guestId}/listing/${listingId}`;
+              const shareUrl = `${window.location.origin}/listing/${listingId}`;
               const shareTitle = selectedListing?.title || 'Check out this listing';
               const shareText = `${selectedListing?.description?.slice(0, 100)}...` || 'Found this great place on StaySmart!';
               
