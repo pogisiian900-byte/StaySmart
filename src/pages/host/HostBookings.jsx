@@ -340,19 +340,54 @@ const HostBookings = () => {
             
             const paymentMethod = reservationData.paymentSummary?.methodType || 'balance'
             
-            // Update host's balance and total earnings
+            // Calculate loyalty points: 0.1% of earnings (0.1 points per 100 pesos)
+            const pointsEarned = Math.round(hostEarnings * 0.001 * 100) / 100 // Round to 2 decimal places
+            const currentPoints = hostData.loyaltyPoints || hostData.points || 0
+            const currentLifetimePoints = hostData.lifetimeLoyaltyPoints || hostData.lifetimePoints || currentPoints
+            const newPoints = currentPoints + pointsEarned
+            const newLifetimePoints = currentLifetimePoints + pointsEarned
+
+            // Update host's balance, total earnings, and loyalty points
             try {
               const updateData = {
                 balance: newHostBalance,
                 totalEarnings: newTotalEarnings,
+                loyaltyPoints: newPoints,
+                lifetimeLoyaltyPoints: newLifetimePoints,
                 updatedAt: serverTimestamp(),
               }
               
               await updateDoc(hostRef, updateData)
               console.log(`✅ Added ₱${hostEarnings} to host balance. New host balance: ₱${newHostBalance}`)
+              console.log(`✅ Added ${pointsEarned.toFixed(2)} points. New points balance: ${newPoints.toFixed(2)}`)
             } catch (updateError) {
               console.error('Error updating host data:', updateError)
               throw updateError // Re-throw to be caught by outer try-catch
+            }
+
+            // Create points transaction record
+            if (pointsEarned > 0) {
+              try {
+                const pointsTransaction = {
+                  userId: hostId,
+                  hostId: hostId,
+                  reservationId: id,
+                  listingId: reservationData.listingId,
+                  listingTitle: reservationData.listingTitle || '',
+                  points: pointsEarned,
+                  title: 'Booking Points',
+                  reason: `Earned from booking: ${reservationData.listingTitle || 'Reservation'}`,
+                  type: 'booking_points',
+                  earnings: hostEarnings,
+                  createdAt: serverTimestamp(),
+                }
+                
+                await addDoc(collection(db, 'PointsTransactions'), pointsTransaction)
+                console.log('✅ Points transaction recorded:', pointsTransaction)
+              } catch (pointsError) {
+                console.error('Error creating points transaction:', pointsError)
+                // Don't throw - points transaction failure shouldn't fail the booking
+              }
             }
 
             // Add service fee to admin's Firebase balance

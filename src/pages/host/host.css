@@ -1536,3 +1536,13 @@
     font-size: 1.6rem;
   }
 }
+
+/* Spinner animation for points conversion */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

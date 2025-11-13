@@ -7,6 +7,10 @@ import {
   orderBy,
   query,
   where,
+  updateDoc,
+  addDoc,
+  serverTimestamp,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../../config/firebase";
 
@@ -17,83 +21,6 @@ const TIER_LEVELS = [
   { id: "platinum", label: "Platinum Host", minPoints: 15000, multiplier: 1.5 },
 ];
 
-const ACHIEVEMENTS = [
-  {
-    id: "first-booking",
-    title: "First Booking",
-    description: "Completed your first confirmed stay.",
-    pointsRequired: 250,
-    badge: "🥇",
-  },
-  {
-    id: "five-star-host",
-    title: "Five-Star Host",
-    description: "Maintain a 4.8+ review score for 30 days.",
-    pointsRequired: 1200,
-    badge: "⭐",
-  },
-  {
-    id: "frequent-host",
-    title: "Frequent Host",
-    description: "Reach 25 confirmed reservations in a year.",
-    pointsRequired: 4500,
-    badge: "🚀",
-  },
-  {
-    id: "superstay",
-    title: "Super Stay",
-    description: "Host a guest for 14+ consecutive nights.",
-    pointsRequired: 8000,
-    badge: "🏆",
-  },
-];
-
-const EARNING_OPPORTUNITIES = [
-  {
-    title: "Accept requests quickly",
-    detail: "Earn bonus points by responding to new requests within 1 hour.",
-    points: "+80 pts per response",
-  },
-  {
-    title: "Maintain five-star reviews",
-    detail: "Each 5★ review adds a loyalty boost to your monthly total.",
-    points: "+150 pts per review",
-  },
-  {
-    title: "Fill calendar gaps",
-    detail: "Use Instant Book to earn additional points on short-notice stays.",
-    points: "+200 pts per booking",
-  },
-  {
-    title: "Promote returning guests",
-    detail: "Offer repeat guests a discount and collect double points.",
-    points: "2× multiplier",
-  },
-];
-
-const REWARD_OPTIONS = [
-  {
-    id: "boosted-placement",
-    title: "Boosted Placement",
-    description: "Feature one listing in local search results for 7 days.",
-    cost: 5000,
-    status: "Available soon",
-  },
-  {
-    id: "service-fee-discount",
-    title: "Service Fee Discount",
-    description: "Apply a 20% discount to host service fees next month.",
-    cost: 8000,
-    status: "Unlock at Gold tier",
-  },
-  {
-    id: "pro-photos",
-    title: "Professional Photography",
-    description: "Redeem a voucher for a professional photo shoot.",
-    cost: 15000,
-    status: "Coming soon",
-  },
-];
 
 const Points = ({ hostId }) => {
   const [pointsData, setPointsData] = useState(null);
@@ -101,6 +28,16 @@ const Points = ({ hostId }) => {
   const [loadingAccount, setLoadingAccount] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState(null);
+  const [historyError, setHistoryError] = useState(null); // Separate error for history
+  
+  // Conversion states
+  const [conversionAmount, setConversionAmount] = useState("");
+  const [converting, setConverting] = useState(false);
+  const [conversionError, setConversionError] = useState(null);
+  const [conversionSuccess, setConversionSuccess] = useState(null);
+  
+  // Conversion rate: 1 point = 1 peso (you can adjust this)
+  const CONVERSION_RATE = 1; // 1 point = 1 peso
 
   useEffect(() => {
     if (!hostId) return;
@@ -130,6 +67,7 @@ const Points = ({ hostId }) => {
     if (!hostId) return;
 
     try {
+      // Query for both userId and hostId to handle both cases
       const q = query(
         collection(db, "PointsTransactions"),
         where("userId", "==", hostId),
@@ -146,10 +84,13 @@ const Points = ({ hostId }) => {
           });
           setHistory(list);
           setLoadingHistory(false);
+          setHistoryError(null); // Clear any previous errors
         },
         (err) => {
           console.error("Failed to load points history:", err);
-          setError("We couldn't load your earning history right now. Please try again later.");
+          // Don't set main error - history is optional
+          setHistoryError("Unable to load transaction history");
+          setHistory([]); // Set empty array on error
           setLoadingHistory(false);
         }
       );
@@ -159,6 +100,7 @@ const Points = ({ hostId }) => {
       // Covers cases where the collection/index might not exist yet
       console.warn("Points history unavailable:", err);
       setHistory([]);
+      setHistoryError("Transaction history unavailable");
       setLoadingHistory(false);
     }
   }, [hostId]);
@@ -195,16 +137,132 @@ const Points = ({ hostId }) => {
     };
   }, [pointsData]);
 
-  const achievements = useMemo(() => {
-    return ACHIEVEMENTS.map((achievement) => ({
-      ...achievement,
-      achieved: computedPoints.currentPoints >= achievement.pointsRequired,
-      progress: Math.min(
-        100,
-        (computedPoints.currentPoints / achievement.pointsRequired) * 100
-      ),
-    }));
-  }, [computedPoints.currentPoints]);
+  // Calculate cash value from points
+  const calculateCashValue = (points) => {
+    return (points * CONVERSION_RATE).toFixed(2);
+  };
+
+  // Handle points to cash conversion
+  const handleConvertPoints = async () => {
+    if (!hostId) {
+      setConversionError("User ID not found");
+      return;
+    }
+
+    const pointsToConvert = parseFloat(conversionAmount);
+    
+    // Validation
+    if (!conversionAmount || isNaN(pointsToConvert) || pointsToConvert <= 0) {
+      setConversionError("Please enter a valid amount of points");
+      return;
+    }
+
+    if (pointsToConvert > computedPoints.currentPoints) {
+      setConversionError(`You only have ${computedPoints.currentPoints.toFixed(2)} points available`);
+      return;
+    }
+
+    // Minimum conversion (optional - you can remove this)
+    if (pointsToConvert < 1) {
+      setConversionError("Minimum conversion is 1 point");
+      return;
+    }
+
+    setConverting(true);
+    setConversionError(null);
+    setConversionSuccess(null);
+
+    try {
+      const userRef = doc(db, "Users", hostId);
+      const userSnap = await getDoc(userRef);
+
+      if (!userSnap.exists()) {
+        setConversionError("User account not found");
+        setConverting(false);
+        return;
+      }
+
+      const userData = userSnap.data();
+      const currentPoints = userData.loyaltyPoints || userData.points || 0;
+      const currentBalance = userData.balance || userData.walletBalance || 0;
+
+      // Double-check points availability
+      if (pointsToConvert > currentPoints) {
+        setConversionError(`Insufficient points. You have ${currentPoints.toFixed(2)} points available`);
+        setConverting(false);
+        return;
+      }
+
+      // Calculate cash amount
+      const cashAmount = pointsToConvert * CONVERSION_RATE;
+      const newPoints = currentPoints - pointsToConvert;
+      const newBalance = currentBalance + cashAmount;
+
+      // Update user document
+      await updateDoc(userRef, {
+        loyaltyPoints: newPoints,
+        balance: newBalance,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Create points transaction (deduction)
+      const pointsTransaction = {
+        userId: hostId,
+        hostId: hostId,
+        points: -pointsToConvert,
+        title: "Points to Cash Conversion",
+        reason: `Converted ${pointsToConvert.toFixed(2)} points to ₱${cashAmount.toFixed(2)}`,
+        type: "points_conversion",
+        cashAmount: cashAmount,
+        conversionRate: CONVERSION_RATE,
+        createdAt: serverTimestamp(),
+      };
+      await addDoc(collection(db, "PointsTransactions"), pointsTransaction);
+
+      // Create balance transaction (addition)
+      const balanceTransaction = {
+        userId: hostId,
+        hostId: hostId,
+        amount: cashAmount,
+        type: "points_conversion",
+        description: `Converted ${pointsToConvert.toFixed(2)} points to cash`,
+        balanceBefore: currentBalance,
+        balanceAfter: newBalance,
+        pointsConverted: pointsToConvert,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      await addDoc(collection(db, "Transactions"), balanceTransaction);
+
+      // Create notification
+      await addDoc(collection(db, "Notifications"), {
+        type: "points_converted",
+        recipientId: hostId,
+        hostId: hostId,
+        title: "Points Converted",
+        body: `Successfully converted ${pointsToConvert.toFixed(2)} points to ₱${cashAmount.toFixed(2)}`,
+        message: `Successfully converted ${pointsToConvert.toFixed(2)} points to ₱${cashAmount.toFixed(2)}`,
+        read: false,
+        createdAt: serverTimestamp(),
+      });
+
+      setConversionSuccess(
+        `Successfully converted ${pointsToConvert.toFixed(2)} points to ₱${cashAmount.toFixed(2)}`
+      );
+      setConversionAmount("");
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setConversionSuccess(null);
+      }, 5000);
+
+    } catch (err) {
+      console.error("Error converting points:", err);
+      setConversionError("Failed to convert points. Please try again later.");
+    } finally {
+      setConverting(false);
+    }
+  };
 
   const formatDate = (value) => {
     if (!value) return "—";
@@ -221,6 +279,7 @@ const Points = ({ hostId }) => {
         <p>Track the rewards you earn from successful stays and unlock host perks.</p>
       </header>
 
+      {/* Only show main error for account loading issues */}
       {error && (
         <div className="host-points-alert">
           <p>{error}</p>
@@ -286,94 +345,564 @@ const Points = ({ hostId }) => {
         </div>
       </section>
 
-      <section className="host-points-achievements">
-        <div className="section-header">
-          <h2>Achievements</h2>
-          <p>Hit new milestones to unlock exclusive badges and bonus rewards.</p>
-        </div>
-        <div className="achievement-grid">
-          {achievements.map((achievement) => (
-            <article
-              key={achievement.id}
-              className={`achievement-card ${achievement.achieved ? "achieved" : ""}`}
-            >
-              <div className="achievement-icon">{achievement.badge}</div>
-              <div className="achievement-content">
-                <h3>{achievement.title}</h3>
-                <p>{achievement.description}</p>
-                <span className="achievement-target">
-                  {achievement.achieved
-                    ? "Completed"
-                    : `${achievement.pointsRequired.toLocaleString()} pts needed`}
-                </span>
-                <div className="achievement-progress">
-                  <div
-                    className="achievement-progress-fill"
-                    style={{ width: `${achievement.progress}%` }}
-                  />
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="host-points-actions">
-        <div className="action-card">
-          <h3>Earn more points</h3>
-          <p>Confirm stays promptly and keep your acceptance rate high to maximise rewards.</p>
-          <button
-            type="button"
-            onClick={() => window?.scrollTo?.({ top: 0, behavior: "smooth" })}
-          >
-            View tips
-          </button>
-        </div>
-        <div className="action-card">
-          <h3>Redeem perks</h3>
-          <p>Use your balance for promotional boosts, featured listings, or partner perks.</p>
-          <button type="button" disabled>
-            Coming soon
-          </button>
-        </div>
-      </section>
-
-      <section className="host-points-earnings">
-        <div className="section-header">
-          <h2>How to earn points</h2>
-          <p>Build consistent hosting habits to stack loyalty bonuses quickly.</p>
-        </div>
-        <div className="earning-list">
-          {EARNING_OPPORTUNITIES.map((item) => (
-            <div key={item.title} className="earning-item">
-              <div>
-                <h3>{item.title}</h3>
-                <p>{item.detail}</p>
-              </div>
-              <span className="earning-points">{item.points}</span>
+      {/* Points to Cash Conversion Section */}
+      <section className="host-points-conversion" style={{
+        background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+        borderRadius: '20px',
+        padding: '32px',
+        boxShadow: '0 4px 20px rgba(49, 50, 111, 0.08), 0 0 0 1px rgba(49, 50, 111, 0.05)',
+        border: '1px solid rgba(49, 50, 111, 0.1)',
+        marginBottom: '32px',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Decorative background element */}
+        <div style={{
+          position: 'absolute',
+          top: '-50px',
+          right: '-50px',
+          width: '200px',
+          height: '200px',
+          background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.05) 0%, rgba(49, 50, 111, 0.02) 100%)',
+          borderRadius: '50%',
+          zIndex: 0
+        }} />
+        
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '12px', 
+            marginBottom: '8px' 
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #31326f, #4a4d8c)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '24px',
+              boxShadow: '0 4px 12px rgba(49, 50, 111, 0.3)'
+            }}>
+              💰
             </div>
-          ))}
-        </div>
-      </section>
+            <div>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: '1.5rem', 
+                fontWeight: '700', 
+                color: '#1f2937',
+                letterSpacing: '-0.02em'
+              }}>
+                Convert Points to Cash
+              </h2>
+              <p style={{ 
+                margin: '4px 0 0', 
+                color: '#6b7280', 
+                fontSize: '0.9rem' 
+              }}>
+                Instant conversion • {CONVERSION_RATE} point = ₱{CONVERSION_RATE}
+              </p>
+            </div>
+          </div>
 
-      <section className="host-points-rewards">
-        <div className="section-header">
-          <h2>Redeem rewards</h2>
-          <p>Trade loyalty points for tools that grow bookings and improve guest experience.</p>
-        </div>
-        <div className="reward-grid">
-          {REWARD_OPTIONS.map((reward) => (
-            <div key={reward.id} className="reward-card">
-              <div className="reward-header">
-                <h3>{reward.title}</h3>
-                <span className="reward-cost">{reward.cost.toLocaleString()} pts</span>
+          {conversionSuccess && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.1), rgba(49, 50, 111, 0.05))',
+              border: '2px solid rgba(49, 50, 111, 0.3)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginTop: '20px',
+              marginBottom: '20px',
+              color: '#31326f',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontWeight: '500',
+              boxShadow: '0 2px 8px rgba(49, 50, 111, 0.1)'
+            }}>
+              <span style={{ fontSize: '20px' }}>✓</span>
+              <span>{conversionSuccess}</span>
+            </div>
+          )}
+
+          {conversionError && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05))',
+              border: '2px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginTop: '20px',
+              marginBottom: '20px',
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontWeight: '500',
+              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.1)'
+            }}>
+              <span style={{ fontSize: '20px' }}>⚠</span>
+              <span>{conversionError}</span>
+            </div>
+          )}
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '20px',
+            marginTop: '24px'
+          }}>
+            <div style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '20px',
+              border: '2px solid rgba(49, 50, 111, 0.1)',
+              transition: 'all 0.3s ease',
+              boxShadow: '0 2px 8px rgba(49, 50, 111, 0.05)'
+            }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '12px',
+                fontWeight: '600',
+                color: '#374151',
+                fontSize: '0.9rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                Points to Convert
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="number"
+                  min="1"
+                  max={computedPoints.currentPoints}
+                  step="0.01"
+                  value={conversionAmount}
+                  onChange={(e) => {
+                    setConversionAmount(e.target.value);
+                    setConversionError(null);
+                    setConversionSuccess(null);
+                  }}
+                  placeholder="0.00"
+                  disabled={converting || loadingAccount}
+                  style={{
+                    width: '100%',
+                    padding: '16px 16px 16px 48px',
+                    borderRadius: '12px',
+                    border: '2px solid rgba(49, 50, 111, 0.15)',
+                    fontSize: '1.25rem',
+                    fontWeight: '600',
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                    background: '#f9fafb',
+                    color: '#1f2937'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#31326f';
+                    e.target.style.background = 'white';
+                    e.target.style.boxShadow = '0 0 0 4px rgba(49, 50, 111, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'rgba(49, 50, 111, 0.15)';
+                    e.target.style.background = '#f9fafb';
+                    e.target.style.boxShadow = 'none';
+                  }}
+                />
+                <span style={{
+                  position: 'absolute',
+                  left: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: '1.25rem',
+                  fontWeight: '600',
+                  color: '#6b7280'
+                }}>⭐</span>
               </div>
-              <p>{reward.description}</p>
-              <button type="button" disabled>
-                {reward.status}
+              <p style={{
+                marginTop: '8px',
+                fontSize: '0.8rem',
+                color: '#9ca3af',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <span>Available:</span>
+                <span style={{ fontWeight: '600', color: '#31326f' }}>
+                  {loadingAccount ? "—" : computedPoints.currentPoints.toFixed(2)} pts
+                </span>
+              </p>
+            </div>
+
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.05), rgba(49, 50, 111, 0.02))',
+              borderRadius: '16px',
+              padding: '20px',
+              border: '2px solid rgba(49, 50, 111, 0.1)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center'
+            }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '12px',
+                fontWeight: '600',
+                color: '#374151',
+                fontSize: '0.9rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                Cash Value
+              </label>
+              <div style={{
+                fontSize: '1.75rem',
+                fontWeight: '700',
+                color: '#31326f',
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: '4px'
+              }}>
+                <span style={{ fontSize: '1.25rem', color: '#6b7280' }}>₱</span>
+                <span>
+                  {conversionAmount && !isNaN(parseFloat(conversionAmount)) 
+                    ? parseFloat(calculateCashValue(parseFloat(conversionAmount))).toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })
+                    : '0.00'}
+                </span>
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-end'
+            }}>
+              <button
+                type="button"
+                onClick={handleConvertPoints}
+                disabled={converting || loadingAccount || !conversionAmount || parseFloat(conversionAmount) <= 0}
+                style={{
+                  width: '100%',
+                  padding: '16px 24px',
+                  borderRadius: '12px',
+                  background: converting || loadingAccount || !conversionAmount || parseFloat(conversionAmount) <= 0
+                    ? 'linear-gradient(135deg, #d1d5db, #e5e7eb)'
+                    : 'linear-gradient(135deg, #31326f, #4a4d8c)',
+                  color: 'white',
+                  border: 'none',
+                  fontSize: '1rem',
+                  fontWeight: '700',
+                  cursor: converting || loadingAccount || !conversionAmount || parseFloat(conversionAmount) <= 0
+                    ? 'not-allowed'
+                    : 'pointer',
+                  transition: 'all 0.3s ease',
+                  boxShadow: converting || loadingAccount || !conversionAmount || parseFloat(conversionAmount) <= 0
+                    ? 'none'
+                    : '0 4px 16px rgba(49, 50, 111, 0.3)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+                onMouseEnter={(e) => {
+                  if (!converting && !loadingAccount && conversionAmount && parseFloat(conversionAmount) > 0) {
+                    e.target.style.transform = 'translateY(-2px)';
+                    e.target.style.boxShadow = '0 6px 20px rgba(49, 50, 111, 0.4)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  if (!converting && !loadingAccount && conversionAmount && parseFloat(conversionAmount) > 0) {
+                    e.target.style.boxShadow = '0 4px 16px rgba(49, 50, 111, 0.3)';
+                  }
+                }}
+              >
+                {converting ? (
+                  <>
+                    <span style={{ 
+                      width: '16px', 
+                      height: '16px', 
+                      border: '2px solid white',
+                      borderTop: '2px solid transparent',
+                      borderRadius: '50%',
+                      animation: 'spin 0.8s linear infinite',
+                      display: 'inline-block'
+                    }} />
+                    Converting...
+                  </>
+                ) : (
+                  <>
+                    <span>💸</span>
+                    Convert Now
+                  </>
+                )}
               </button>
             </div>
-          ))}
+          </div>
+
+          <div style={{
+            marginTop: '24px',
+            padding: '16px',
+            background: 'rgba(49, 50, 111, 0.03)',
+            borderRadius: '12px',
+            border: '1px solid rgba(49, 50, 111, 0.08)',
+            fontSize: '0.85rem',
+            color: '#6b7280',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <span style={{ fontSize: '18px' }}>ℹ️</span>
+            <span>
+              <strong style={{ color: '#374151' }}>Instant conversion:</strong> Cash is added to your account balance immediately. No waiting time.
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="host-points-actions" style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: '24px',
+        marginBottom: '32px'
+      }}>
+        <div className="action-card" style={{
+          background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+          borderRadius: '20px',
+          padding: '28px',
+          boxShadow: '0 4px 20px rgba(49, 50, 111, 0.08), 0 0 0 1px rgba(49, 50, 111, 0.05)',
+          border: '1px solid rgba(49, 50, 111, 0.1)',
+          position: 'relative',
+          overflow: 'hidden',
+          transition: 'all 0.3s ease'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-4px)';
+          e.currentTarget.style.boxShadow = '0 8px 30px rgba(49, 50, 111, 0.12), 0 0 0 1px rgba(49, 50, 111, 0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 4px 20px rgba(49, 50, 111, 0.08), 0 0 0 1px rgba(49, 50, 111, 0.05)';
+        }}
+        >
+          <div style={{
+            position: 'absolute',
+            top: '-30px',
+            right: '-30px',
+            width: '120px',
+            height: '120px',
+            background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.05))',
+            borderRadius: '50%',
+            zIndex: 0
+          }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '28px',
+              marginBottom: '20px',
+              boxShadow: '0 4px 16px rgba(251, 191, 36, 0.3)'
+            }}>
+              ⭐
+            </div>
+            <h3 style={{
+              margin: '0 0 12px',
+              fontSize: '1.5rem',
+              fontWeight: '700',
+              color: '#1f2937',
+              letterSpacing: '-0.02em'
+            }}>
+              Earn More Points
+            </h3>
+            <p style={{
+              margin: '0 0 24px',
+              color: '#6b7280',
+              lineHeight: '1.6',
+              fontSize: '0.95rem'
+            }}>
+              Maximize your rewards by confirming bookings quickly and maintaining high guest satisfaction ratings.
+            </p>
+            <div style={{
+              marginBottom: '20px',
+              padding: '16px',
+              background: 'rgba(251, 191, 36, 0.05)',
+              borderRadius: '12px',
+              border: '1px solid rgba(251, 191, 36, 0.15)'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '8px'
+              }}>
+                <span style={{ fontSize: '0.85rem', color: '#6b7280', fontWeight: '500' }}>
+                  Quick Response Bonus
+                </span>
+                <span style={{ fontSize: '0.9rem', color: '#f59e0b', fontWeight: '700' }}>
+                  +80 pts
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '8px'
+              }}>
+                <span style={{ fontSize: '0.85rem', color: '#6b7280', fontWeight: '500' }}>
+                  5-Star Review
+                </span>
+                <span style={{ fontSize: '0.9rem', color: '#f59e0b', fontWeight: '700' }}>
+                  +150 pts
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <span style={{ fontSize: '0.85rem', color: '#6b7280', fontWeight: '500' }}>
+                  Per Booking
+                </span>
+                <span style={{ fontSize: '0.9rem', color: '#f59e0b', fontWeight: '700' }}>
+                  0.1% of earnings
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => window?.scrollTo?.({ top: 0, behavior: "smooth" })}
+              style={{
+                width: '100%',
+                padding: '14px 24px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #31326f, #4a4d8c)',
+                color: 'white',
+                border: 'none',
+                fontSize: '0.95rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 12px rgba(49, 50, 111, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 6px 16px rgba(49, 50, 111, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 4px 12px rgba(49, 50, 111, 0.2)';
+              }}
+            >
+              <span>📈</span>
+              View Earning Tips
+            </button>
+          </div>
+        </div>
+
+        <div className="action-card" style={{
+          background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+          borderRadius: '20px',
+          padding: '28px',
+          boxShadow: '0 4px 20px rgba(49, 50, 111, 0.08), 0 0 0 1px rgba(49, 50, 111, 0.05)',
+          border: '1px solid rgba(49, 50, 111, 0.1)',
+          position: 'relative',
+          overflow: 'hidden',
+          opacity: 0.7
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: '-30px',
+            right: '-30px',
+            width: '120px',
+            height: '120px',
+            background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.1), rgba(49, 50, 111, 0.05))',
+            borderRadius: '50%',
+            zIndex: 0
+          }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '28px',
+              marginBottom: '20px',
+              boxShadow: '0 4px 16px rgba(99, 102, 241, 0.3)'
+            }}>
+              🎁
+            </div>
+            <h3 style={{
+              margin: '0 0 12px',
+              fontSize: '1.5rem',
+              fontWeight: '700',
+              color: '#1f2937',
+              letterSpacing: '-0.02em'
+            }}>
+              Redeem Perks
+            </h3>
+            <p style={{
+              margin: '0 0 24px',
+              color: '#6b7280',
+              lineHeight: '1.6',
+              fontSize: '0.95rem'
+            }}>
+              Unlock exclusive benefits, promotional boosts, and premium features with your loyalty points.
+            </p>
+            <div style={{
+              marginBottom: '20px',
+              padding: '16px',
+              background: 'rgba(99, 102, 241, 0.05)',
+              borderRadius: '12px',
+              border: '1px solid rgba(99, 102, 241, 0.15)',
+              textAlign: 'center'
+            }}>
+              <span style={{
+                fontSize: '0.9rem',
+                color: '#6366f1',
+                fontWeight: '600'
+              }}>
+                Coming Soon
+              </span>
+            </div>
+            <button 
+              type="button" 
+              disabled
+              style={{
+                width: '100%',
+                padding: '14px 24px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #d1d5db, #e5e7eb)',
+                color: '#9ca3af',
+                border: 'none',
+                fontSize: '0.95rem',
+                fontWeight: '600',
+                cursor: 'not-allowed',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              <span>🔒</span>
+              Unlock Soon
+            </button>
+          </div>
         </div>
       </section>
 
@@ -385,15 +914,21 @@ const Points = ({ hostId }) => {
           )}
         </div>
 
+        {historyError && (
+          <div className="history-empty" style={{ color: '#6b7280', fontSize: '0.9rem' }}>
+            <p>{historyError}</p>
+          </div>
+        )}
+
         {loadingHistory ? (
           <div className="history-empty">
             <p>Loading your latest rewards…</p>
           </div>
-        ) : history.length === 0 ? (
+        ) : history.length === 0 && !historyError ? (
           <div className="history-empty">
             <p>No activity yet. Complete bookings to earn your first points.</p>
           </div>
-        ) : (
+        ) : history.length > 0 ? (
           <ul className="history-list">
             {history.map((entry) => {
               const amount = Number(entry.points ?? entry.amount ?? 0);
@@ -413,7 +948,7 @@ const Points = ({ hostId }) => {
               );
             })}
           </ul>
-        )}
+        ) : null}
       </section>
     </div>
   );
