@@ -1122,7 +1122,7 @@ const SelectListingItem = () => {
           </div>
 
           {/* Calendar Toggle Button */}
-          <div style={{ marginTop: '16px' }}>
+          <div style={{ marginTop: '16px', marginBottom: showCalendar ? '0' : '0' }}>
             <button
               type="button"
               onClick={() => setShowCalendar(!showCalendar)}
@@ -1142,7 +1142,9 @@ const SelectListingItem = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '8px',
+                position: 'relative',
+                zIndex: 2
               }}
               onMouseEnter={(e) => {
                 if (!showCalendar) {
@@ -1171,11 +1173,14 @@ const SelectListingItem = () => {
           {showCalendar && (
             <div style={{
               marginTop: '20px',
+              marginBottom: '20px',
               padding: '20px',
               background: 'white',
               borderRadius: '16px',
               border: '2px solid #e5e7eb',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)'
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
+              position: 'relative',
+              zIndex: 1
             }}>
               <div style={{
                 display: 'flex',
@@ -1468,12 +1473,14 @@ const SelectListingItem = () => {
           {/* Unavailable Dates Display */}
           {unavailableDates.ranges.length > 0 && (
             <div style={{
-              marginTop: '16px',
+              marginTop: showCalendar ? '20px' : '16px',
               padding: '12px 16px',
               background: '#fef2f2',
               border: '1px solid #fecaca',
               borderRadius: '8px',
-              fontSize: '0.9rem'
+              fontSize: '0.9rem',
+              position: 'relative',
+              zIndex: 1
             }}>
               <div style={{ 
                 display: 'flex', 
@@ -1507,7 +1514,11 @@ const SelectListingItem = () => {
             </div>
           )}
 
-          <div className="guest-section">
+          <div className="guest-section" style={{
+            marginTop: showCalendar ? '20px' : '0',
+            position: 'relative',
+            zIndex: 1
+          }}>
             <label>Guests</label>
 
             <div className="guest-dropdown">
