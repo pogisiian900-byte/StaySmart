@@ -6,6 +6,15 @@ import { db } from '../../config/firebase'
 import ContinuousCalendar from '../../components/ContinuousCalendar'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
 import dialogPolyfill from 'dialog-polyfill'
+import emailjs from 'emailjs-com'
+import { sendCancellationEmail } from '../../services/cancellationEmail'
+
+// EmailJS Configuration
+const EMAILJS_CONFIG = {
+  serviceId: 'service_endhho9',
+  templateId: 'template_azo8p92', // Update this with your new template ID
+  publicKey: 'xFGnrqT_ZhFhJ5Y0n'
+}
 
 const HostBookings = () => {
   const { hostId } = useParams()
@@ -24,6 +33,7 @@ const HostBookings = () => {
   const [reservationToDecline, setReservationToDecline] = useState(null)
   const declineDialogRef = React.useRef(null)
   const [showCompleted, setShowCompleted] = useState(false)
+  const [guestInfo, setGuestInfo] = useState(null) // Store guest information for selected reservation
 
   // Read date from URL params on mount
   useEffect(() => {
@@ -58,6 +68,32 @@ const HostBookings = () => {
     })
     return () => unsub()
   }, [hostId])
+
+  // Fetch guest information when reservation is selected
+  useEffect(() => {
+    const fetchGuestInfo = async () => {
+      if (!selectedReservation?.guestId) {
+        setGuestInfo(null)
+        return
+      }
+      
+      try {
+        const guestRef = doc(db, 'Users', selectedReservation.guestId)
+        const guestSnap = await getDoc(guestRef)
+        
+        if (guestSnap.exists()) {
+          setGuestInfo(guestSnap.data())
+        } else {
+          setGuestInfo(null)
+        }
+      } catch (error) {
+        console.error('Error fetching guest info:', error)
+        setGuestInfo(null)
+      }
+    }
+    
+    fetchGuestInfo()
+  }, [selectedReservation])
 
 
   // Register dialog polyfill
@@ -300,6 +336,289 @@ const HostBookings = () => {
           createdAt: serverTimestamp(),
         }
         const guestNotificationRef = await addDoc(collection(db, 'Notifications'), guestNotification);
+
+        // Send confirmation email to guest when booking is confirmed
+        if (status === 'confirmed') {
+          try {
+            // Fetch guest information to get email and name
+            const guestRef = doc(db, 'Users', reservationData.guestId)
+            const guestSnap = await getDoc(guestRef)
+            
+            if (guestSnap.exists()) {
+              const guestData = guestSnap.data()
+              // Try multiple possible email field names
+              const guestEmail = guestData.emailAddress || guestData.email || guestData.userEmail || ''
+              const guestName = `${guestData.firstName || ''} ${guestData.lastName || ''}`.trim() || 'Guest'
+              
+              console.log('Guest data retrieved:', {
+                guestId: reservationData.guestId,
+                emailAddress: guestData.emailAddress,
+                email: guestData.email,
+                guestEmail: guestEmail,
+                guestName: guestName
+              })
+              
+              if (guestEmail && guestEmail.trim() !== '') {
+                // Format dates for email
+                const checkInDate = new Date(reservationData.checkIn).toLocaleDateString('en-US', { 
+                  month: 'long', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                })
+                const checkOutDate = new Date(reservationData.checkOut).toLocaleDateString('en-US', { 
+                  month: 'long', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                })
+                
+                // Helper function to sanitize strings for EmailJS
+                const sanitizeString = (str) => {
+                  if (!str) return ''
+                  // Convert to string, remove null/undefined, trim whitespace
+                  return String(str).trim().replace(/\0/g, '') || ''
+                }
+                
+                // Helper function to format currency safely
+                const formatCurrency = (amount) => {
+                  if (!amount && amount !== 0) return 'PHP 0'
+                  const num = typeof amount === 'number' ? amount : parseFloat(amount) || 0
+                  return `PHP ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                }
+                
+                // Validate email before preparing template params
+                const sanitizedEmail = sanitizeString(guestEmail)
+                if (!sanitizedEmail || sanitizedEmail.trim() === '' || !sanitizedEmail.includes('@')) {
+                  console.error('❌ Email is empty or invalid! Cannot send email.')
+                  console.error('Guest data:', {
+                    guestId: reservationData.guestId,
+                    guestEmail: guestEmail,
+                    guestName: guestName,
+                    sanitizedEmail: sanitizedEmail
+                  })
+                  // Don't try to send if email is empty or invalid
+                  return
+                }
+                
+                // Prepare email template parameters
+                // Simplified to match the EmailJS template - only essential variables
+                // All values are sanitized to prevent "corrupted variables" error
+                // IMPORTANT: EmailJS template must have "To Email" field set to one of these variable names
+                const templateParams = {
+                  to_name: sanitizeString(guestName) || 'Guest',
+                  to_email: sanitizedEmail, // Primary email field
+                  reply_to: sanitizedEmail, // Some EmailJS templates use this for recipient
+                  email: sanitizedEmail, // Alternative name some templates use
+                  listing_title: sanitizeString(reservationData.listingTitle) || 'Your listing',
+                  check_in: sanitizeString(checkInDate),
+                  check_out: sanitizeString(checkOutDate),
+                  nights: String(reservationData.nights || 0),
+                  nights_plural: (reservationData.nights || 0) !== 1 ? 's' : '',
+                  reservation_id: sanitizeString(id.substring(0, 8).toUpperCase()),
+                  total_amount: formatCurrency(reservationData.pricing?.total || 0),
+                  dashboard_url: sanitizeString(`${window.location.origin}/guest/${reservationData.guestId}`),
+                }
+                
+                // Remove any undefined or null values (EmailJS doesn't like them)
+                Object.keys(templateParams).forEach(key => {
+                  if (templateParams[key] === undefined || templateParams[key] === null) {
+                    templateParams[key] = ''
+                  }
+                })
+                
+                console.log('✅ Email template parameters prepared (sanitized):', {
+                  to_email: templateParams.to_email,
+                  to_name: templateParams.to_name,
+                  hasEmail: !!templateParams.to_email && templateParams.to_email.length > 0,
+                  emailValid: templateParams.to_email.includes('@'),
+                  total_amount: templateParams.total_amount,
+                  reservation_id: templateParams.reservation_id,
+                  allParams: Object.keys(templateParams),
+                  fullTemplateParams: templateParams // Show all values
+                })
+                
+                // Validate all parameters are strings (EmailJS requirement)
+                const invalidParams = Object.entries(templateParams).filter(([key, value]) => {
+                  return typeof value !== 'string' && typeof value !== 'number'
+                })
+                if (invalidParams.length > 0) {
+                  console.warn('⚠️ Non-string/number parameters found:', invalidParams)
+                }
+
+                // CRITICAL: Log the exact payload being sent to EmailJS
+                console.log('�� Sending to EmailJS:', {
+                  serviceId: EMAILJS_CONFIG.serviceId,
+                  templateId: EMAILJS_CONFIG.templateId,
+                  publicKey: EMAILJS_CONFIG.publicKey.substring(0, 10) + '...',
+                  templateParams: {
+                    ...templateParams,
+                    to_email: templateParams.to_email, // Explicitly show email
+                    emailLength: templateParams.to_email?.length || 0
+                  }
+                })
+
+                // Send email using EmailJS
+                try {
+                  const emailResponse = await emailjs.send(
+                    EMAILJS_CONFIG.serviceId,
+                    EMAILJS_CONFIG.templateId,
+                    templateParams,
+                    EMAILJS_CONFIG.publicKey
+                  )
+                  
+                  console.log('✅ Confirmation email sent successfully to:', guestEmail)
+                  console.log('EmailJS Response:', emailResponse)
+                  
+                  // Show success alert
+                  alert(`✅ Confirmation email sent successfully to ${guestEmail}!`)
+                } catch (emailSendError) {
+                  console.error('❌ Failed to send confirmation email:', emailSendError)
+                  console.error('Full error object:', JSON.stringify(emailSendError, null, 2))
+                  // Log detailed error for debugging
+                  if (emailSendError.text) {
+                    console.error('EmailJS Error Details:', emailSendError.text)
+                  }
+                  if (emailSendError.status) {
+                    console.error('EmailJS Error Status:', emailSendError.status)
+                  }
+                  // Log what was actually sent
+                  console.error('What was sent to EmailJS:', {
+                    to_email: templateParams.to_email,
+                    to_email_type: typeof templateParams.to_email,
+                    to_email_length: templateParams.to_email?.length,
+                    allParams: templateParams
+                  })
+                  
+                  // Show error alert
+                  alert(`❌ Failed to send confirmation email to ${guestEmail}. Please check the console for details.`)
+                  // Still continue - don't block booking confirmation if email fails
+                }
+              } else {
+                console.error('❌ Guest email is empty or invalid:', {
+                  guestId: reservationData.guestId,
+                  emailAddress: guestData.emailAddress,
+                  email: guestData.email,
+                  allGuestData: guestData
+                })
+                console.warn('Guest email not found, skipping email notification')
+              }
+            } else {
+              console.warn('Guest document not found, skipping email notification')
+            }
+          } catch (emailError) {
+            console.error('Error sending confirmation email:', emailError)
+            // Don't throw - email failure shouldn't prevent booking confirmation
+          }
+        }
+
+        // Send cancellation email to guest when booking is declined
+        if (status === 'declined') {
+          try {
+            // Fetch guest information to get email and name
+            const guestRef = doc(db, 'Users', reservationData.guestId)
+            const guestSnap = await getDoc(guestRef)
+            
+            if (guestSnap.exists()) {
+              const guestData = guestSnap.data()
+              
+              await sendCancellationEmail(
+                reservationData,
+                id,
+                guestData
+              )
+              
+              console.log('✅ Cancellation email sent successfully to:', guestData.emailAddress || guestData.email)
+            } else {
+              console.warn('Guest document not found, skipping cancellation email')
+            }
+          } catch (emailError) {
+            console.error('Error sending cancellation email:', emailError)
+            // Don't throw - email failure shouldn't prevent booking decline
+          }
+        }
+      }
+
+      // If declined, refund the payment back to guest
+      if (status === 'declined' && reservationData.pricing) {
+        try {
+          const refundAmount = reservationData.pricing.total || 0
+          
+          if (refundAmount > 0 && reservationData.guestId) {
+            // Get guest's current balance
+            const guestRef = doc(db, 'Users', reservationData.guestId)
+            const guestSnap = await getDoc(guestRef)
+            
+            if (guestSnap.exists()) {
+              const guestData = guestSnap.data()
+              const currentGuestBalance = guestData.balance || guestData.walletBalance || guestData.paypalBalance || 0
+              const newGuestBalance = currentGuestBalance + refundAmount
+              
+              console.log('Processing refund for declined booking:', {
+                guestId: reservationData.guestId,
+                refundAmount,
+                currentBalance: currentGuestBalance,
+                newBalance: newGuestBalance,
+                reservationId: id
+              })
+              
+              // Update guest's balance
+              await updateDoc(guestRef, {
+                balance: newGuestBalance,
+                updatedAt: serverTimestamp()
+              })
+              
+              // Create refund transaction record in Transactions collection
+              const refundTransaction = {
+                userId: reservationData.guestId,
+                userRole: 'guest',
+                reservationId: id,
+                listingId: reservationData.listingId,
+                listingTitle: reservationData.listingTitle || '',
+                type: 'refund',
+                amount: refundAmount,
+                currency: 'PHP',
+                status: 'completed',
+                description: `Refund for declined booking: ${reservationData.listingTitle || 'Reservation'}`,
+                paymentMethod: reservationData.paymentSummary?.methodType || 'balance',
+                balanceBefore: currentGuestBalance,
+                balanceAfter: newGuestBalance,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              }
+              
+              await addDoc(collection(db, 'Transactions'), refundTransaction)
+              
+              // Also add to PayPalTransactions for backward compatibility
+              await addDoc(collection(db, 'PayPalTransactions'), {
+                ...refundTransaction,
+                type: 'deposit' // Keep as deposit for backward compatibility
+              })
+              
+              // Create notification for guest about refund
+              await addDoc(collection(db, 'Notifications'), {
+                type: 'refund_processed',
+                recipientId: reservationData.guestId,
+                guestId: reservationData.guestId,
+                hostId: hostId,
+                reservationId: id,
+                listingId: reservationData.listingId,
+                title: 'Refund Processed',
+                body: `Your payment of ₱${refundAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} has been refunded to your account balance.`,
+                message: `Your payment has been refunded due to booking decline. Amount: ₱${refundAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                read: false,
+                createdAt: serverTimestamp()
+              })
+              
+              console.log(`✅ Refunded ₱${refundAmount} to guest balance. New guest balance: ₱${newGuestBalance}`)
+            } else {
+              console.warn('Guest document not found, cannot process refund')
+            }
+          }
+        } catch (refundError) {
+          console.error('Error processing refund for declined booking:', refundError)
+          // Don't throw - refund failure shouldn't prevent booking decline
+          // But alert the host about the issue
+          alert(`⚠️ Booking declined, but there was an error processing the refund. Please contact support. Error: ${refundError.message}`)
+        }
       }
 
       // If confirmed, credit the amount to host and service fee to admin
@@ -516,7 +835,11 @@ const HostBookings = () => {
 
       // Only show generic alert if status is not 'confirmed' (already shown specific alerts above)
       if (status !== 'confirmed') {
-        alert(`Reservation ${status} successfully!`)
+        if (status === 'declined' && reservationData.pricing?.total) {
+          alert(`Reservation declined successfully!\n\nThe payment of ₱${reservationData.pricing.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} has been refunded to the guest's account balance.`)
+        } else {
+          alert(`Reservation ${status} successfully!`)
+        }
       }
     } catch (e) {
       console.error('Failed to update reservation:', e)
@@ -840,7 +1163,10 @@ const HostBookings = () => {
         <div 
           role="dialog" 
           aria-modal="true" 
-          onClick={() => setSelectedReservation(null)}
+          onClick={() => {
+            setSelectedReservation(null)
+            setGuestInfo(null)
+          }}
           style={{
             position: 'fixed',
             inset: 0,
@@ -859,7 +1185,7 @@ const HostBookings = () => {
               background: '#ffffff',
               borderRadius: '20px',
               width: '100%',
-              maxWidth: '520px',
+              maxWidth: '600px',
               boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
               overflow: 'hidden',
               display: 'flex',
@@ -1107,6 +1433,322 @@ const HostBookings = () => {
                       lineHeight: 1.6
                     }}>
                       {selectedReservation.guestMessage}
+                    </div>
+                  </div>
+                )}
+
+                {/* Reservation ID and Created Date */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '16px',
+                  padding: '16px',
+                  background: '#f9fafb',
+                  borderRadius: '12px',
+                  border: '1px solid #e5e7eb'
+                }}>
+                  <div>
+                    <div style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6b7280',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      marginBottom: '6px'
+                    }}>
+                      Reservation ID
+                    </div>
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: '#1f2937',
+                      fontFamily: 'monospace'
+                    }}>
+                      {selectedReservation.id.substring(0, 8).toUpperCase()}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6b7280',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      marginBottom: '6px'
+                    }}>
+                      Created Date
+                    </div>
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: '#1f2937'
+                    }}>
+                      {selectedReservation.createdAt 
+                        ? (selectedReservation.createdAt.toDate 
+                          ? selectedReservation.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : new Date(selectedReservation.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))
+                        : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Guest Information */}
+                {guestInfo && (
+                  <div style={{
+                    padding: '20px',
+                    background: '#f9fafb',
+                    borderRadius: '12px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <h3 style={{
+                      margin: '0 0 16px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: '#1f2937',
+                      borderBottom: '2px solid #e5e7eb',
+                      paddingBottom: '12px'
+                    }}>
+                      Guest Information
+                    </h3>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '12px'
+                    }}>
+                      <div>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#6b7280',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          marginBottom: '4px'
+                        }}>
+                          Name
+                        </div>
+                        <div style={{
+                          fontSize: '15px',
+                          fontWeight: 600,
+                          color: '#1f2937'
+                        }}>
+                          {guestInfo.firstName || ''} {guestInfo.lastName || ''}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#6b7280',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          marginBottom: '4px'
+                        }}>
+                          Email
+                        </div>
+                        <div style={{
+                          fontSize: '14px',
+                          color: '#1f2937',
+                          wordBreak: 'break-word'
+                        }}>
+                          {guestInfo.emailAddress || 'N/A'}
+                        </div>
+                      </div>
+                      {guestInfo.phoneNumber && (
+                        <div>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#6b7280',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            marginBottom: '4px'
+                          }}>
+                            Phone
+                          </div>
+                          <div style={{
+                            fontSize: '15px',
+                            color: '#1f2937'
+                          }}>
+                            {guestInfo.phoneNumber}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment Information */}
+                {selectedReservation.paymentSummary && (
+                  <div style={{
+                    padding: '20px',
+                    background: '#f9fafb',
+                    borderRadius: '12px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <h3 style={{
+                      margin: '0 0 16px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: '#1f2937',
+                      borderBottom: '2px solid #e5e7eb',
+                      paddingBottom: '12px'
+                    }}>
+                      Payment Information
+                    </h3>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '12px'
+                    }}>
+                      <div>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#6b7280',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          marginBottom: '4px'
+                        }}>
+                          Payment Method
+                        </div>
+                        <div style={{
+                          fontSize: '15px',
+                          fontWeight: 600,
+                          color: '#1f2937',
+                          textTransform: 'capitalize'
+                        }}>
+                          {selectedReservation.paymentSummary.methodType || 'N/A'}
+                        </div>
+                      </div>
+                      {selectedReservation.paymentSummary.last4 && (
+                        <div>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#6b7280',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            marginBottom: '4px'
+                          }}>
+                            Card Last 4
+                          </div>
+                          <div style={{
+                            fontSize: '15px',
+                            color: '#1f2937',
+                            fontFamily: 'monospace'
+                          }}>
+                            **** {selectedReservation.paymentSummary.last4}
+                          </div>
+                        </div>
+                      )}
+                      {selectedReservation.paymentSummary.transactionId && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#6b7280',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            marginBottom: '4px'
+                          }}>
+                            Transaction ID
+                          </div>
+                          <div style={{
+                            fontSize: '13px',
+                            color: '#1f2937',
+                            fontFamily: 'monospace',
+                            wordBreak: 'break-all'
+                          }}>
+                            {selectedReservation.paymentSummary.transactionId}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pricing Breakdown */}
+                {selectedReservation.pricing && (
+                  <div style={{
+                    padding: '20px',
+                    background: '#f9fafb',
+                    borderRadius: '12px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <h3 style={{
+                      margin: '0 0 16px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: '#1f2937',
+                      borderBottom: '2px solid #e5e7eb',
+                      paddingBottom: '12px'
+                    }}>
+                      Pricing Breakdown
+                    </h3>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px'
+                    }}>
+                      {selectedReservation.pricing.nightly && (
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '8px 0',
+                          borderBottom: '1px solid #e5e7eb'
+                        }}>
+                          <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                            Nightly Rate (×{selectedReservation.nights})
+                          </span>
+                          <span style={{ fontSize: '14px', fontWeight: 600, color: '#1f2937' }}>
+                            ₱{selectedReservation.pricing.nightly.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {selectedReservation.pricing.baseTotal && (
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '8px 0',
+                          borderBottom: '1px solid #e5e7eb'
+                        }}>
+                          <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                            Subtotal
+                          </span>
+                          <span style={{ fontSize: '14px', fontWeight: 600, color: '#1f2937' }}>
+                            ₱{selectedReservation.pricing.baseTotal.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {selectedReservation.pricing.serviceFee && (
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '8px 0',
+                          borderBottom: '1px solid #e5e7eb'
+                        }}>
+                          <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                            Service Fee
+                          </span>
+                          <span style={{ fontSize: '14px', fontWeight: 600, color: '#1f2937' }}>
+                            ₱{selectedReservation.pricing.serviceFee.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        padding: '12px 0 0',
+                        borderTop: '2px solid #1f2937',
+                        marginTop: '4px'
+                      }}>
+                        <span style={{ fontSize: '16px', fontWeight: 700, color: '#1f2937' }}>
+                          Total
+                        </span>
+                        <span style={{ fontSize: '18px', fontWeight: 700, color: '#059669' }}>
+                          ₱{selectedReservation.pricing.total?.toLocaleString() || 0}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}

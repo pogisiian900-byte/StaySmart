@@ -87,88 +87,246 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
   const fetchPayPalData = () => {
     try {
       setLoading(true);
+      console.log('🔄 Starting to fetch PayPal data for userId:', userId);
+      
+      // Set a timeout to ensure loading doesn't hang forever
+      const loadingTimeout = setTimeout(() => {
+        console.warn('⚠️ Transaction loading timeout - setting loading to false');
+        setLoading(false);
+      }, 10000); // 10 second timeout
       
       // Fetch transactions from both collections
-      const paypalTransactionsQuery = query(
-        collection(db, 'PayPalTransactions'),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
-      );
+      // Try with orderBy first, fallback to without if index doesn't exist
+      let paypalTransactionsQuery;
+      let transactionsQuery;
       
-      const transactionsQuery = query(
-        collection(db, 'Transactions'),
-        where('userId', '==', userId),
-        orderBy('createdAt', 'desc')
-      );
+      try {
+        paypalTransactionsQuery = query(
+          collection(db, 'PayPalTransactions'),
+          where('userId', '==', userId),
+          orderBy('createdAt', 'desc')
+        );
+        
+        transactionsQuery = query(
+          collection(db, 'Transactions'),
+          where('userId', '==', userId),
+          orderBy('createdAt', 'desc')
+        );
+      } catch (queryError) {
+        // If orderBy fails (missing index), try without orderBy
+        console.warn('OrderBy query failed, trying without orderBy:', queryError);
+        paypalTransactionsQuery = query(
+          collection(db, 'PayPalTransactions'),
+          where('userId', '==', userId)
+        );
+        
+        transactionsQuery = query(
+          collection(db, 'Transactions'),
+          where('userId', '==', userId)
+        );
+      }
 
       // Listen to PayPalTransactions
-      const unsubPayPal = onSnapshot(paypalTransactionsQuery, async (snapshot) => {
-        const transList = [];
+      const unsubPayPal = onSnapshot(
+        paypalTransactionsQuery, 
+        async (snapshot) => {
+          try {
+            clearTimeout(loadingTimeout);
+            const transList = [];
 
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          const trans = { id: doc.id, ...data, source: 'PayPalTransactions' };
-          transList.push(trans);
-        });
-
-        // Also fetch from Transactions collection for top-up transactions
-        const transactionsSnap = await getDocs(transactionsQuery);
-        transactionsSnap.forEach((doc) => {
-          const data = doc.data();
-          // Only include top-up transactions from Transactions collection
-          if (data.type === 'topup') {
-            const trans = { id: doc.id, ...data, source: 'Transactions' };
-            transList.push(trans);
-          }
-        });
-
-        // Sort by date (most recent first)
-        transList.sort((a, b) => {
-          const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds * 1000 || 0);
-          const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds * 1000 || 0);
-          return dateB - dateA;
-        });
-
-        setTransactions(transList);
-        
-        // Verify balance is in sync with transactions (optional safety check)
-        // Calculate balance from transactions
-        let calculatedBalance = 0;
-        transList.forEach((trans) => {
-          if (trans.type === 'topup' || trans.type === 'deposit') {
-            calculatedBalance += trans.amount || 0;
-          } else if (trans.type === 'payment' || trans.type === 'withdrawal') {
-            calculatedBalance -= trans.amount || 0;
-          }
-        });
-
-        // Get current balance from user document
-        try {
-          const userRef = doc(db, 'Users', userId);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            const storedBalance = userData.balance || userData.walletBalance || userData.paypalBalance || 0;
+            console.log('📊 PayPalTransactions snapshot received:', snapshot.size, 'documents');
             
-            // If there's a discrepancy, sync the balance (use stored balance as source of truth)
-            if (Math.abs(storedBalance - calculatedBalance) > 0.01) {
-              console.warn('Balance discrepancy detected. Using stored balance:', storedBalance);
+            snapshot.forEach((doc) => {
+              const data = doc.data();
+              console.log('📄 Transaction document:', {
+                id: doc.id,
+                userId: data.userId,
+                type: data.type,
+                amount: data.amount,
+                createdAt: data.createdAt
+              });
+              
+              // Only include transactions for this user
+              if (data.userId === userId) {
+                const trans = { id: doc.id, ...data, source: 'PayPalTransactions' };
+                transList.push(trans);
+              }
+            });
+
+            console.log('✅ PayPalTransactions added:', transList.length, 'transactions');
+
+            // Also fetch from Transactions collection for top-up transactions
+            try {
+              const transactionsSnap = await getDocs(transactionsQuery);
+              console.log('📊 Transactions collection snapshot received:', transactionsSnap.size, 'documents');
+              
+              transactionsSnap.forEach((doc) => {
+                const data = doc.data();
+                // Include all transaction types from Transactions collection (not just topup)
+                // Only include if userId matches
+                if (data.userId === userId) {
+                  const trans = { id: doc.id, ...data, source: 'Transactions' };
+                  // Avoid duplicates - check if transaction already exists from PayPalTransactions
+                  const exists = transList.some(t => 
+                    t.paypalTransactionId === data.paypalTransactionId && 
+                    t.paypalTransactionId !== undefined
+                  );
+                  if (!exists) {
+                    transList.push(trans);
+                  }
+                }
+              });
+              
+              console.log('✅ Total transactions after adding from Transactions collection:', transList.length);
+            } catch (transError) {
+              console.error('Error fetching from Transactions collection:', transError);
+              // Continue with what we have from PayPalTransactions
+            }
+
+            // Sort by date (most recent first)
+            transList.sort((a, b) => {
+              const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds * 1000 || 0);
+              const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds * 1000 || 0);
+              return dateB - dateA;
+            });
+
+            console.log('✅ Final transaction list:', transList.length, 'transactions');
+            console.log('📋 Transaction types:', transList.map(t => ({ type: t.type, amount: t.amount })));
+            
+            setTransactions(transList);
+            
+            // Verify balance is in sync with transactions (optional safety check)
+            // Calculate balance from transactions
+            let calculatedBalance = 0;
+            transList.forEach((trans) => {
+              if (trans.type === 'topup' || trans.type === 'deposit') {
+                calculatedBalance += trans.amount || 0;
+              } else if (trans.type === 'payment' || trans.type === 'withdrawal') {
+                calculatedBalance -= trans.amount || 0;
+              }
+            });
+
+            // Get current balance from user document
+            try {
+              const userRef = doc(db, 'Users', userId);
+              const userSnap = await getDoc(userRef);
+              if (userSnap.exists()) {
+                const userData = userSnap.data();
+                const storedBalance = userData.balance || userData.walletBalance || userData.paypalBalance || 0;
+                
+                // If there's a discrepancy, sync the balance (use stored balance as source of truth)
+                if (Math.abs(storedBalance - calculatedBalance) > 0.01) {
+                  console.warn('Balance discrepancy detected. Using stored balance:', storedBalance);
+                }
+              }
+            } catch (error) {
+              console.error('Error verifying balance:', error);
+            }
+            
+            setLoading(false);
+          } catch (innerError) {
+            console.error('Error processing snapshot data:', innerError);
+            clearTimeout(loadingTimeout);
+            setLoading(false);
+            setTransactions([]);
+          }
+        }, 
+        (error) => {
+          console.error('Error fetching PayPal data:', error);
+          clearTimeout(loadingTimeout);
+          setLoading(false);
+          setTransactions([]);
+          
+          // If it's a missing index error, try without orderBy
+          if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+            console.log('Attempting to fetch without orderBy due to missing index...');
+            try {
+              const fallbackQuery = query(
+                collection(db, 'PayPalTransactions'),
+                where('userId', '==', userId)
+              );
+              
+              const unsubFallback = onSnapshot(fallbackQuery, async (snapshot) => {
+                try {
+                  const transList = [];
+                  console.log('📊 Fallback query snapshot received:', snapshot.size, 'documents');
+                  
+                  snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    // Only include transactions for this user
+                    if (data.userId === userId) {
+                      console.log('📄 Fallback transaction:', {
+                        id: doc.id,
+                        userId: data.userId,
+                        type: data.type,
+                        amount: data.amount
+                      });
+                      transList.push({ id: doc.id, ...data, source: 'PayPalTransactions' });
+                    }
+                  });
+                  
+                  // Also try to fetch from Transactions collection
+                  try {
+                    const fallbackTransQuery = query(
+                      collection(db, 'Transactions'),
+                      where('userId', '==', userId)
+                    );
+                    const transactionsSnap = await getDocs(fallbackTransQuery);
+                    transactionsSnap.forEach((doc) => {
+                      const data = doc.data();
+                      if (data.userId === userId) {
+                        const exists = transList.some(t => 
+                          t.paypalTransactionId === data.paypalTransactionId && 
+                          t.paypalTransactionId !== undefined
+                        );
+                        if (!exists) {
+                          transList.push({ id: doc.id, ...data, source: 'Transactions' });
+                        }
+                      }
+                    });
+                  } catch (transError) {
+                    console.error('Error fetching Transactions in fallback:', transError);
+                  }
+                  
+                  // Sort client-side
+                  transList.sort((a, b) => {
+                    const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds * 1000 || 0);
+                    const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds * 1000 || 0);
+                    return dateB - dateA;
+                  });
+                  
+                  console.log('✅ Fallback query result:', transList.length, 'transactions');
+                  setTransactions(transList);
+                  setLoading(false);
+                } catch (fallbackInnerError) {
+                  console.error('Error processing fallback snapshot:', fallbackInnerError);
+                  setLoading(false);
+                  setTransactions([]);
+                }
+              }, (fallbackError) => {
+                console.error('Fallback query also failed:', fallbackError);
+                setLoading(false);
+                setTransactions([]);
+              });
+              
+              return unsubFallback;
+            } catch (fallbackError) {
+              console.error('Error setting up fallback query:', fallbackError);
+              setLoading(false);
+              setTransactions([]);
             }
           }
-        } catch (error) {
-          console.error('Error verifying balance:', error);
         }
-        
-        setLoading(false);
-      }, (error) => {
-        console.error('Error fetching PayPal data:', error);
-        setLoading(false);
-      });
+      );
 
-      return unsubPayPal;
+      return () => {
+        clearTimeout(loadingTimeout);
+        unsubPayPal();
+      };
     } catch (error) {
-      console.error('Error fetching PayPal data:', error);
+      console.error('Error setting up PayPal data fetch:', error);
       setLoading(false);
+      setTransactions([]);
       return () => {}; // Return empty function if error
     }
   };

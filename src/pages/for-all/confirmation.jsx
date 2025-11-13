@@ -59,7 +59,7 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         to_email: formData.emailAddress,
         verify_link:
           formData.role === 'host'
-            ? `${window.location.origin}/getStarted/${user.uid}`
+            ? `${window.location.origin}/host/${user.uid}`
             : `${window.location.origin}/guest/${user.uid}`
       }
 
@@ -99,7 +99,7 @@ const ConfirmationModal = ({ formData, onPrev }) => {
         to_email: formData.emailAddress,
         verify_link:
           formData.role === 'host'
-            ? `https://staysmartlisting.netlify.app/getStarted/${createdUser.uid}`
+            ? `https://staysmartlisting.netlify.app/host/${createdUser.uid}`
             : `https://staysmartlisting.netlify.app//guest/${createdUser.uid}`
       }
 

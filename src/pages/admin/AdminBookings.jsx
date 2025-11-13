@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { collection, onSnapshot, doc, getDoc, updateDoc, serverTimestamp, addDoc, getDocs } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { useAuth } from '../../layout/AuthContext'
+import { sendCancellationEmail } from '../../services/cancellationEmail'
 import './admin-dashboard.css'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
 import dialogPolyfill from 'dialog-polyfill'
@@ -423,24 +424,53 @@ const AdminBookings = () => {
       // Create notification for guest
       if (bookingData.guestId) {
         const guestNotification = {
-          type: newStatus === 'confirmed' ? 'booking_confirmed' : newStatus === 'declined' ? 'booking_declined' : 'booking_updated',
+          type: newStatus === 'confirmed' ? 'booking_confirmed' : newStatus === 'declined' ? 'booking_declined' : newStatus === 'cancelled' ? 'booking_cancelled' : 'booking_updated',
           recipientId: bookingData.guestId,
           guestId: bookingData.guestId,
           hostId: bookingData.hostId,
           reservationId: bookingId,
           listingId: bookingData.listingId,
           listingTitle: bookingData.listingTitle || '',
-          title: newStatus === 'confirmed' ? 'Booking Confirmed!' : newStatus === 'declined' ? 'Booking Declined' : 'Booking Updated',
+          title: newStatus === 'confirmed' ? 'Booking Confirmed!' : newStatus === 'declined' ? 'Booking Declined' : newStatus === 'cancelled' ? 'Booking Cancelled' : 'Booking Updated',
           body: newStatus === 'confirmed' 
             ? `Your booking for ${bookingData.listingTitle || 'listing'} has been confirmed by admin!`
             : newStatus === 'declined'
             ? `Your booking request for ${bookingData.listingTitle || 'listing'} has been declined by admin.`
+            : newStatus === 'cancelled'
+            ? `Your booking for ${bookingData.listingTitle || 'listing'} has been cancelled.`
             : `Your booking status has been updated to ${newStatus}.`,
           message: `Your booking status has been updated to ${newStatus}.`,
           read: false,
           createdAt: serverTimestamp(),
         }
         await addDoc(collection(db, 'Notifications'), guestNotification)
+      }
+
+      // Send cancellation email to guest when booking is cancelled
+      if (newStatus === 'cancelled') {
+        try {
+          // Fetch guest information to get email and name
+          const guestRef = doc(db, 'Users', bookingData.guestId)
+          const guestSnap = await getDoc(guestRef)
+          
+          if (guestSnap.exists()) {
+            const guestData = guestSnap.data()
+            
+            await sendCancellationEmail(
+              bookingData,
+              bookingId,
+              guestData
+            )
+            
+            console.log('✅ Cancellation email sent successfully to:', guestData.emailAddress || guestData.email)
+          } else {
+            console.warn('Guest document not found, skipping cancellation email')
+          }
+        } catch (emailError) {
+          console.error('Error sending cancellation email:', emailError)
+          // Don't throw - email failure shouldn't prevent status update
+          // Alert will still show success for status update
+        }
       }
 
       // Create notification for host

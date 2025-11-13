@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { collection, onSnapshot, orderBy, query, where, updateDoc, doc, serverTimestamp, addDoc } from 'firebase/firestore'
+import { collection, onSnapshot, orderBy, query, where, updateDoc, doc, serverTimestamp, addDoc, getDoc } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import ContinuousCalendar from '../../components/ContinuousCalendar'
 import './guest-bookingConfirmation.css'
@@ -23,6 +23,7 @@ const GuestBookings = () => {
   })
   const [hoveredRating, setHoveredRating] = useState(0)
   const [showCompleted, setShowCompleted] = useState(false)
+  const [hostInfo, setHostInfo] = useState(null) // Store host information for selected reservation
 
   useEffect(() => {
     if (!guestId) return
@@ -41,6 +42,32 @@ const GuestBookings = () => {
     })
     return () => unsub()
   }, [guestId])
+
+  // Fetch host information when reservation is selected
+  useEffect(() => {
+    const fetchHostInfo = async () => {
+      if (!selectedReservation?.hostId) {
+        setHostInfo(null)
+        return
+      }
+      
+      try {
+        const hostRef = doc(db, 'Users', selectedReservation.hostId)
+        const hostSnap = await getDoc(hostRef)
+        
+        if (hostSnap.exists()) {
+          setHostInfo(hostSnap.data())
+        } else {
+          setHostInfo(null)
+        }
+      } catch (error) {
+        console.error('Error fetching host info:', error)
+        setHostInfo(null)
+      }
+    }
+    
+    fetchHostInfo()
+  }, [selectedReservation])
 
   const bookedDates = useMemo(() => {
     const priority = { Pending: 3, Confirmed: 2, Declined: 1 }
@@ -524,7 +551,10 @@ const GuestBookings = () => {
         <div 
           role="dialog" 
           aria-modal="true" 
-          onClick={() => setSelectedReservation(null)}
+          onClick={() => {
+            setSelectedReservation(null)
+            setHostInfo(null)
+          }}
           style={{
             position: 'fixed',
             inset: 0,
@@ -543,7 +573,7 @@ const GuestBookings = () => {
               background: '#ffffff',
               borderRadius: '20px',
               width: '100%',
-              maxWidth: '520px',
+              maxWidth: '600px',
               boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
               overflow: 'hidden',
               display: 'flex',
@@ -795,29 +825,318 @@ const GuestBookings = () => {
                   </div>
                 )}
 
-                {selectedReservation?.paymentSummary?.transactionId && (
-                  <div style={{
-                    padding: '12px 16px',
-                    background: '#f9fafb',
-                    borderRadius: '8px',
-                    border: '1px solid #e5e7eb'
-                  }}>
+                {/* Reservation ID and Created Date */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '16px',
+                  padding: '16px',
+                  background: '#f9fafb',
+                  borderRadius: '12px',
+                  border: '1px solid #e5e7eb'
+                }}>
+                  <div>
                     <div style={{
                       fontSize: '12px',
                       fontWeight: 600,
                       color: '#6b7280',
-                      marginBottom: '4px',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
+                      letterSpacing: '0.5px',
+                      marginBottom: '6px'
                     }}>
-                      Transaction ID
+                      Reservation ID
                     </div>
                     <div style={{
-                      fontSize: '13px',
-                      color: '#374151',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: '#1f2937',
                       fontFamily: 'monospace'
                     }}>
-                      {selectedReservation.paymentSummary.transactionId}
+                      {selectedReservation.id.substring(0, 8).toUpperCase()}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6b7280',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      marginBottom: '6px'
+                    }}>
+                      Created Date
+                    </div>
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      color: '#1f2937'
+                    }}>
+                      {selectedReservation.createdAt 
+                        ? (selectedReservation.createdAt.toDate 
+                          ? selectedReservation.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : new Date(selectedReservation.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))
+                        : 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Host Information */}
+                {hostInfo && (
+                  <div style={{
+                    padding: '20px',
+                    background: '#f9fafb',
+                    borderRadius: '12px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <h3 style={{
+                      margin: '0 0 16px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: '#1f2937',
+                      borderBottom: '2px solid #e5e7eb',
+                      paddingBottom: '12px'
+                    }}>
+                      Host Information
+                    </h3>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '12px'
+                    }}>
+                      <div>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#6b7280',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          marginBottom: '4px'
+                        }}>
+                          Name
+                        </div>
+                        <div style={{
+                          fontSize: '15px',
+                          fontWeight: 600,
+                          color: '#1f2937'
+                        }}>
+                          {hostInfo.firstName || ''} {hostInfo.lastName || ''}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#6b7280',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          marginBottom: '4px'
+                        }}>
+                          Email
+                        </div>
+                        <div style={{
+                          fontSize: '14px',
+                          color: '#1f2937',
+                          wordBreak: 'break-word'
+                        }}>
+                          {hostInfo.emailAddress || 'N/A'}
+                        </div>
+                      </div>
+                      {hostInfo.phoneNumber && (
+                        <div>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#6b7280',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            marginBottom: '4px'
+                          }}>
+                            Phone
+                          </div>
+                          <div style={{
+                            fontSize: '15px',
+                            color: '#1f2937'
+                          }}>
+                            {hostInfo.phoneNumber}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment Information */}
+                {selectedReservation.paymentSummary && (
+                  <div style={{
+                    padding: '20px',
+                    background: '#f9fafb',
+                    borderRadius: '12px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <h3 style={{
+                      margin: '0 0 16px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: '#1f2937',
+                      borderBottom: '2px solid #e5e7eb',
+                      paddingBottom: '12px'
+                    }}>
+                      Payment Information
+                    </h3>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '12px'
+                    }}>
+                      <div>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#6b7280',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          marginBottom: '4px'
+                        }}>
+                          Payment Method
+                        </div>
+                        <div style={{
+                          fontSize: '15px',
+                          fontWeight: 600,
+                          color: '#1f2937',
+                          textTransform: 'capitalize'
+                        }}>
+                          {selectedReservation.paymentSummary.methodType || 'N/A'}
+                        </div>
+                      </div>
+                      {selectedReservation.paymentSummary.last4 && (
+                        <div>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#6b7280',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            marginBottom: '4px'
+                          }}>
+                            Card Last 4
+                          </div>
+                          <div style={{
+                            fontSize: '15px',
+                            color: '#1f2937',
+                            fontFamily: 'monospace'
+                          }}>
+                            **** {selectedReservation.paymentSummary.last4}
+                          </div>
+                        </div>
+                      )}
+                      {selectedReservation.paymentSummary.transactionId && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <div style={{
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#6b7280',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px',
+                            marginBottom: '4px'
+                          }}>
+                            Transaction ID
+                          </div>
+                          <div style={{
+                            fontSize: '13px',
+                            color: '#1f2937',
+                            fontFamily: 'monospace',
+                            wordBreak: 'break-all'
+                          }}>
+                            {selectedReservation.paymentSummary.transactionId}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pricing Breakdown */}
+                {selectedReservation.pricing && (
+                  <div style={{
+                    padding: '20px',
+                    background: '#f9fafb',
+                    borderRadius: '12px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <h3 style={{
+                      margin: '0 0 16px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: '#1f2937',
+                      borderBottom: '2px solid #e5e7eb',
+                      paddingBottom: '12px'
+                    }}>
+                      Pricing Breakdown
+                    </h3>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px'
+                    }}>
+                      {selectedReservation.pricing.nightly && (
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '8px 0',
+                          borderBottom: '1px solid #e5e7eb'
+                        }}>
+                          <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                            Nightly Rate (×{selectedReservation.nights})
+                          </span>
+                          <span style={{ fontSize: '14px', fontWeight: 600, color: '#1f2937' }}>
+                            ₱{selectedReservation.pricing.nightly.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {selectedReservation.pricing.baseTotal && (
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '8px 0',
+                          borderBottom: '1px solid #e5e7eb'
+                        }}>
+                          <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                            Subtotal
+                          </span>
+                          <span style={{ fontSize: '14px', fontWeight: 600, color: '#1f2937' }}>
+                            ₱{selectedReservation.pricing.baseTotal.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {selectedReservation.pricing.serviceFee && (
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          padding: '8px 0',
+                          borderBottom: '1px solid #e5e7eb'
+                        }}>
+                          <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                            Service Fee
+                          </span>
+                          <span style={{ fontSize: '14px', fontWeight: 600, color: '#1f2937' }}>
+                            ₱{selectedReservation.pricing.serviceFee.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        padding: '12px 0 0',
+                        borderTop: '2px solid #1f2937',
+                        marginTop: '4px'
+                      }}>
+                        <span style={{ fontSize: '16px', fontWeight: 700, color: '#1f2937' }}>
+                          Total
+                        </span>
+                        <span style={{ fontSize: '18px', fontWeight: 700, color: '#059669' }}>
+                          ₱{selectedReservation.pricing.total?.toLocaleString() || 0}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
