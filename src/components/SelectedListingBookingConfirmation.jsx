@@ -628,10 +628,24 @@ const SelectedListingBookingConfirmation = () => {
     const checkOutDate = normalizeDate(checkOut);
 
     // Validate dates
+    if (!checkInDate || !checkOutDate) {
+      showError('Please select valid check-in and check-out dates.');
+      return;
+    }
+
+    // Prevent same-day reservations - check-in must be at least tomorrow
+    const today = new Date();
+    const todayNormalized = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    if (checkInDate.getTime() <= todayNormalized.getTime()) {
+      showError('Check-in date must be at least tomorrow. Same-day reservations are not allowed.');
+      return;
+    }
+
     if (checkOutDate <= checkInDate) {
       showError('Check-out date must be after check-in date.');
-        return;
-      }
+      return;
+    }
 
     // Check for existing reservations with overlapping dates for the same listing
     const listingIdFinal = listing.id || listingId;
@@ -657,6 +671,11 @@ const SelectedListingBookingConfirmation = () => {
       // Normalize existing reservation dates consistently
       const existingCheckInNormalized = normalizeDate(reservation.checkIn);
       const existingCheckOutNormalized = normalizeDate(reservation.checkOut);
+
+      // Skip if dates are invalid/null
+      if (!existingCheckInNormalized || !existingCheckOutNormalized || !checkInDate || !checkOutDate) {
+        return false;
+      }
 
       // Check for overlap: 
       // Dates overlap if the new booking's stay period intersects with existing booking's stay period.
@@ -844,25 +863,6 @@ const SelectedListingBookingConfirmation = () => {
 
   return (
     <div className="booking-container">
-      {/* Back Button */}
-      <button className="back-btn" onClick={() => navigate(-1)} title="Go back">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="30"
-          height="30"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="m12 19-7-7 7-7" />
-          <path d="M19 12H5" />
-        </svg>
-        <span className="back-btn-text">Back</span>
-      </button>
-
       <div className="booking-main">
         {/* Left Side: Booking Steps */}
         <div className="booking-fields">

@@ -413,7 +413,7 @@ function Host_Navigation({ hostId, userData }) {
             >
               ⭐ Points & Perks
             </button>
-            <button>⚙️ Account Settings</button>
+            <button onClick={() => { navigate(`/host/${hostId}/account-settings`); setOpen(false); }}>⚙️ Account Settings</button>
             <button onClick={showLogoutConfirmation}>🚪 Logout</button>
           </div>
         )}

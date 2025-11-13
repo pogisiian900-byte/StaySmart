@@ -83,6 +83,8 @@
 .status-pending { background: #fff8e1; color: #8a6d00; border: 1px solid #f0d77b; }
 .status-confirmed { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
 .status-declined { background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a; }
+.status-refund_pending { background: #fff3e0; color: #e65100; border: 1px solid #ffb74d; }
+.status-refunded { background: #f3e5f5; color: #4a148c; border: 1px solid #ba68c8; }
 
 /* Modal */
 .modal-overlay {

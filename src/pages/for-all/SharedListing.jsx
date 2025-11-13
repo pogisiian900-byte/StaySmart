@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { db, auth} from "../../config/firebase";
 import { useNavigate, useParams } from "react-router-dom";
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, Timestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, Timestamp, collection, query, where, getDocs } from "firebase/firestore";
 
 
 import nothing from "/static/no photo.webp";
@@ -42,7 +42,10 @@ const SharedListing = () => {
   const [ratingLoading, setRatingLoading] = useState(false); // Loading state for rating submission
   const [userRatings, setUserRatings] = useState([]); // All ratings for this listing
   const [showRatingForm, setShowRatingForm] = useState(false); // Toggle rating form
- 
+  
+  // Reservations state for unavailable dates
+  const [reservations, setReservations] = useState([]);
+  const [reservationsLoading, setReservationsLoading] = useState(true);
 
     const handleMessageHost = async (hostId, guestId) => {
       if (!guestId) {
@@ -68,13 +71,78 @@ const SharedListing = () => {
 }, []);
 
   const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
   const twoDaysLater = new Date();
   twoDaysLater.setDate(today.getDate() + 2);
 
   // Format dates as YYYY-MM-DD for <input type="date">
   const formatDate = (date) => date.toISOString().split("T")[0];
-const [checkIn, setCheckIn] = useState(formatDate(today));
+const [checkIn, setCheckIn] = useState(formatDate(tomorrow));
 const [checkOut, setCheckOut] = useState(formatDate(twoDaysLater));
+
+  // Calculate unavailable dates from reservations
+  const unavailableDates = useMemo(() => {
+    const unavailable = new Set();
+    const unavailableRanges = [];
+    
+    reservations.forEach((reservation) => {
+      const status = (reservation.status || '').toLowerCase();
+      // Only consider pending or confirmed reservations
+      if (status !== 'pending' && status !== 'confirmed') return;
+      
+      if (!reservation.checkIn || !reservation.checkOut) return;
+      
+      const startDate = new Date(reservation.checkIn);
+      const endDate = new Date(reservation.checkOut);
+      
+      // Normalize to midnight
+      const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      
+      // Add all dates in the range (check-in inclusive, check-out exclusive)
+      const dayMs = 86400000;
+      for (let t = start.getTime(); t < end.getTime(); t += dayMs) {
+        const d = new Date(t);
+        const dateKey = formatDate(d);
+        unavailable.add(dateKey);
+      }
+      
+      unavailableRanges.push({
+        checkIn: start,
+        checkOut: end,
+        status: reservation.status
+      });
+    });
+    
+    return { dates: unavailable, ranges: unavailableRanges };
+  }, [reservations]);
+
+  // Check if selected dates conflict with unavailable dates
+  const checkDateConflict = (checkInDate, checkOutDate) => {
+    if (!checkInDate || !checkOutDate) return false;
+    
+    const start = new Date(checkInDate);
+    const end = new Date(checkOutDate);
+    const startNormalized = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const endNormalized = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    
+    // Check if any date in the range is unavailable
+    const dayMs = 86400000;
+    for (let t = startNormalized.getTime(); t < endNormalized.getTime(); t += dayMs) {
+      const d = new Date(t);
+      const dateKey = formatDate(d);
+      if (unavailableDates.dates.has(dateKey)) {
+        return true;
+      }
+    }
+    
+    // Also check for overlaps with existing reservations
+    return unavailableDates.ranges.some(range => {
+      return startNormalized.getTime() < range.checkOut.getTime() && 
+             endNormalized.getTime() > range.checkIn.getTime();
+    });
+  };
 
 const handleCheckInChange = (e) => {
   const newCheckIn = new Date(e.target.value);
@@ -86,6 +154,21 @@ const handleCheckInChange = (e) => {
 
   if (new Date(checkOut) < minCheckoutDate) {
     setCheckOut(formatDate(minCheckoutDate));
+  }
+  
+  // Check for conflicts
+  if (checkOut && checkDateConflict(formatDate(newCheckIn), checkOut)) {
+    alert('Warning: The selected dates conflict with existing reservations. Please choose different dates.');
+  }
+};
+
+const handleCheckOutChange = (e) => {
+  const newCheckOut = e.target.value;
+  setCheckOut(newCheckOut);
+  
+  // Check for conflicts
+  if (checkIn && checkDateConflict(checkIn, newCheckOut)) {
+    alert('Warning: The selected dates conflict with existing reservations. Please choose different dates.');
   }
 };
 
@@ -160,6 +243,35 @@ const handleCheckInChange = (e) => {
 
   fetchListing();
 }, [listingId]);
+
+  // Fetch reservations for this listing to show unavailable dates
+  useEffect(() => {
+    const fetchReservations = async () => {
+      if (!listingId) return;
+      
+      try {
+        setReservationsLoading(true);
+        const reservationsQuery = query(
+          collection(db, 'Reservation'),
+          where('listingId', '==', listingId)
+        );
+        
+        const reservationsSnapshot = await getDocs(reservationsQuery);
+        const reservationsList = reservationsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        setReservations(reservationsList);
+      } catch (error) {
+        console.error('Error fetching reservations:', error);
+      } finally {
+        setReservationsLoading(false);
+      }
+    };
+
+    fetchReservations();
+  }, [listingId]);
 
 useEffect(() => {
     const fetchFavourites = async () => {
@@ -801,7 +913,7 @@ const handleAddGuest = (key) => {
     <input
       type="date"
       value={checkIn}
-      min={formatDate(today)} // Prevent past dates
+      min={formatDate(tomorrow)} // Prevent same-day reservations
       onChange={handleCheckInChange}
     />
   </div>
@@ -811,10 +923,52 @@ const handleAddGuest = (key) => {
       type="date"
       value={checkOut}
       min={formatDate(new Date(new Date(checkIn).setDate(new Date(checkIn).getDate() + 2)))} // must be 2+ days later
-      onChange={(e) => setCheckOut(e.target.value)}
+      onChange={handleCheckOutChange}
     />
   </div>
 </div>
+
+          {/* Unavailable Dates Display */}
+          {unavailableDates.ranges.length > 0 && (
+            <div style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '8px',
+              fontSize: '0.9rem'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                marginBottom: '8px',
+                fontWeight: 600,
+                color: '#991b1b'
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span>Unavailable Dates</span>
+              </div>
+              <div style={{ color: '#7f1d1d', lineHeight: '1.6' }}>
+                {unavailableDates.ranges.map((range, idx) => {
+                  const checkInStr = range.checkIn.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  const checkOutStr = range.checkOut.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  return (
+                    <div key={idx} style={{ marginBottom: '4px' }}>
+                      <span style={{ fontWeight: 500 }}>{checkInStr} - {checkOutStr}</span>
+                      <span style={{ marginLeft: '8px', fontSize: '0.85rem', color: '#991b1b' }}>
+                        ({range.status})
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
 
     <div className="guest-section">

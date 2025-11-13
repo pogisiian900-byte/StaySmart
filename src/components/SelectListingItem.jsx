@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { db, auth } from "../config/firebase";
 import { useNavigate, useParams } from "react-router-dom";
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, Timestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, Timestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { createOrGetConversation } from "../pages/for-all/messages/createOrGetConversation";
 
 import nothing from "/static/no photo.webp";
@@ -53,7 +53,13 @@ const SelectListingItem = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [imageIndex, setImageIndex] = useState(0);
 
+  // Reservations state for unavailable dates
+  const [reservations, setReservations] = useState([]);
+  const [reservationsLoading, setReservationsLoading] = useState(true);
+
   const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
   const twoDaysLater = new Date();
   twoDaysLater.setDate(today.getDate() + 2);
 
@@ -63,6 +69,69 @@ const SelectListingItem = () => {
   // Dates start as null - user must select them
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
+
+  // Calculate unavailable dates from reservations
+  const unavailableDates = useMemo(() => {
+    const unavailable = new Set();
+    const unavailableRanges = [];
+    
+    reservations.forEach((reservation) => {
+      const status = (reservation.status || '').toLowerCase();
+      // Only consider pending or confirmed reservations
+      if (status !== 'pending' && status !== 'confirmed') return;
+      
+      if (!reservation.checkIn || !reservation.checkOut) return;
+      
+      const startDate = new Date(reservation.checkIn);
+      const endDate = new Date(reservation.checkOut);
+      
+      // Normalize to midnight
+      const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      
+      // Add all dates in the range (check-in inclusive, check-out exclusive)
+      const dayMs = 86400000;
+      for (let t = start.getTime(); t < end.getTime(); t += dayMs) {
+        const d = new Date(t);
+        const dateKey = formatDate(d);
+        unavailable.add(dateKey);
+      }
+      
+      unavailableRanges.push({
+        checkIn: start,
+        checkOut: end,
+        status: reservation.status
+      });
+    });
+    
+    return { dates: unavailable, ranges: unavailableRanges };
+  }, [reservations]);
+
+  // Check if selected dates conflict with unavailable dates
+  const checkDateConflict = (checkInDate, checkOutDate) => {
+    if (!checkInDate || !checkOutDate) return false;
+    
+    const start = new Date(checkInDate);
+    const end = new Date(checkOutDate);
+    const startNormalized = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const endNormalized = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    
+    // Check if any date in the range is unavailable
+    const dayMs = 86400000;
+    for (let t = startNormalized.getTime(); t < endNormalized.getTime(); t += dayMs) {
+      const d = new Date(t);
+      const dateKey = formatDate(d);
+      if (unavailableDates.dates.has(dateKey)) {
+        return true;
+      }
+    }
+    
+    // Also check for overlaps with existing reservations
+    return unavailableDates.ranges.some(range => {
+      return startNormalized.getTime() < range.checkOut.getTime() && 
+             endNormalized.getTime() > range.checkIn.getTime();
+    });
+  };
 
   const handleCheckInChange = (e) => {
     const newCheckIn = e.target.value;
@@ -77,6 +146,21 @@ const SelectListingItem = () => {
       if (!checkOut || new Date(checkOut) < minCheckoutDate) {
         setCheckOut(formatDate(minCheckoutDate));
       }
+      
+      // Check for conflicts
+      if (checkOut && checkDateConflict(newCheckIn, checkOut)) {
+        alert('Warning: The selected dates conflict with existing reservations. Please choose different dates.');
+      }
+    }
+  };
+
+  const handleCheckOutChange = (e) => {
+    const newCheckOut = e.target.value;
+    setCheckOut(newCheckOut);
+    
+    // Check for conflicts
+    if (checkIn && checkDateConflict(checkIn, newCheckOut)) {
+      alert('Warning: The selected dates conflict with existing reservations. Please choose different dates.');
     }
   };
 
@@ -147,6 +231,35 @@ const SelectListingItem = () => {
     };
 
     fetchListing();
+  }, [listingId]);
+
+  // Fetch reservations for this listing to show unavailable dates
+  useEffect(() => {
+    const fetchReservations = async () => {
+      if (!listingId) return;
+      
+      try {
+        setReservationsLoading(true);
+        const reservationsQuery = query(
+          collection(db, 'Reservation'),
+          where('listingId', '==', listingId)
+        );
+        
+        const reservationsSnapshot = await getDocs(reservationsQuery);
+        const reservationsList = reservationsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        setReservations(reservationsList);
+      } catch (error) {
+        console.error('Error fetching reservations:', error);
+      } finally {
+        setReservationsLoading(false);
+      }
+    };
+
+    fetchReservations();
   }, [listingId]);
 
   useEffect(() => {
@@ -1028,7 +1141,7 @@ const SelectListingItem = () => {
               <input
                 type="date"
                 value={checkIn}
-                min={formatDate(today)}
+                min={formatDate(tomorrow)}
                 onChange={handleCheckInChange}
               />
             </div>
@@ -1038,10 +1151,52 @@ const SelectListingItem = () => {
                 type="date"
                 value={checkOut}
                 min={checkIn ? formatDate(new Date(new Date(checkIn).setDate(new Date(checkIn).getDate() + 2))) : formatDate(twoDaysLater)}
-                onChange={(e) => setCheckOut(e.target.value)}
+                onChange={handleCheckOutChange}
               />
             </div>
           </div>
+
+          {/* Unavailable Dates Display */}
+          {unavailableDates.ranges.length > 0 && (
+            <div style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '8px',
+              fontSize: '0.9rem'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                marginBottom: '8px',
+                fontWeight: 600,
+                color: '#991b1b'
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span>Unavailable Dates</span>
+              </div>
+              <div style={{ color: '#7f1d1d', lineHeight: '1.6' }}>
+                {unavailableDates.ranges.map((range, idx) => {
+                  const checkInStr = range.checkIn.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  const checkOutStr = range.checkOut.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  return (
+                    <div key={idx} style={{ marginBottom: '4px' }}>
+                      <span style={{ fontWeight: 500 }}>{checkInStr} - {checkOutStr}</span>
+                      <span style={{ marginLeft: '8px', fontSize: '0.85rem', color: '#991b1b' }}>
+                        ({range.status})
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="guest-section">
             <label>Guests</label>

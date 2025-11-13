@@ -42,9 +42,6 @@ export const processPayPalPayout = httpsCallable(functions, 'processPayPalPayout
 // PayPal payout using REST API (server-side)
 export const processPayPalPayoutRest = httpsCallable(functions, 'processPayPalPayoutRest');
 
-// Get PayPal balance from API (server-side)
-export const getPayPalBalance = httpsCallable(functions, 'getPayPalBalance');
-
 // Sync PayPal balance to Firebase (server-side)
 export const syncPayPalBalanceToFirebase = httpsCallable(functions, 'syncPayPalBalanceToFirebase');
 

@@ -23,6 +23,7 @@ const HostBookings = () => {
   const [showDeclineDialog, setShowDeclineDialog] = useState(false)
   const [reservationToDecline, setReservationToDecline] = useState(null)
   const declineDialogRef = React.useRef(null)
+  const [showCompleted, setShowCompleted] = useState(false)
 
   // Read date from URL params on mount
   useEffect(() => {
@@ -140,6 +141,111 @@ const HostBookings = () => {
     if (!reservationToDecline) return
     handleCloseDeclineDialog()
     await handleDecision(reservationToDecline.id, 'declined')
+  }
+
+  const handleRefundDecision = async (reservationId, approve) => {
+    try {
+      setUpdating(reservationId)
+      
+      const reservationRef = doc(db, 'Reservation', reservationId)
+      const reservationSnap = await getDoc(reservationRef)
+      
+      if (!reservationSnap.exists()) {
+        alert('Reservation not found')
+        return
+      }
+
+      const reservationData = reservationSnap.data()
+      
+      // Find the refund record
+      const refundsQuery = query(
+        collection(db, 'Refunds'),
+        where('reservationId', '==', reservationId),
+        where('status', '==', 'refund_pending')
+      )
+      const refundsSnapshot = await getDocs(refundsQuery)
+      
+      if (refundsSnapshot.empty) {
+        alert('Refund record not found')
+        return
+      }
+      
+      const refundDoc = refundsSnapshot.docs[0]
+      const refundRef = doc(db, 'Refunds', refundDoc.id)
+      
+      if (approve) {
+        // Approve refund - set status to refunded
+        await updateDoc(reservationRef, {
+          status: 'refunded',
+          refundApprovedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        })
+        
+        await updateDoc(refundRef, {
+          status: 'approved',
+          approvedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        })
+        
+        // Notify guest
+        await addDoc(collection(db, 'Notifications'), {
+          type: 'refund_approved',
+          recipientId: reservationData.guestId,
+          guestId: reservationData.guestId,
+          hostId: hostId,
+          reservationId: reservationId,
+          listingId: reservationData.listingId,
+          title: 'Refund Approved',
+          body: `Your refund request for ${reservationData.listingTitle} has been approved. Amount: ₱${reservationData?.pricing?.total || 0}`,
+          message: `Your refund request has been approved. The refund will be processed shortly.`,
+          read: false,
+          createdAt: serverTimestamp()
+        })
+        
+        alert('Refund approved successfully! The guest has been notified.')
+      } else {
+        // Cancel refund - restore original status
+        const originalStatus = reservationData.status === 'refund_pending' 
+          ? (reservationData.refundRequestedAt ? 'confirmed' : 'pending')
+          : reservationData.status
+        
+        await updateDoc(reservationRef, {
+          status: originalStatus,
+          refundCancelledAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        })
+        
+        await updateDoc(refundRef, {
+          status: 'cancelled',
+          cancelledAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        })
+        
+        // Notify guest
+        await addDoc(collection(db, 'Notifications'), {
+          type: 'refund_declined',
+          recipientId: reservationData.guestId,
+          guestId: reservationData.guestId,
+          hostId: hostId,
+          reservationId: reservationId,
+          listingId: reservationData.listingId,
+          title: 'Refund Request Declined',
+          body: `Your refund request for ${reservationData.listingTitle} has been declined by the host.`,
+          message: `Your refund request has been declined. The reservation remains active.`,
+          read: false,
+          createdAt: serverTimestamp()
+        })
+        
+        alert('Refund request declined. The guest has been notified and the reservation remains active.')
+      }
+      
+      setSelectedReservation(null)
+    } catch (error) {
+      console.error('Error processing refund decision:', error)
+      alert('Failed to process refund decision. Please try again.')
+    } finally {
+      setUpdating(null)
+    }
   }
 
   const handleDecision = async (id, status) => {
@@ -385,11 +491,27 @@ const HostBookings = () => {
   }
 
   const filtered = useMemo(() => {
-    if (!selectedDate) return reservations
+    // Filter based on showCompleted toggle
+    let filteredReservations = reservations
+    if (!showCompleted) {
+      // Filter out completed bookings when showing active
+      filteredReservations = reservations.filter((r) => {
+        const status = (r.status || '').toLowerCase()
+        return status !== 'completed'
+      })
+    } else {
+      // Show only completed bookings
+      filteredReservations = reservations.filter((r) => {
+        const status = (r.status || '').toLowerCase()
+        return status === 'completed'
+      })
+    }
+
+    if (!selectedDate) return filteredReservations
     // Normalize selected date to midnight for comparison using date components
     const selected = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
     
-    return reservations.filter((r) => {
+    return filteredReservations.filter((r) => {
       if (!r.checkIn || !r.checkOut) return false
       
       // Normalize dates to midnight local time using date components
@@ -402,7 +524,7 @@ const HostBookings = () => {
       
       return selected >= start && selected < end
     })
-  }, [reservations, selectedDate])
+  }, [reservations, selectedDate, showCompleted])
 
   const bookedDates = useMemo(() => {
     const priority = { Pending: 3, Confirmed: 2, Declined: 1 }
@@ -486,6 +608,45 @@ const HostBookings = () => {
               alignItems: 'center',
               flexWrap: 'wrap'
             }}>
+              <button
+                onClick={() => setShowCompleted(!showCompleted)}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '12px',
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  background: showCompleted 
+                    ? 'rgba(255, 255, 255, 0.2)' 
+                    : 'rgba(255, 255, 255, 0.1)',
+                  color: 'white',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  backdropFilter: 'blur(10px)',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+                onMouseEnter={(e) => {
+                  if (!showCompleted) {
+                    e.target.style.background = 'rgba(255, 255, 255, 0.2)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!showCompleted) {
+                    e.target.style.background = 'rgba(255, 255, 255, 0.1)'
+                  }
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  {showCompleted ? (
+                    <path d="M9 11l3 3L22 4" strokeLinecap="round" strokeLinejoin="round"/>
+                  ) : (
+                    <path d="M9 18l6-6" strokeLinecap="round" strokeLinejoin="round"/>
+                  )}
+                </svg>
+                {showCompleted ? 'Show Active' : 'Show Completed'}
+              </button>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -577,7 +738,10 @@ const HostBookings = () => {
               color: '#374151',
               margin: '0 0 8px 0'
             }}>
-              {selectedDate ? `No reservations on ${selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No reservations found'}
+              {showCompleted 
+                ? (selectedDate ? `No completed reservations on ${selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No completed reservations found')
+                : (selectedDate ? `No reservations on ${selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : 'No reservations found')
+              }
             </h3>
             <p style={{
               fontSize: '0.95rem',
@@ -585,7 +749,10 @@ const HostBookings = () => {
               margin: 0,
               maxWidth: '400px'
             }}>
-              {selectedDate ? 'There are no reservations scheduled for this date. Try selecting a different date from the calendar.' : 'You don\'t have any reservations yet. When guests book your listings, they will appear here.'}
+              {showCompleted 
+                ? (selectedDate ? 'There are no completed reservations scheduled for this date. Try selecting a different date from the calendar.' : 'You don\'t have any completed reservations yet.')
+                : (selectedDate ? 'There are no reservations scheduled for this date. Try selecting a different date from the calendar.' : 'You don\'t have any reservations yet. When guests book your listings, they will appear here.')
+              }
             </p>
           </div>
         )}
@@ -634,37 +801,426 @@ const HostBookings = () => {
         )}
       </div>
       {selectedReservation && (
-        <div role="dialog" aria-modal="true" className="modal-overlay" onClick={() => setSelectedReservation(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">{selectedReservation.listingTitle || 'Reservation Details'}</h3>
-              <button className="btn btn-ghost" onClick={() => setSelectedReservation(null)}>✕</button>
+        <div 
+          role="dialog" 
+          aria-modal="true" 
+          onClick={() => setSelectedReservation(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            zIndex: 1000
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: '20px',
+              width: '100%',
+              maxWidth: '520px',
+              boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: '90vh'
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: '24px 24px 20px',
+              borderBottom: '1px solid #f0f0f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: '20px',
+                fontWeight: 700,
+                color: '#1f2937',
+                letterSpacing: '-0.3px'
+              }}>
+                {selectedReservation.listingTitle || 'Reservation Details'}
+              </h3>
+              <button 
+                onClick={() => setSelectedReservation(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  color: '#9ca3af',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s',
+                  lineHeight: 1
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#f3f4f6'
+                  e.target.style.color = '#374151'
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'none'
+                  e.target.style.color = '#9ca3af'
+                }}
+              >
+                ×
+              </button>
             </div>
-            <div className="modal-body">
-              <div style={{ display: 'flex', gap: 12 }}>
-                {selectedReservation.listingThumbnail && (
-                  <img src={selectedReservation.listingThumbnail} alt={selectedReservation.listingTitle} style={{ width: 160, height: 120, objectFit: 'cover', borderRadius: 8 }} />
-                )}
-                <div style={{ flex: 1, fontSize: 14, display:'flex', flexDirection:'column', gap:6 }}>
-                  <div><b>Check-in:</b> {new Date(selectedReservation.checkIn).toLocaleString()}</div>
-                  <div><b>Check-out:</b> {new Date(selectedReservation.checkOut).toLocaleString()}</div>
-                  <div><b>Nights:</b> {selectedReservation.nights}</div>
-                  <div>
-                    <b>Status:</b> <span className={`status-badge status-${(selectedReservation.status||'').toLowerCase()}`}>{selectedReservation.status}</span>
-                  </div>
-                  <div><b>Total:</b> ₱{selectedReservation?.pricing?.total || 0}</div>
-                  {selectedReservation.guestMessage && (
-                    <div style={{ marginTop: 4 }}><b>Message:</b> {selectedReservation.guestMessage}</div>
-                  )}
+
+            {/* Body */}
+            <div style={{
+              padding: '24px',
+              overflowY: 'auto',
+              flex: 1
+            }}>
+              {selectedReservation.listingThumbnail && (
+                <img 
+                  src={selectedReservation.listingThumbnail} 
+                  alt={selectedReservation.listingTitle} 
+                  style={{ 
+                    width: '100%', 
+                    height: '200px', 
+                    objectFit: 'cover', 
+                    borderRadius: '12px',
+                    marginBottom: '20px'
+                  }} 
+                />
+              )}
+              
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
+              }}>
+                {/* Status Badge */}
+                <div>
+                  <span className={`status-badge status-${(selectedReservation.status||'').toLowerCase()}`}>
+                    {selectedReservation.status}
+                  </span>
                 </div>
+
+                {/* Refund Pending Alert */}
+                {selectedReservation.status?.toLowerCase() === 'refund_pending' && (
+                  <div style={{
+                    padding: '16px',
+                    background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+                    borderRadius: '12px',
+                    border: '1px solid #fed7aa',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px'
+                  }}>
+                    <div style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      background: '#f97316',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      marginTop: '2px'
+                    }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 8v4M12 16h.01"/>
+                      </svg>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color: '#9a3412',
+                        marginBottom: '4px'
+                      }}>
+                        Refund Request Pending
+                      </div>
+                      <div style={{
+                        fontSize: '13px',
+                        color: '#7c2d12',
+                        lineHeight: 1.5
+                      }}>
+                        Guest has requested a refund of <strong>₱{selectedReservation?.pricing?.total || 0}</strong>. Please review and make a decision.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Details Grid */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '16px',
+                  padding: '20px',
+                  background: '#f9fafb',
+                  borderRadius: '12px'
+                }}>
+                  <div>
+                    <div style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6b7280',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      marginBottom: '6px'
+                    }}>
+                      Check-in
+                    </div>
+                    <div style={{
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      color: '#1f2937'
+                    }}>
+                      {new Date(selectedReservation.checkIn).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' 
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6b7280',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      marginBottom: '6px'
+                    }}>
+                      Check-out
+                    </div>
+                    <div style={{
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      color: '#1f2937'
+                    }}>
+                      {new Date(selectedReservation.checkOut).toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' 
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6b7280',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      marginBottom: '6px'
+                    }}>
+                      Nights
+                    </div>
+                    <div style={{
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      color: '#1f2937'
+                    }}>
+                      {selectedReservation.nights}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6b7280',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      marginBottom: '6px'
+                    }}>
+                      Total Amount
+                    </div>
+                    <div style={{
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      color: '#059669'
+                    }}>
+                      ₱{selectedReservation?.pricing?.total?.toLocaleString() || 0}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedReservation.guestMessage && (
+                  <div style={{
+                    padding: '16px',
+                    background: '#f0f9ff',
+                    borderRadius: '12px',
+                    border: '1px solid #bae6fd'
+                  }}>
+                    <div style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#0369a1',
+                      marginBottom: '8px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      Guest Message
+                    </div>
+                    <div style={{
+                      fontSize: '14px',
+                      color: '#0c4a6e',
+                      lineHeight: 1.6
+                    }}>
+                      {selectedReservation.guestMessage}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-            <div className="modal-footer" style={{ justifyContent:'space-between' }}>
-              <button className="btn btn-ghost" onClick={() => setSelectedReservation(null)}>Close</button>
-              <div style={{ display:'flex', gap:8 }}>
-                <button className="btn btn-primary" disabled={updating===selectedReservation.id || selectedReservation.status!=='pending'} onClick={() => showConfirmBookingDialog(selectedReservation)}>Confirm</button>
-                <button className="btn btn-danger" disabled={updating===selectedReservation.id || selectedReservation.status!=='pending'} onClick={() => showDeclineBookingDialog(selectedReservation)}>Decline</button>
-              </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '20px 24px',
+              borderTop: '1px solid #f0f0f0',
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end',
+              background: '#fafafa'
+            }}>
+              {selectedReservation.status?.toLowerCase() === 'refund_pending' ? (
+                <>
+                  <button 
+                    disabled={updating===selectedReservation.id} 
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to approve this refund request?\n\nAmount: ₱${selectedReservation?.pricing?.total || 0}\n\nThe guest will be refunded and the reservation will be cancelled.`)) {
+                        handleRefundDecision(selectedReservation.id, true)
+                      }
+                    }}
+                    style={{
+                      padding: '12px 24px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: 'white',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: updating===selectedReservation.id ? 'not-allowed' : 'pointer',
+                      opacity: updating===selectedReservation.id ? 0.6 : 1,
+                      transition: 'all 0.2s',
+                      boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (updating!==selectedReservation.id) {
+                        e.target.style.transform = 'translateY(-1px)'
+                        e.target.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.4)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0)'
+                      e.target.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.3)'
+                    }}
+                  >
+                    {updating===selectedReservation.id ? 'Processing...' : 'Approve Refund'}
+                  </button>
+                  <button 
+                    disabled={updating===selectedReservation.id} 
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to decline this refund request?\n\nThe reservation will remain active and the guest will be notified.`)) {
+                        handleRefundDecision(selectedReservation.id, false)
+                      }
+                    }}
+                    style={{
+                      padding: '12px 24px',
+                      borderRadius: '10px',
+                      border: '1px solid #e5e7eb',
+                      background: 'white',
+                      color: '#dc2626',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: updating===selectedReservation.id ? 'not-allowed' : 'pointer',
+                      opacity: updating===selectedReservation.id ? 0.6 : 1,
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (updating!==selectedReservation.id) {
+                        e.target.style.background = '#fef2f2'
+                        e.target.style.borderColor = '#dc2626'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = 'white'
+                      e.target.style.borderColor = '#e5e7eb'
+                    }}
+                  >
+                    {updating===selectedReservation.id ? 'Processing...' : 'Decline Refund'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    className="btn btn-ghost" 
+                    onClick={() => setSelectedReservation(null)}
+                    style={{
+                      padding: '12px 24px',
+                      borderRadius: '10px',
+                      border: '1px solid #e5e7eb',
+                      background: 'white',
+                      color: '#6b7280',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#f9fafb'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = 'white'
+                    }}
+                  >
+                    Close
+                  </button>
+                  <button 
+                    className="btn btn-primary" 
+                    disabled={updating===selectedReservation.id || selectedReservation.status!=='pending'} 
+                    onClick={() => showConfirmBookingDialog(selectedReservation)}
+                    style={{
+                      padding: '12px 24px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: updating===selectedReservation.id || selectedReservation.status!=='pending' 
+                        ? '#d1d5db' 
+                        : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: updating===selectedReservation.id || selectedReservation.status!=='pending' ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Confirm
+                  </button>
+                  <button 
+                    className="btn btn-danger" 
+                    disabled={updating===selectedReservation.id || selectedReservation.status!=='pending'} 
+                    onClick={() => showDeclineBookingDialog(selectedReservation)}
+                    style={{
+                      padding: '12px 24px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: updating===selectedReservation.id || selectedReservation.status!=='pending' 
+                        ? '#d1d5db' 
+                        : '#ef4444',
+                      color: 'white',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: updating===selectedReservation.id || selectedReservation.status!=='pending' ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Decline
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

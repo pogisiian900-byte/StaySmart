@@ -39,6 +39,7 @@ import HostNotifications from './pages/host/HostNotifications.jsx';
 import GuestSearch from './pages/guest/GuestSearch.jsx';
 import GuestFavourites from './pages/guest/GuestFavourites.jsx';
 import GuestAccountSettings from './pages/guest/GuestAccountSettings.jsx';
+import HostAccountSettings from './pages/host/HostAccountSettings.jsx';
 import SharedListing from './pages/for-all/SharedListing.jsx';
 
 function App() {
@@ -74,7 +75,8 @@ function App() {
             <Route index element={<GuestMainLogged />} />
             <Route path="account-settings" element={<GuestAccountSettings />} />
             <Route path="listing/:listingId" element={<SelectListingItem />} />
-              <Route path="messages" element={<GuestConvoList />} />
+            <Route path="messages" element={<GuestConvoList />} />
+            <Route path="bookings" element={<GuestBookings />} />
             <Route path="favourites" element={<GuestFavourites />} />
             <Route path="notifications" element={<GuestNotifications />} />
             <Route path="search" element={<GuestSearch />} />
@@ -128,6 +130,7 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="bookings" element={<HostBookings />} />
           <Route path="notifications" element={<HostNotifications />} />
+          <Route path="account-settings" element={<HostAccountSettings />} />
 
           {/* ✅ Host Messaging Routes */}
           <Route

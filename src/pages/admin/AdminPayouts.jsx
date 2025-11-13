@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { collection, onSnapshot, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { db, processPayPalPayout } from '../../config/firebase'
+import { db, processPayPalPayoutRest } from '../../config/firebase'
 import './admin-dashboard.css'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
 import dialogPolyfill from 'dialog-polyfill'
@@ -179,11 +179,10 @@ const AdminPayouts = () => {
         updatedAt: serverTimestamp()
       })
 
-      // Retry PayPal payout
+      // Retry PayPal payout using REST API (consistent with user withdrawals)
       try {
-        const payoutResult = await processPayPalPayout({
-          payoutId: payoutId,
-          hostPayPalEmail: payoutData.hostPayPalEmail || '',
+        const payoutResult = await processPayPalPayoutRest({
+          payoutEmail: payoutData.hostPayPalEmail || '',
           payerId: payoutData.payerId || null,
           amount: payoutData.amount.toString(),
           currency: payoutData.currency || 'PHP',
@@ -192,7 +191,7 @@ const AdminPayouts = () => {
         // Update payout record with result
         await updateDoc(payoutRef, {
           payoutBatchId: payoutResult.data.payoutBatchId,
-          status: payoutResult.data.status === 'PENDING' ? 'processing' : payoutResult.data.status.toLowerCase(),
+          status: payoutResult.data.batchStatus === 'PENDING' ? 'processing' : payoutResult.data.batchStatus?.toLowerCase() || 'processing',
           processedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         })

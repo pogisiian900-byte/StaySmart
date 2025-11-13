@@ -10,6 +10,7 @@ import dialogPolyfill from 'dialog-polyfill';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import PayPal from './paypal';
 import SlideshowWheel from './sildeshowWheel';
+import { depositToPayPal } from '../utils/AddAmountPaypal';
 const Profile = () => {
 const { hostId, guestId } = useParams();
 const [user, setUser] = useState(null);
@@ -133,45 +134,6 @@ useEffect(() => {
       console.log('Firebase paypalBalance:', userData.paypalBalance);
       console.log('PayPal Account ID:', userData.paypalAccountId);
       console.log('Payment Method:', userData.paymentMethod);
-      
-      // If user has PayPal account connected, fetch actual balance from PayPal API
-      if (userData.paypalAccountId || userData.paymentMethod?.payerId) {
-        console.log('=== FETCHING ACTUAL PAYPAL SANDBOX BALANCE ===');
-        console.log('PayPal Account ID:', userData.paypalAccountId || userData.paymentMethod?.payerId);
-        console.log('PayPal Email:', userData.paymentMethod?.paypalEmail);
-        
-        try {
-          const { getPayPalBalance } = await import('../utils/paypalApi');
-          console.log('Calling Firebase Function to get PayPal balance for user:', userId);
-          const balanceResult = await getPayPalBalance(userId, 'PHP');
-          const actualPayPalBalance = balanceResult.balance;
-          
-          console.log('💰💰💰 ACTUAL PAYPAL SANDBOX ACCOUNT BALANCE (from API via Firebase Function):', actualPayPalBalance);
-          console.log('📊📊📊 FIREBASE BALANCE:', userData.paypalBalance);
-          console.log('Difference:', actualPayPalBalance - (userData.paypalBalance || 0));
-          console.log('Full PayPal balance data:', balanceResult.balanceData);
-          
-          if (Math.abs(actualPayPalBalance - (userData.paypalBalance || 0)) > 0.01) {
-            console.warn('⚠️⚠️⚠️ BALANCE MISMATCH DETECTED!');
-            console.warn('PayPal Sandbox Account Balance:', actualPayPalBalance);
-            console.warn('Firebase Balance:', userData.paypalBalance);
-            console.warn('Difference:', actualPayPalBalance - (userData.paypalBalance || 0));
-            console.warn('Consider using "Sync Balance" button to sync them.');
-          } else {
-            console.log('✅✅✅ Balances are in sync!');
-          }
-        } catch (balanceError) {
-          console.warn('⚠️ Could not fetch PayPal balance from API (via Firebase Function):', balanceError.message);
-          console.warn('Error code:', balanceError.code);
-          console.warn('This might be expected if:');
-          console.warn('  1. Firebase Functions are not deployed');
-          console.warn('  2. The balance API requires different permissions');
-          console.warn('  3. PayPal credentials are not configured in Firebase Functions');
-          console.warn('Error details:', balanceError);
-        }
-      } else {
-        console.log('No PayPal account connected yet.');
-      }
       
       setUser(userData);
       setEditedUser(userData);
@@ -350,135 +312,210 @@ const handleWithdrawal = async () => {
     const userData = userSnap.data();
     const currentBalance = userData.balance || userData.walletBalance || 0;
 
-    // Check if user has sufficient balance
+    // Handle PayPal withdrawal differently - use depositToPayPal for guests (transfers from platform balance)
+    if (withdrawalMethod === 'paypal') {
+      // For guests: use depositToPayPal (transfers from StaySmart platform to guest PayPal)
+      // For hosts/others: use the old withdrawal logic (deducts from their balance)
+      if (guestId && userData.role === 'guest') {
+        // Skip guest balance check - depositToPayPal will check platform balance instead
+        try {
+          // Get PayPal account info
+          const payoutEmail = withdrawalAccount.trim() || 
+                             paymentMethod?.paypalEmail ||
+                             userData.paymentMethod?.paypalEmail || 
+                             userData.paymentInfo?.payoutEmail || 
+                             userData?.payoutEmail;
+          const payerId = paymentMethod?.payerId ||
+                         userData.paymentMethod?.payerId || 
+                         userData.paypalAccountId ||
+                         userData.paymentMethod?.payer_id;
+
+          console.log('Processing PayPal deposit from StaySmart platform to guest...', {
+            guestId,
+            payoutEmail: payoutEmail || withdrawalAccount.trim(),
+            amount,
+            payerId
+          });
+
+          // Use depositToPayPal function (transfers from platform balance to guest PayPal)
+          const depositResult = await depositToPayPal(guestId, amount, {
+            paypalEmail: payoutEmail || withdrawalAccount.trim() || null,
+            payerId: payerId || null,
+            currency: 'PHP',
+            minimumAmount: 100
+          });
+
+          console.log('PayPal deposit result:', depositResult);
+
+          // Check if deposit succeeded
+          if (!depositResult.success) {
+            throw new Error(depositResult.error || 'PayPal deposit failed. Please try again or contact support.');
+          }
+
+          // Create notification for user
+          await addDoc(collection(db, 'Notifications'), {
+            type: 'withdrawal_completed',
+            recipientId: guestId,
+            title: 'PayPal Deposit Successful',
+            body: `Successfully deposited ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from StaySmart platform to your PayPal account. The funds should arrive shortly.`,
+            message: `Deposit of ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} completed.`,
+            read: false,
+            createdAt: serverTimestamp()
+          });
+
+          alert(`✅ Successfully deposited ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from StaySmart platform to your PayPal account!\n\nPayout Batch ID: ${depositResult.payoutBatchId}\nStatus: ${depositResult.batchStatus}\n\nThe funds should arrive in your PayPal account shortly.`);
+          
+          // Reset form and close dialog
+          setWithdrawalAmount('');
+          setWithdrawalAccount('');
+          setWithdrawalMethod('bank');
+          setShowWithdrawalDialog(false);
+          withdrawalDialogRef.current?.close();
+          
+          return;
+        } catch (paypalError) {
+          console.error('PayPal deposit error:', paypalError);
+          alert(`PayPal deposit failed: ${paypalError.message || 'Please try again or contact support.'}`);
+          setProcessingWithdrawal(false);
+          return;
+        }
+      } else {
+        // For hosts/other users: use original withdrawal logic (deducts from their balance)
+        // Check if user has sufficient balance (for hosts/others)
+        if (amount > currentBalance) {
+          alert(`Insufficient balance. You have ₱${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available.`);
+          setProcessingWithdrawal(false);
+          return;
+        }
+        
+        // Get PayPal account info
+        const payoutEmail = withdrawalAccount.trim() || 
+                           paymentMethod?.paypalEmail ||
+                           userData.paymentMethod?.paypalEmail || 
+                           userData.paymentInfo?.payoutEmail || 
+                           userData?.payoutEmail;
+        const payerId = paymentMethod?.payerId ||
+                       userData.paymentMethod?.payerId || 
+                       userData.paypalAccountId ||
+                       userData.paymentMethod?.payer_id;
+
+        if (!payoutEmail && !payerId) {
+          alert('No PayPal account found. Please connect your PayPal account in your profile first or enter your PayPal email.');
+          setProcessingWithdrawal(false);
+          return;
+        }
+
+        if (!payoutEmail && !withdrawalAccount.trim()) {
+          alert('Please enter your PayPal email address.');
+          setProcessingWithdrawal(false);
+          return;
+        }
+
+        try {
+          // Import PayPal payout function
+          const { processPayPalPayout } = await import('../utils/paypalApi');
+          
+          console.log('Processing PayPal withdrawal...', {
+            payoutEmail: payoutEmail || withdrawalAccount.trim(),
+            amount,
+            payerId
+          });
+
+          // Process PayPal payout
+          const payoutResult = await processPayPalPayout(
+            payoutEmail || withdrawalAccount.trim(),
+            amount,
+            'PHP',
+            payerId || null
+          );
+
+          console.log('PayPal payout result:', payoutResult);
+
+          // Verify payout succeeded
+          if (!payoutResult.success || !payoutResult.payoutBatchId) {
+            throw new Error('PayPal withdrawal failed. Please try again or contact support.');
+          }
+
+          const batchStatus = payoutResult.batchStatus || 'PENDING';
+          const transactionStatus = payoutResult.transactionStatus || 'PENDING';
+
+          // Calculate new balance
+          const newBalance = currentBalance - amount;
+
+          // Create withdrawal transaction record
+          const withdrawalTransaction = {
+            userId: userId,
+            userRole: userData.role || 'guest',
+            type: 'withdrawal',
+            amount: amount,
+            currency: 'PHP',
+            status: transactionStatus === 'SUCCESS' ? 'completed' : 'pending',
+            description: `Withdrawal to PayPal${payoutEmail ? ` (${payoutEmail})` : ` (${withdrawalAccount.trim()})`}`,
+            paymentMethod: 'paypal',
+            payoutBatchId: payoutResult.payoutBatchId,
+            batchStatus: batchStatus,
+            payoutItemId: payoutResult.payoutItemId || null,
+            transactionId: payoutResult.transactionId || null,
+            transactionStatus: transactionStatus,
+            payerId: payerId || null,
+            paypalEmail: payoutEmail || withdrawalAccount.trim(),
+            balanceBefore: currentBalance,
+            balanceAfter: newBalance,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          };
+
+          // Add to PayPalTransactions collection
+          await addDoc(collection(db, 'PayPalTransactions'), withdrawalTransaction);
+          
+          // Also add to Transactions collection
+          await addDoc(collection(db, 'Transactions'), withdrawalTransaction);
+
+          // Update balance in user document
+          await updateDoc(userRef, {
+            balance: newBalance,
+            walletBalance: newBalance,
+            updatedAt: serverTimestamp()
+          });
+
+          // Create notification for user
+          await addDoc(collection(db, 'Notifications'), {
+            type: 'withdrawal_completed',
+            recipientId: userId,
+            title: 'PayPal Withdrawal Successful',
+            body: `Successfully withdrawn ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} to your PayPal account. The funds should arrive shortly.`,
+            message: `Withdrawal of ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} completed.`,
+            read: false,
+            createdAt: serverTimestamp()
+          });
+
+          alert(`✅ Successfully withdrawn ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} to your PayPal account!\n\nPayout Batch ID: ${payoutResult.payoutBatchId}\nStatus: ${batchStatus}\n\nThe funds should arrive in your PayPal account shortly.`);
+          
+          // Reset form and close dialog
+          setWithdrawalAmount('');
+          setWithdrawalAccount('');
+          setWithdrawalMethod('bank');
+          setShowWithdrawalDialog(false);
+          withdrawalDialogRef.current?.close();
+          
+          return;
+        } catch (paypalError) {
+          console.error('PayPal withdrawal error:', paypalError);
+          alert(`PayPal withdrawal failed: ${paypalError.message || 'Please try again or contact support.'}`);
+          setProcessingWithdrawal(false);
+          return;
+        }
+      }
+    }
+
+    // Handle other withdrawal methods (bank, gcash, paymaya) - create pending request
+    // Check balance for non-PayPal withdrawals (already checked for hosts/others in PayPal section)
     if (amount > currentBalance) {
       alert(`Insufficient balance. You have ₱${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available.`);
       setProcessingWithdrawal(false);
       return;
     }
-
-    // Handle PayPal withdrawal differently - process directly via PayPal API
-    if (withdrawalMethod === 'paypal') {
-      // Get PayPal account info
-      const payoutEmail = withdrawalAccount.trim() || 
-                         paymentMethod?.paypalEmail ||
-                         userData.paymentMethod?.paypalEmail || 
-                         userData.paymentInfo?.payoutEmail || 
-                         userData?.payoutEmail;
-      const payerId = paymentMethod?.payerId ||
-                     userData.paymentMethod?.payerId || 
-                     userData.paypalAccountId ||
-                     userData.paymentMethod?.payer_id;
-
-      if (!payoutEmail && !payerId) {
-        alert('No PayPal account found. Please connect your PayPal account in your profile first or enter your PayPal email.');
-        setProcessingWithdrawal(false);
-        return;
-      }
-
-      if (!payoutEmail && !withdrawalAccount.trim()) {
-        alert('Please enter your PayPal email address.');
-        setProcessingWithdrawal(false);
-        return;
-      }
-
-      try {
-        // Import PayPal payout function
-        const { processPayPalPayout } = await import('../utils/paypalApi');
-        
-        console.log('Processing PayPal withdrawal...', {
-          payoutEmail: payoutEmail || withdrawalAccount.trim(),
-          amount,
-          payerId
-        });
-
-        // Process PayPal payout
-        const payoutResult = await processPayPalPayout(
-          payoutEmail || withdrawalAccount.trim(),
-          amount,
-          'PHP',
-          payerId || null
-        );
-
-        console.log('PayPal payout result:', payoutResult);
-
-        // Verify payout succeeded
-        if (!payoutResult.success || !payoutResult.payoutBatchId) {
-          throw new Error('PayPal withdrawal failed. Please try again or contact support.');
-        }
-
-        const batchStatus = payoutResult.batchStatus || 'PENDING';
-        const transactionStatus = payoutResult.transactionStatus || 'PENDING';
-
-        // Calculate new balance
-        const newBalance = currentBalance - amount;
-
-        // Create withdrawal transaction record
-        const withdrawalTransaction = {
-          userId: userId,
-          userRole: userData.role || 'guest',
-          type: 'withdrawal',
-          amount: amount,
-          currency: 'PHP',
-          status: transactionStatus === 'SUCCESS' ? 'completed' : 'pending',
-          description: `Withdrawal to PayPal${payoutEmail ? ` (${payoutEmail})` : ` (${withdrawalAccount.trim()})`}`,
-          paymentMethod: 'paypal',
-          payoutBatchId: payoutResult.payoutBatchId,
-          batchStatus: batchStatus,
-          payoutItemId: payoutResult.payoutItemId || null,
-          transactionId: payoutResult.transactionId || null,
-          transactionStatus: transactionStatus,
-          payerId: payerId || null,
-          paypalEmail: payoutEmail || withdrawalAccount.trim(),
-          balanceBefore: currentBalance,
-          balanceAfter: newBalance,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        };
-
-        // Add to PayPalTransactions collection
-        await addDoc(collection(db, 'PayPalTransactions'), withdrawalTransaction);
-        
-        // Also add to Transactions collection
-        await addDoc(collection(db, 'Transactions'), withdrawalTransaction);
-
-        // Update balance in user document
-        await updateDoc(userRef, {
-          balance: newBalance,
-          walletBalance: newBalance,
-          updatedAt: serverTimestamp()
-        });
-
-        // Create notification for user
-        await addDoc(collection(db, 'Notifications'), {
-          type: 'withdrawal_completed',
-          recipientId: userId,
-          title: 'PayPal Withdrawal Successful',
-          body: `Successfully withdrawn ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} to your PayPal account. The funds should arrive shortly.`,
-          message: `Withdrawal of ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} completed.`,
-          read: false,
-          createdAt: serverTimestamp()
-        });
-
-        alert(`✅ Successfully withdrawn ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} to your PayPal account!\n\nPayout Batch ID: ${payoutResult.payoutBatchId}\nStatus: ${batchStatus}\n\nThe funds should arrive in your PayPal account shortly.`);
-        
-        // Reset form and close dialog
-        setWithdrawalAmount('');
-        setWithdrawalAccount('');
-        setWithdrawalMethod('bank');
-        setShowWithdrawalDialog(false);
-        withdrawalDialogRef.current?.close();
-        
-        return;
-      } catch (paypalError) {
-        console.error('PayPal withdrawal error:', paypalError);
-        alert(`PayPal withdrawal failed: ${paypalError.message || 'Please try again or contact support.'}`);
-        setProcessingWithdrawal(false);
-        return;
-      }
-    }
-
-    // Handle other withdrawal methods (bank, gcash, paymaya) - create pending request
+    
     if (!withdrawalAccount || withdrawalAccount.trim() === '') {
       alert('Please enter your account details.');
       setProcessingWithdrawal(false);
@@ -2230,34 +2267,42 @@ const handlePayPalCancel = () => {
             >
               Cancel
             </button>
-            <button
-              onClick={handleWithdrawal}
-              disabled={
-                processingWithdrawal || 
-                !withdrawalAmount || 
-                parseFloat(withdrawalAmount) < 100 ||
-                parseFloat(withdrawalAmount) > (user?.balance || user?.walletBalance || 0) ||
-                !withdrawalAccount
-              }
-              style={{
-                flex: 1,
-                padding: '12px',
-                background: processingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) < 100 || parseFloat(withdrawalAmount) > (user?.balance || user?.walletBalance || 0) || !withdrawalAccount ? '#9ca3af' : '#10b981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: processingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) < 100 || parseFloat(withdrawalAmount) > (user?.balance || user?.walletBalance || 0) || !withdrawalAccount ? 'not-allowed' : 'pointer',
-                opacity: processingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) < 100 || parseFloat(withdrawalAmount) > (user?.balance || user?.walletBalance || 0) || !withdrawalAccount ? 0.6 : 1
-              }}
-            >
-              {processingWithdrawal 
-                ? 'Processing...' 
-                : withdrawalMethod === 'paypal' 
-                  ? 'Withdraw to PayPal' 
-                  : 'Submit Withdrawal Request'}
-            </button>
+            {(() => {
+              // Skip balance check for guests using PayPal (uses platform balance instead)
+              const isGuestPayPal = guestId && withdrawalMethod === 'paypal' && user?.role === 'guest';
+              const userBalance = user?.balance || user?.walletBalance || 0;
+              const exceedsBalance = !isGuestPayPal && parseFloat(withdrawalAmount) > userBalance;
+              const isDisabled = processingWithdrawal || 
+                                !withdrawalAmount || 
+                                parseFloat(withdrawalAmount) < 100 ||
+                                exceedsBalance ||
+                                !withdrawalAccount;
+              
+              return (
+                <button
+                  onClick={handleWithdrawal}
+                  disabled={isDisabled}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: isDisabled ? '#9ca3af' : '#10b981',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    opacity: isDisabled ? 0.6 : 1
+                  }}
+                >
+                  {processingWithdrawal 
+                    ? 'Processing...' 
+                    : withdrawalMethod === 'paypal' 
+                      ? 'Withdraw to PayPal' 
+                      : 'Submit Withdrawal Request'}
+                </button>
+              );
+            })()}
           </div>
         </div>
       </dialog>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, orderBy, doc, updateDoc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { processPayPalPayout as processPayPalPayoutAPI, syncPayPalBalanceToFirebase } from '../utils/paypalApi';
+import { extractPayPalErrorMessage } from '../utils/paypalErrorHandler';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import 'dialog-polyfill/dist/dialog-polyfill.css';
 import dialogPolyfill from 'dialog-polyfill';
@@ -62,49 +63,6 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
             }
           }
           
-          // If user has PayPal account, try to fetch actual balance for comparison (via Firebase Function)
-          if (userData.paypalAccountId || userData.paymentMethod?.payerId) {
-            try {
-              const { getPayPalBalance } = await import('../utils/paypalApi');
-              console.log('Calling Firebase Function to get PayPal balance for user:', userId);
-              const balanceResult = await getPayPalBalance(userId, 'PHP');
-              const actualPayPalBalance = balanceResult.balance;
-              
-              console.log('💰💰💰 ACTUAL PAYPAL SANDBOX ACCOUNT BALANCE (from API via Firebase Function):', actualPayPalBalance);
-              console.log('📊📊📊 FIREBASE BALANCE:', newBalance);
-              console.log('Difference:', actualPayPalBalance - newBalance);
-              
-              if (Math.abs(actualPayPalBalance - newBalance) > 0.01) {
-                console.warn('⚠️⚠️⚠️ BALANCE MISMATCH!');
-                console.warn('PayPal Account has:', actualPayPalBalance);
-                console.warn('Firebase shows:', newBalance);
-                console.warn('Difference:', actualPayPalBalance - newBalance);
-              } else {
-                console.log('✅✅✅ Balances match!');
-              }
-            } catch (balanceError) {
-              console.warn('⚠️ Could not fetch PayPal balance (via Firebase Function):', balanceError.message);
-              console.warn('Error code:', balanceError.code);
-              console.warn('Error details:', balanceError.details);
-              
-              // Provide more specific warnings
-              if (balanceError.message && (
-                balanceError.message.includes('Reporting API') || 
-                balanceError.message.includes('not available') ||
-                balanceError.message.includes('forbidden') ||
-                balanceError.message.includes('403')
-              )) {
-                console.warn('⚠️ PayPal Reporting API is not available. This is normal for sandbox accounts.');
-                console.warn('⚠️ The balance shown is from Firebase transactions only.');
-              } else if (balanceError.code === 'functions/not-found') {
-                console.warn('⚠️ Firebase Functions not deployed. Please deploy functions first.');
-              } else if (balanceError.code === 'functions/failed-precondition') {
-                console.warn('⚠️ PayPal credentials not configured in Firebase Functions.');
-              } else {
-                console.warn('⚠️ This might be expected if Firebase Functions are not deployed or PayPal credentials are not configured.');
-              }
-            }
-          }
           
           setBalance(newBalance);
           console.log('✅ Balance updated in real-time:', newBalance);
@@ -293,7 +251,14 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
       setActiveTab('history');
     } catch (error) {
       console.error('Error processing top-up:', error);
-      alert('Failed to process top-up. Please try again.');
+      
+      // Use standardized error handler
+      const errorMessage = extractPayPalErrorMessage(error, {
+        defaultMessage: 'Failed to process top-up. Please try again.',
+        operation: 'top-up'
+      });
+      
+      alert(errorMessage);
     } finally {
       setProcessing(false);
     }
@@ -301,7 +266,14 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
 
   const handlePayPalTopUpError = (err) => {
     console.error('PayPal Top-Up Error:', err);
-    alert('An error occurred with PayPal payment. Please try again.');
+    
+    // Use standardized error handler
+    const errorMessage = extractPayPalErrorMessage(err, {
+      defaultMessage: 'An error occurred with PayPal payment. Please try again.',
+      operation: 'top-up'
+    });
+    
+    alert(errorMessage);
     setProcessing(false);
   };
 
@@ -310,7 +282,10 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
     setProcessing(false);
   };
 
-  // 💸 Handle Withdrawal (wallet balance → PayPal account)
+  // 💸 Handle Withdrawal (Firebase user balance → PayPal account)
+  // Flow: 1. Deduct from user's Firebase balance
+  //       2. Use PayPal Payout API to add funds to user's PayPal account
+  //       3. If payout fails, refund the balance automatically
   const handleWithdrawal = async () => {
     // Validate withdrawal amount
     const amount = parseFloat(withdrawalAmount);
@@ -370,27 +345,79 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
         return;
       }
 
-      console.log('PayPal payout info:', {
-        payoutEmail: payoutEmail || 'Not provided',
-        payerId: payerId || 'Not provided',
-        usingPayerId: !!payerId
+      console.log('=== PAYPAL PAYOUT INFO ===');
+      console.log('Receiver Email:', payoutEmail || 'Not provided');
+      console.log('Payer ID:', payerId || 'Not provided');
+      console.log('Using Payer ID:', !!payerId);
+      console.log('Recipient Type:', payerId ? 'PAYER_ID' : 'EMAIL');
+      console.log('Recipient Value:', payerId || payoutEmail || 'Not provided');
+
+      // 3️⃣ Calculate new balance and deduct from user's Firebase balance FIRST
+      // IMPORTANT: We deduct from Firebase balance, NOT from platform PayPal balance
+      const newBalance = currentBalance - amount;
+      
+      console.log('Deducting from user Firebase balance...');
+      console.log('Balance before:', currentBalance);
+      console.log('Amount to withdraw:', amount);
+      console.log('Balance after:', newBalance);
+
+      // Update balance in user document FIRST (before PayPal payout)
+      // This ensures user's balance is deducted even if PayPal payout fails later
+      await updateDoc(userRef, {
+        balance: newBalance,
+        paypalBalance: newBalance, // Keep for backward compatibility
+        updatedAt: serverTimestamp()
       });
+      console.log('✅ Balance deducted from user Firebase account');
 
-      // 3️⃣ Process PayPal payout using REST API
-      console.log('Sending payout request to PayPal...');
-      const payoutResult = await processPayPalPayoutAPI(
-        payoutEmail || '',
-        amount,
-        'PHP',
-        payerId || null
-      );
+      // 4️⃣ Process PayPal payout using REST API (adds funds to user's PayPal account)
+      // NOTE: PayPal Payout API requires the platform PayPal account to have funds to send.
+      // This is how PayPal's API works - it sends money FROM platform account TO user account.
+      // For sandbox testing: Add test funds to your platform PayPal sandbox account.
+      // The user's Firebase balance has already been deducted above.
+      console.log('=== SENDING PAYPAL PAYOUT REQUEST ===');
+      console.log('Receiver Email:', payoutEmail || 'Not provided');
+      console.log('Payer ID:', payerId || 'Not provided');
+      console.log('Amount:', amount);
+      console.log('Currency: PHP');
+      console.log('Sending payout request to PayPal to add funds to user PayPal account...');
+      let payoutResult;
+      try {
+        payoutResult = await processPayPalPayoutAPI(
+          payoutEmail || '',
+          amount,
+          'PHP',
+          payerId || null
+        );
 
-      console.log('✅ PayPal payout response:', payoutResult);
+        console.log('✅ PayPal payout response:', payoutResult);
 
-      // 4️⃣ Verify payout succeeded
-      if (!payoutResult.success || !payoutResult.payoutBatchId) {
-        console.error('❌ Payout failed - no batch ID received:', payoutResult);
-        throw new Error('Withdrawal failed. PayPal did not return a valid payout batch ID. Please try again or contact support.');
+        // Verify payout succeeded
+        if (!payoutResult.success || !payoutResult.payoutBatchId) {
+          console.error('❌ Payout failed - no batch ID received:', payoutResult);
+          // Refund the balance back to user
+          await updateDoc(userRef, {
+            balance: currentBalance,
+            paypalBalance: currentBalance,
+            updatedAt: serverTimestamp()
+          });
+          console.log('✅ Balance refunded due to PayPal payout failure');
+          throw new Error('Withdrawal failed. PayPal did not return a valid payout batch ID. Your balance has been refunded. Please try again or contact support.');
+        }
+      } catch (payoutError) {
+        // If PayPal payout fails, refund the balance
+        console.error('PayPal payout error, refunding balance...', payoutError);
+        try {
+          await updateDoc(userRef, {
+            balance: currentBalance,
+            paypalBalance: currentBalance,
+            updatedAt: serverTimestamp()
+          });
+          console.log('✅ Balance refunded due to PayPal payout error');
+        } catch (refundError) {
+          console.error('❌ Failed to refund balance:', refundError);
+        }
+        throw payoutError;
       }
 
       // Verify batch status
@@ -401,10 +428,7 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
       console.log('Transaction status:', transactionStatus);
       console.log('Payout batch ID:', payoutResult.payoutBatchId);
 
-      // 5️⃣ Calculate new balance
-      const newBalance = currentBalance - amount;
-
-      // 6️⃣ Create withdrawal transaction record in PayPalTransactions
+      // 5️⃣ Create withdrawal transaction record in PayPalTransactions
       const withdrawalTransaction = {
         userId: userId,
         userRole: userRole || 'guest',
@@ -412,8 +436,9 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
         amount: amount,
         currency: 'PHP',
         status: transactionStatus === 'SUCCESS' ? 'completed' : 'pending',
-        description: `Withdrawal to PayPal${payoutEmail ? ` (${payoutEmail})` : ''}`,
+        description: `Withdrawal from Firebase balance to PayPal${payoutEmail ? ` (${payoutEmail})` : ''}`,
         paymentMethod: 'paypal',
+        source: 'user_balance', // Indicates this came from user's Firebase balance
         payoutBatchId: payoutResult.payoutBatchId,
         batchStatus: batchStatus,
         payoutItemId: payoutResult.payoutItemId || null,
@@ -431,17 +456,14 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
       console.log('Creating withdrawal transaction record...');
       const transactionRef = await addDoc(collection(db, 'PayPalTransactions'), withdrawalTransaction);
       console.log('✅ Transaction record created:', transactionRef.id);
+      
+      // Also add to Transactions collection for consistency
+      await addDoc(collection(db, 'Transactions'), withdrawalTransaction);
+      console.log('✅ Transaction also added to Transactions collection');
 
-      // 7️⃣ Update balance in user document
-      await updateDoc(userRef, {
-        balance: newBalance,
-        paypalBalance: newBalance, // Keep for backward compatibility
-        updatedAt: serverTimestamp()
-      });
-      console.log('✅ Balance updated in user document');
-
-      // 8️⃣ Success message
-      const successMessage = `Successfully withdrawn ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} to your PayPal account!\n\n` +
+      // 6️⃣ Success message
+      const successMessage = `Successfully withdrawn ₱${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from your Firebase balance to your PayPal account!\n\n` +
+                            `Your Firebase balance: ₱${newBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
                             `Payout Batch ID: ${payoutResult.payoutBatchId}\n` +
                             `Status: ${batchStatus}\n\n` +
                             `The funds should arrive in your PayPal account shortly.`;
@@ -461,25 +483,11 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
         stack: error.stack
       });
       
-      // Provide user-friendly error messages
-      let errorMessage = 'Failed to process withdrawal. Please try again.';
-      
-      if (error.message) {
-        // Check for specific PayPal errors
-        const errorMsg = error.message.toUpperCase();
-        
-        if (errorMsg.includes('INSUFFICIENT_FUNDS') || errorMsg.includes('INSUFFICIENT')) {
-          errorMessage = 'Insufficient funds in platform PayPal account for withdrawal. Please contact support.';
-        } else if (errorMsg.includes('INVALID_RECEIVER') || errorMsg.includes('INVALID')) {
-          errorMessage = 'Invalid PayPal receiver. Please check your PayPal email or payer ID in your profile.';
-        } else if (errorMsg.includes('AUTHENTICATION') || errorMsg.includes('AUTH')) {
-          errorMessage = 'PayPal authentication failed. Please contact support.';
-        } else if (errorMsg.includes('NOT_FOUND')) {
-          errorMessage = 'PayPal account not found. Please verify your PayPal email or payer ID.';
-        } else {
-          errorMessage = error.message;
-        }
-      }
+      // Use standardized error handler
+      const errorMessage = extractPayPalErrorMessage(error, {
+        defaultMessage: 'Failed to process withdrawal. Please try again.',
+        operation: 'withdrawal'
+      });
       
       alert(`Withdrawal Error: ${errorMessage}`);
     } finally {

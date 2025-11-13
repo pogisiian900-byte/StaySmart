@@ -1,19 +1,19 @@
 import React, { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import Profile from '../../components/Profile'
-import GuestBookings from './GuestBookings'
-import GuestWishlist from './GuestWishlist'
+import HostBookings from './HostBookings'
 import Coupon from '../../components/Coupon'
+import Reports from '../../components/Reports'
 
-const GuestAccountSettings = () => {
-  const { guestId } = useParams()
+const HostAccountSettings = () => {
+  const { hostId } = useParams()
   const [activeTab, setActiveTab] = useState('profile')
 
   const tabs = [
     { id: 'profile', label: 'Profile' },
-    { id: 'bookings', label: 'Bookings' },
-    { id: 'wishlist', label: 'Wishlist' },
-    { id: 'coupons', label: 'Coupons' }
+    { id: 'reservations', label: 'Reservations' },
+    { id: 'coupons', label: 'Coupons' },
+    { id: 'reports', label: 'Payment & Transaction Reports' }
   ]
 
   return (
@@ -47,7 +47,7 @@ const GuestAccountSettings = () => {
           color: 'rgba(255, 255, 255, 0.9)',
           fontWeight: 400
         }}>
-          Manage your profile, bookings, saved listings, and view available coupons
+          Manage your profile, reservations, and view available coupons
         </p>
       </div>
 
@@ -137,14 +137,9 @@ const GuestAccountSettings = () => {
             <Profile />
           </div>
         )}
-        {activeTab === 'bookings' && (
+        {activeTab === 'reservations' && (
           <div style={{ width: '100%', overflowX: 'auto' }}>
-            <GuestBookings />
-          </div>
-        )}
-        {activeTab === 'wishlist' && (
-          <div style={{ width: '100%', overflowX: 'auto' }}>
-            <GuestWishlist />
+            <HostBookings />
           </div>
         )}
         {activeTab === 'coupons' && (
@@ -152,10 +147,15 @@ const GuestAccountSettings = () => {
             <Coupon />
           </div>
         )}
+        {activeTab === 'reports' && (
+          <div style={{ width: '100%', overflowX: 'auto' }}>
+            <Reports hostId={hostId} />
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-export default GuestAccountSettings
+export default HostAccountSettings
 

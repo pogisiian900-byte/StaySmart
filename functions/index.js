@@ -16,9 +16,9 @@ admin.initializeApp();
 function getPayPalClient() {
   console.log('Getting PayPal client configuration...');
   
-  const PAYPAL_CLIENT_ID = functions.config().paypal?.client_id || process.env.PAYPAL_CLIENT_ID;
-  const PAYPAL_CLIENT_SECRET = functions.config().paypal?.client_secret || process.env.PAYPAL_CLIENT_SECRET;
-  const PAYPAL_MODE = functions.config().paypal?.mode || process.env.PAYPAL_MODE || 'sandbox'; // 'sandbox' or 'live'
+  const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+  const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
+  const PAYPAL_MODE = 'sandbox'; // Hardcoded to sandbox only
 
   console.log('PayPal configuration:', {
     hasClientId: !!PAYPAL_CLIENT_ID,
@@ -29,15 +29,14 @@ function getPayPalClient() {
   });
 
   if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
-    const errorMsg = 'PayPal credentials not configured. Please set PayPal client ID and secret in Firebase Functions config using: firebase functions:config:set paypal.client_id="YOUR_ID" paypal.client_secret="YOUR_SECRET"';
+    const errorMsg = 'PayPal credentials not configured. Please set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables. For local development, create a .env file in the functions directory. For production, set environment variables in Firebase.';
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
 
   try {
-    const environment = PAYPAL_MODE === 'sandbox'
-      ? new paypal.core.SandboxEnvironment(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET)
-      : new paypal.core.LiveEnvironment(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET);
+    // Always use sandbox environment
+    const environment = new paypal.core.SandboxEnvironment(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET);
 
     console.log('PayPal environment created:', PAYPAL_MODE);
     const client = new paypal.core.PayPalHttpClient(environment);
@@ -234,15 +233,41 @@ exports.processPayPalPayout = functions.https.onCall(async (data, context) => {
       }
     }
     
-    // Check for specific PayPal errors
+    // Check for specific PayPal errors and map to appropriate error codes
+    let firebaseErrorCode = 'internal'; // Default for truly unexpected errors
+    const errorMessageUpper = errorMessage.toUpperCase();
+    
     if (errorMessage.includes('credentials') || errorMessage.includes('not configured')) {
       errorMessage = 'PayPal credentials not configured. Please set PayPal client ID and secret in Firebase Functions config.';
+      firebaseErrorCode = 'failed-precondition';
     } else if (errorMessage.includes('AUTHENTICATION_FAILURE') || errorMessage.includes('401')) {
       errorMessage = 'PayPal authentication failed. Please check your PayPal credentials.';
+      firebaseErrorCode = 'unauthenticated';
     } else if (errorMessage.includes('INSUFFICIENT_FUNDS')) {
       errorMessage = 'Insufficient funds in PayPal account for payout.';
+      firebaseErrorCode = 'failed-precondition';
     } else if (errorMessage.includes('INVALID_RECEIVER')) {
       errorMessage = 'Invalid PayPal receiver. Please check the host PayPal email or payer ID.';
+      firebaseErrorCode = 'invalid-argument';
+    } else if (errorMessageUpper.includes('INVALID')) {
+      firebaseErrorCode = 'invalid-argument';
+    } else if (errorMessageUpper.includes('AUTHENTICATION') || errorMessageUpper.includes('AUTH')) {
+      firebaseErrorCode = 'unauthenticated';
+    } else if (errorMessageUpper.includes('CREDENTIALS') || errorMessageUpper.includes('CONFIGURATION')) {
+      firebaseErrorCode = 'failed-precondition';
+    }
+    
+    // Check HTTP status code if available
+    if (errorDetails.statusCode) {
+      if (errorDetails.statusCode === 401 || errorDetails.statusCode === 403) {
+        firebaseErrorCode = 'unauthenticated';
+      } else if (errorDetails.statusCode === 400 || errorDetails.statusCode === 422) {
+        if (firebaseErrorCode === 'internal') {
+          firebaseErrorCode = 'invalid-argument';
+        }
+      } else if (errorDetails.statusCode === 402) {
+        firebaseErrorCode = 'failed-precondition';
+      }
     }
     
     try {
@@ -257,9 +282,10 @@ exports.processPayPalPayout = functions.https.onCall(async (data, context) => {
       console.error('Failed to update payout record with error:', updateError);
     }
 
-    // Throw error with detailed message
+    // Throw error with appropriate Firebase error code
+    // This ensures the error message is accessible on the client
     throw new functions.https.HttpsError(
-      'internal',
+      firebaseErrorCode,
       `PayPal payout failed: ${errorMessage}`,
       {
         originalError: error.message,
@@ -674,12 +700,12 @@ exports.getPayPalBalance = functions.https.onCall(async (data, context) => {
     console.log('Getting PayPal balance from API for user:', context.auth.uid);
 
     // Get PayPal credentials from environment
-    const PAYPAL_CLIENT_ID = functions.config().paypal?.client_id || process.env.PAYPAL_CLIENT_ID;
-    const PAYPAL_CLIENT_SECRET = functions.config().paypal?.client_secret || process.env.PAYPAL_CLIENT_SECRET;
-    const PAYPAL_API_BASE = functions.config().paypal?.api_base || process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com';
+    const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+    const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
+    const PAYPAL_API_BASE = 'https://api-m.sandbox.paypal.com';
 
     if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
-      throw new functions.https.HttpsError('failed-precondition', 'PayPal credentials not configured');
+      throw new functions.https.HttpsError('failed-precondition', 'PayPal credentials not configured. Please set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables.');
     }
 
     // Get PayPal access token
@@ -829,12 +855,12 @@ exports.syncPayPalBalanceToFirebase = functions.https.onCall(async (data, contex
     }
 
     // Get PayPal credentials from environment
-    const PAYPAL_CLIENT_ID = functions.config().paypal?.client_id || process.env.PAYPAL_CLIENT_ID;
-    const PAYPAL_CLIENT_SECRET = functions.config().paypal?.client_secret || process.env.PAYPAL_CLIENT_SECRET;
-    const PAYPAL_API_BASE = functions.config().paypal?.api_base || process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com';
+    const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+    const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
+    const PAYPAL_API_BASE = 'https://api-m.sandbox.paypal.com';
 
     if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
-      throw new functions.https.HttpsError('failed-precondition', 'PayPal credentials not configured');
+      throw new functions.https.HttpsError('failed-precondition', 'PayPal credentials not configured. Please set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables.');
     }
 
     // Get PayPal access token
@@ -973,18 +999,43 @@ exports.processPayPalPayoutRest = functions.https.onCall(async (data, context) =
   }
 
   try {
-    console.log('Processing PayPal payout (REST API):', { payoutEmail, payerId, amount, currency });
+    console.log('=== PROCESSING PAYPAL PAYOUT (REST API) ===');
+    console.log('Receiver Email:', payoutEmail || 'Not provided');
+    console.log('Payer ID:', payerId || 'Not provided');
+    console.log('Amount:', amount);
+    console.log('Currency:', currency);
+    console.log('Recipient Type:', payerId ? 'PAYER_ID' : 'EMAIL');
+    console.log('Recipient Value:', payerId || payoutEmail || 'Not provided');
 
     // Get PayPal credentials from environment
-    const PAYPAL_CLIENT_ID = functions.config().paypal?.client_id || process.env.PAYPAL_CLIENT_ID;
-    const PAYPAL_CLIENT_SECRET = functions.config().paypal?.client_secret || process.env.PAYPAL_CLIENT_SECRET;
-    const PAYPAL_API_BASE = functions.config().paypal?.api_base || process.env.PAYPAL_API_BASE || 'https://api-m.sandbox.paypal.com';
+    const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
+    const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
+    const PAYPAL_API_BASE = 'https://api-m.sandbox.paypal.com';
+
+    console.log('=== PAYPAL CREDENTIALS CHECK ===');
+    console.log('PAYPAL_CLIENT_ID exists:', !!PAYPAL_CLIENT_ID);
+    console.log('PAYPAL_CLIENT_SECRET exists:', !!PAYPAL_CLIENT_SECRET);
+    console.log('PAYPAL_CLIENT_ID length:', PAYPAL_CLIENT_ID ? PAYPAL_CLIENT_ID.length : 0);
+    console.log('PAYPAL_CLIENT_SECRET length:', PAYPAL_CLIENT_SECRET ? PAYPAL_CLIENT_SECRET.length : 0);
+    console.log('PAYPAL_CLIENT_ID starts with:', PAYPAL_CLIENT_ID ? PAYPAL_CLIENT_ID.substring(0, 10) : 'N/A');
+    console.log('Is placeholder?', PAYPAL_CLIENT_ID ? PAYPAL_CLIENT_ID.includes('your_paypal') : true);
 
     if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
-      throw new functions.https.HttpsError('failed-precondition', 'PayPal credentials not configured');
+      const errorMsg = 'PayPal credentials not configured. Please set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET environment variables. For local development, create a .env file in the functions directory. For production, set environment variables in Firebase Console.';
+      console.error('❌', errorMsg);
+      throw new functions.https.HttpsError('failed-precondition', errorMsg);
+    }
+
+    // Check if credentials are placeholders
+    if (PAYPAL_CLIENT_ID.includes('your_paypal') || PAYPAL_CLIENT_SECRET.includes('your_paypal')) {
+      const errorMsg = 'PayPal credentials are still placeholders. Please update functions/.env file with actual Client ID and Secret from PayPal Developer Dashboard. IMPORTANT: The Client ID and Secret should be from a PayPal App associated with lhanie@business.example.com account (the sender account).';
+      console.error('❌', errorMsg);
+      throw new functions.https.HttpsError('failed-precondition', errorMsg);
     }
 
     // Get PayPal access token
+    console.log('=== REQUESTING PAYPAL ACCESS TOKEN ===');
+    console.log('API Base:', PAYPAL_API_BASE);
     const credentials = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
     
     const tokenResponse = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, {
@@ -996,9 +1047,27 @@ exports.processPayPalPayoutRest = functions.https.onCall(async (data, context) =
       body: 'grant_type=client_credentials',
     });
 
+    console.log('Token response status:', tokenResponse.status);
+    console.log('Token response statusText:', tokenResponse.statusText);
+
     if (!tokenResponse.ok) {
-      const errorData = await tokenResponse.json().catch(() => ({}));
-      throw new Error(`Failed to get PayPal access token: ${errorData.error_description || tokenResponse.statusText}`);
+      const tokenErrorData = await tokenResponse.json().catch(() => ({}));
+      console.error('❌ Failed to get PayPal access token');
+      console.error('Token error response:', JSON.stringify(tokenErrorData, null, 2));
+      
+      let tokenErrorMessage = 'Failed to authenticate with PayPal API. ';
+      if (tokenErrorData.error === 'invalid_client') {
+        tokenErrorMessage += 'Invalid Client ID or Secret. Please verify your PayPal App credentials in functions/.env file. Make sure the Client ID and Secret are from a PayPal App associated with lhanie@business.example.com account (the sender account).';
+      } else if (tokenErrorData.error_description) {
+        tokenErrorMessage += tokenErrorData.error_description;
+      } else {
+        tokenErrorMessage += `HTTP ${tokenResponse.status}: ${tokenResponse.statusText}`;
+      }
+      
+      throw new functions.https.HttpsError('failed-precondition', tokenErrorMessage, {
+        message: tokenErrorMessage,
+        paypalError: tokenErrorData
+      });
     }
 
     const tokenData = await tokenResponse.json();
@@ -1011,6 +1080,9 @@ exports.processPayPalPayoutRest = functions.https.onCall(async (data, context) =
     const senderItemId = `item_${timestamp}_${randomStr}`;
 
     // Prepare payout request
+    // NOTE: PayPal Payout API sends money FROM the platform PayPal account TO the user's PayPal account.
+    // The platform PayPal account (associated with PAYPAL_CLIENT_ID) must have sufficient funds.
+    // For sandbox: Add test funds to your platform PayPal sandbox account.
     const payoutData = {
       sender_batch_header: {
         sender_batch_id: senderBatchId,
@@ -1031,7 +1103,12 @@ exports.processPayPalPayoutRest = functions.https.onCall(async (data, context) =
       ],
     };
 
-    console.log('Sending payout request to PayPal:', JSON.stringify(payoutData, null, 2));
+    console.log('=== PAYPAL PAYOUT REQUEST DATA ===');
+    console.log('Receiver Email:', payoutEmail || 'Not provided');
+    console.log('Payer ID:', payerId || 'Not provided');
+    console.log('Recipient Type:', payerId ? 'PAYER_ID' : 'EMAIL');
+    console.log('Receiver (in request):', payerId || payoutEmail);
+    console.log('Full payout request:', JSON.stringify(payoutData, null, 2));
 
     // Send payout request
     const response = await fetch(`${PAYPAL_API_BASE}/v1/payments/payouts`, {
@@ -1046,20 +1123,79 @@ exports.processPayPalPayoutRest = functions.https.onCall(async (data, context) =
     const responseData = await response.json();
 
     if (!response.ok) {
-      console.error('PayPal payout API error:', responseData);
+      console.error('PayPal payout API error response:', JSON.stringify(responseData, null, 2));
+      console.error('Response status:', response.status);
+      console.error('Response statusText:', response.statusText);
       
-      const errorMessage = responseData.message || 
-        responseData.details?.[0]?.description || 
-        responseData.details?.[0]?.issue ||
-        `PayPal payout failed: ${response.statusText}`;
+      // Extract error message from PayPal response
+      let errorMessage = 'PayPal payout failed';
       
+      if (responseData.message) {
+        errorMessage = responseData.message;
+      } else if (responseData.details && Array.isArray(responseData.details) && responseData.details[0]) {
+        errorMessage = responseData.details[0].description || responseData.details[0].issue || errorMessage;
+      } else if (responseData.name) {
+        errorMessage = responseData.name;
+      } else if (response.statusText) {
+        errorMessage = `PayPal API error: ${response.statusText}`;
+      }
+      
+      console.error('Extracted error message:', errorMessage);
+      
+      // Map PayPal errors to appropriate Firebase error codes
+      // This ensures error messages are passed to the client
+      let firebaseErrorCode = 'internal'; // Default for truly unexpected errors
+      const paypalErrorName = responseData.name || '';
+      const paypalErrorIssue = responseData.details?.[0]?.issue || '';
+      const errorMessageUpper = errorMessage.toUpperCase();
+      
+      // Check HTTP status codes first
+      if (response.status === 401 || response.status === 403) {
+        firebaseErrorCode = 'unauthenticated';
+      } else if (response.status === 400 || response.status === 422) {
+        // Check if it's an invalid argument error
+        if (errorMessageUpper.includes('INVALID_RECEIVER') || 
+            errorMessageUpper.includes('INVALID') ||
+            paypalErrorIssue.includes('INVALID') ||
+            paypalErrorName.includes('VALIDATION_ERROR')) {
+          firebaseErrorCode = 'invalid-argument';
+        } else {
+          firebaseErrorCode = 'invalid-argument'; // Most 400/422 are invalid arguments
+        }
+      } else if (response.status === 402) {
+        firebaseErrorCode = 'failed-precondition'; // Payment required / insufficient funds
+      } else {
+        // Check PayPal-specific error codes
+        if (errorMessageUpper.includes('INSUFFICIENT_FUNDS') || 
+            errorMessageUpper.includes('INSUFFICIENT') ||
+            paypalErrorIssue.includes('INSUFFICIENT')) {
+          firebaseErrorCode = 'failed-precondition';
+        } else if (errorMessageUpper.includes('INVALID_RECEIVER') || 
+                   errorMessageUpper.includes('INVALID') ||
+                   paypalErrorIssue.includes('INVALID') ||
+                   paypalErrorName.includes('VALIDATION_ERROR')) {
+          firebaseErrorCode = 'invalid-argument';
+        } else if (errorMessageUpper.includes('AUTHENTICATION') || 
+                   errorMessageUpper.includes('AUTH') ||
+                   paypalErrorName.includes('AUTHENTICATION')) {
+          firebaseErrorCode = 'unauthenticated';
+        } else if (errorMessageUpper.includes('CREDENTIALS') || 
+                   errorMessageUpper.includes('NOT_CONFIGURED') ||
+                   errorMessageUpper.includes('CONFIGURATION')) {
+          firebaseErrorCode = 'failed-precondition';
+        }
+      }
+      
+      // Throw error with appropriate Firebase error code
+      // This ensures the error message is accessible on the client
       throw new functions.https.HttpsError(
-        'internal',
-        errorMessage,
+        firebaseErrorCode,
+        errorMessage, // This will be accessible via error.message on client
         {
+          message: errorMessage,
           statusCode: response.status,
           errorCode: responseData.name || responseData.details?.[0]?.issue,
-          details: responseData
+          paypalResponse: responseData
         }
       );
     }
@@ -1077,15 +1213,44 @@ exports.processPayPalPayoutRest = functions.https.onCall(async (data, context) =
     };
   } catch (error) {
     console.error('PayPal payout error:', error);
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
     
+    // If it's already an HttpsError, rethrow it (it should have the proper message)
     if (error instanceof functions.https.HttpsError) {
+      console.error('Rethrowing HttpsError with message:', error.message);
       throw error;
     }
     
+    // Extract detailed error message
+    let errorMessage = error.message || 'Unknown error occurred';
+    
+    // Check if error has response data (from fetch)
+    if (error.response) {
+      const responseData = error.response.body || {};
+      if (responseData.message) {
+        errorMessage = responseData.message;
+      } else if (responseData.details?.[0]?.description) {
+        errorMessage = responseData.details[0].description;
+      } else if (responseData.details?.[0]?.issue) {
+        errorMessage = responseData.details[0].issue;
+      }
+    }
+    
+    // Throw with detailed message - include message in both parameter and details
+    const finalErrorMessage = `PayPal payout failed: ${errorMessage}`;
+    
     throw new functions.https.HttpsError(
       'internal',
-      `PayPal payout failed: ${error.message}`,
-      { originalError: error.message }
+      finalErrorMessage,
+      { 
+        message: finalErrorMessage, // Include in details for client access
+        originalError: error.message,
+        errorType: error.constructor.name,
+        stack: error.stack,
+        errorMessage: errorMessage // Include the extracted error message
+      }
     );
   }
 });

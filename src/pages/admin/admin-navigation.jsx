@@ -8,6 +8,7 @@ import AdminBookings from './AdminBookings'
 import AdminPayouts from './AdminPayouts'
 import AdminUsers from './AdminUsers'
 import AdminProfile from './AdminProfile'
+import AdminReports from './AdminReports'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
 import dialogPolyfill from 'dialog-polyfill'
 
@@ -75,6 +76,8 @@ const Admin_Navigation = () => {
         return <AdminUsers />
       case 'profile':
         return <AdminProfile />
+      case 'reports':
+        return <AdminReports />
       default:
         return <Admin_MainContent />
     }
@@ -147,6 +150,16 @@ const Admin_Navigation = () => {
           >
             <span className="icon">👤</span>
             <span className="label">User Management</span>
+          </button>
+          <button 
+            className={`admin-nav-button ${selectedNav === 'reports' ? 'admin-nav-selected' : ''}`}
+            onClick={() => {
+              handleNavClick('reports')
+              setIsMobileMenuOpen(false)
+            }}
+          >
+            <span className="icon">📊</span>
+            <span className="label">Reports</span>
           </button>
           <button 
             className={`admin-nav-button ${selectedNav === 'profile' ? 'admin-nav-selected' : ''}`}
