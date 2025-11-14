@@ -1327,7 +1327,7 @@ const AdminReports = () => {
                   borderRadius: '16px',
                   border: '2px solid #e5e7eb',
                   boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
-                  width: '400px',
+                  width: '320px',
                   maxHeight: '90vh',
                   overflowY: 'auto'
                 }}
@@ -1622,7 +1622,7 @@ const AdminReports = () => {
                   borderRadius: '16px',
                   border: '2px solid #e5e7eb',
                   boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
-                  width: '400px',
+                  width: '320px',
                   maxHeight: '90vh',
                   overflowY: 'auto'
                 }}

@@ -1,14 +1,14 @@
 import { Route, createBrowserRouter, createRoutesFromElements, RouterProvider } from 'react-router-dom';
 import './App.css';
 import './index.css';
-import '../src/pages/for-all/HostRegis.css'
-import '../src/pages/for-all/HostSetupForm/HostSetupForm.css'
-import '../src/pages/host/navigations.css'
-import '../src/pages/host/host-dashboard.css'
-import '../src/pages/host/host-listing.css'
-import '../src/pages/guest/guest-viewListing.css'
-import '../src/pages/guest/guest-bookingConfirmation.css'
-import '../src/pages/guest/guest-reviews.css'
+import './pages/for-all/HostRegis.css'
+import './pages/for-all/HostSetupForm/HostSetupForm.css'
+import './pages/host/navigations.css'
+import './pages/host/host-dashboard.css'
+import './pages/host/host-listing.css'
+import './pages/guest/guest-viewListing.css'
+import './pages/guest/guest-bookingConfirmation.css'
+import './pages/guest/guest-reviews.css'
 import './pages/booking-responsive.css'
 import RootLayout from './layout/RootLayout.jsx';
 import ProtectedRoute from './layout/ProtectedRoute.jsx';
