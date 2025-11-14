@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react'
-import { collection, onSnapshot, doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, onSnapshot, doc, updateDoc, getDoc, setDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import './admin-dashboard.css'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
@@ -12,11 +12,20 @@ const AdminUsers = () => {
   const [loading, setLoading] = useState(true)
   const [selectedUser, setSelectedUser] = useState(null)
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [editingUser, setEditingUser] = useState(null)
+  const [deletingUser, setDeletingUser] = useState(null)
+  const [editFormData, setEditFormData] = useState({})
+  const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [filterRole, setFilterRole] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [updatingRole, setUpdatingRole] = useState(null)
   const [userStats, setUserStats] = useState({}) // Cache for user statistics
   const detailsDialogRef = React.useRef(null)
+  const editDialogRef = React.useRef(null)
+  const deleteDialogRef = React.useRef(null)
 
   // Fetch all users
   useEffect(() => {
@@ -98,6 +107,12 @@ const AdminUsers = () => {
     if (detailsDialogRef.current && !detailsDialogRef.current.showModal) {
       dialogPolyfill.registerDialog(detailsDialogRef.current)
     }
+    if (editDialogRef.current && !editDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(editDialogRef.current)
+    }
+    if (deleteDialogRef.current && !deleteDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(deleteDialogRef.current)
+    }
   }, [])
 
   // Filter and search users
@@ -164,6 +179,115 @@ const AdminUsers = () => {
   const handleCloseDetailsDialog = () => {
     setShowDetailsDialog(false)
     detailsDialogRef.current?.close()
+  }
+
+  const handleEdit = (user) => {
+    setEditingUser(user)
+    setEditFormData({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      middleName: user.middleName || '',
+      emailAddress: user.emailAddress || '',
+      phoneNumber: user.phoneNumber || '',
+      birthday: user.birthday ? (user.birthday?.toDate ? user.birthday.toDate().toISOString().split('T')[0] : new Date(user.birthday).toISOString().split('T')[0]) : '',
+      street: user.street || '',
+      barangay: user.barangay || '',
+      city: user.city || '',
+      province: user.province || '',
+      zipCode: user.zipCode || ''
+    })
+    setShowEditDialog(true)
+    if (editDialogRef.current) {
+      try {
+        if (typeof editDialogRef.current.showModal === 'function') {
+          editDialogRef.current.showModal()
+        } else {
+          dialogPolyfill.registerDialog(editDialogRef.current)
+          editDialogRef.current.showModal()
+        }
+      } catch (err) {
+        console.error('Error showing edit dialog:', err)
+        editDialogRef.current.style.display = 'block'
+      }
+    }
+  }
+
+  const handleCloseEditDialog = () => {
+    setShowEditDialog(false)
+    setEditingUser(null)
+    setEditFormData({})
+    editDialogRef.current?.close()
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingUser) return
+    
+    try {
+      setIsSaving(true)
+      const userRef = doc(db, 'Users', editingUser.id)
+      const updateData = {
+        ...editFormData,
+        updatedAt: serverTimestamp()
+      }
+
+      // Convert birthday string back to timestamp if provided
+      if (updateData.birthday) {
+        updateData.birthday = Timestamp.fromDate(new Date(updateData.birthday))
+      } else {
+        // Remove birthday from updateData if it's empty
+        delete updateData.birthday
+      }
+
+      await updateDoc(userRef, updateData)
+      alert('User information updated successfully!')
+      handleCloseEditDialog()
+    } catch (error) {
+      console.error('Error updating user:', error)
+      alert('Failed to update user. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleDelete = (user) => {
+    setDeletingUser(user)
+    setShowDeleteDialog(true)
+    if (deleteDialogRef.current) {
+      try {
+        if (typeof deleteDialogRef.current.showModal === 'function') {
+          deleteDialogRef.current.showModal()
+        } else {
+          dialogPolyfill.registerDialog(deleteDialogRef.current)
+          deleteDialogRef.current.showModal()
+        }
+      } catch (err) {
+        console.error('Error showing delete dialog:', err)
+        deleteDialogRef.current.style.display = 'block'
+      }
+    }
+  }
+
+  const handleCloseDeleteDialog = () => {
+    setShowDeleteDialog(false)
+    setDeletingUser(null)
+    deleteDialogRef.current?.close()
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deletingUser) return
+    
+    try {
+      setIsDeleting(true)
+      const userRef = doc(db, 'Users', deletingUser.id)
+      await deleteDoc(userRef)
+      alert('User deleted successfully!')
+      handleCloseDeleteDialog()
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      alert('Failed to delete user. Please try again.')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const handleUpdateRole = async (userId, newRole) => {
@@ -401,21 +525,53 @@ const AdminUsers = () => {
                         {formatDate(user.createdAt)}
                       </td>
                       <td style={{ padding: '12px' }}>
-                        <button
-                          onClick={() => handleViewDetails(user)}
-                          style={{
-                            padding: '6px 12px',
-                            background: '#31326F',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            fontWeight: '500'
-                          }}
-                        >
-                          View
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button
+                            onClick={() => handleViewDetails(user)}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#31326F',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => handleEdit(user)}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#10b981',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(user)}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -652,6 +808,365 @@ const AdminUsers = () => {
                 }}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
+
+      {/* Edit User Dialog */}
+      {showEditDialog && editingUser && (
+        <dialog
+          ref={editDialogRef}
+          style={{
+            maxWidth: '600px',
+            width: '90%',
+            border: 'none',
+            borderRadius: '16px',
+            padding: 0,
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)'
+          }}
+        >
+          <style>
+            {`.edit-user-dialog::backdrop {
+              background: rgba(0, 0, 0, 0.5);
+              backdrop-filter: blur(4px);
+            }`}
+          </style>
+          <div style={{ padding: '30px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
+                Edit User
+              </h2>
+              <button
+                onClick={handleCloseEditDialog}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                  padding: '0',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.firstName || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.lastName || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Middle Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.middleName || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, middleName: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editFormData.emailAddress || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, emailAddress: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={editFormData.phoneNumber || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, phoneNumber: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Birthday
+                  </label>
+                  <input
+                    type="date"
+                    value={editFormData.birthday || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, birthday: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Street
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.street || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, street: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Barangay
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.barangay || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, barangay: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.city || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Province
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.province || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, province: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Zip Code
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.zipCode || ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, zipCode: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={handleCloseEditDialog}
+                disabled={isSaving}
+                style={{
+                  padding: '10px 24px',
+                  background: '#f3f4f6',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  opacity: isSaving ? 0.6 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={isSaving}
+                style={{
+                  padding: '10px 24px',
+                  background: '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  opacity: isSaving ? 0.6 : 1
+                }}
+              >
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteDialog && deletingUser && (
+        <dialog
+          ref={deleteDialogRef}
+          style={{
+            maxWidth: '500px',
+            width: '90%',
+            border: 'none',
+            borderRadius: '16px',
+            padding: 0,
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)'
+          }}
+        >
+          <style>
+            {`.delete-user-dialog::backdrop {
+              background: rgba(0, 0, 0, 0.5);
+              backdrop-filter: blur(4px);
+            }`}
+          </style>
+          <div style={{ padding: '30px' }}>
+            <div style={{ marginBottom: '24px' }}>
+              <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '600', color: '#1f2937', marginBottom: '12px' }}>
+                Delete User
+              </h2>
+              <p style={{ margin: 0, fontSize: '14px', color: '#6b7280' }}>
+                Are you sure you want to delete this user? This action cannot be undone.
+              </p>
+            </div>
+
+            <div style={{ 
+              background: '#fef2f2', 
+              border: '1px solid #fecaca', 
+              borderRadius: '8px', 
+              padding: '16px', 
+              marginBottom: '24px' 
+            }}>
+              <div style={{ fontSize: '14px', color: '#374151' }}>
+                <div><strong>Name:</strong> {`${deletingUser.firstName || ''} ${deletingUser.lastName || ''}`.trim() || 'N/A'}</div>
+                <div><strong>Email:</strong> {deletingUser.emailAddress || 'N/A'}</div>
+                <div><strong>Role:</strong> {(deletingUser.role || 'unknown').toUpperCase()}</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={handleCloseDeleteDialog}
+                disabled={isDeleting}
+                style={{
+                  padding: '10px 24px',
+                  background: '#f3f4f6',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  opacity: isDeleting ? 0.6 : 1
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                style={{
+                  padding: '10px 24px',
+                  background: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  opacity: isDeleting ? 0.6 : 1
+                }}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete User'}
               </button>
             </div>
           </div>

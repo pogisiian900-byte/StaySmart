@@ -1673,7 +1673,7 @@
   gap: 16px;
 }
 
-.recommendations-loading p {
+.recommendations-loading p {                        
   margin: 0;
   font-size: 1rem;
   color: #6b7280;
