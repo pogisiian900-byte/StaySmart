@@ -18,6 +18,7 @@ const HostSetupForm = () => {
   const { serviceType, hostId, draftId } = useParams();
   const navigate = useNavigate();
   const dialogRef = useRef(null);
+  const successDialogRef = useRef(null);
   const isEditingDraft = Boolean(draftId);
   const [isDisabled, setIsDisabled] = useState(false);
 
@@ -217,12 +218,31 @@ const HostSetupForm = () => {
       console.log(`Draft ${draftId} deleted successfully`);
     }
 
-      alert("Listing saved successfully!");
-      navigate(`/host/${hostId}`);
+      // Show success dialog
+      if (successDialogRef.current) {
+        try {
+          if (typeof successDialogRef.current.showModal === 'function') {
+            successDialogRef.current.showModal();
+          } else {
+            successDialogRef.current.style.display = 'block';
+          }
+        } catch (err) {
+          console.error('Error showing success dialog:', err);
+          successDialogRef.current.style.display = 'block';
+        }
+      }
     } catch (error) {
       console.error("Error saving listing:", error);
       alert("Something went wrong while saving your listing.");
+      setIsDisabled(false);
     }
+  };
+
+  const handleCloseSuccessDialog = () => {
+    if (successDialogRef.current) {
+      successDialogRef.current.close();
+    }
+    navigate(`/host/${hostId}`);
   };
   return (
     <div className="hostSetupForm">
@@ -488,6 +508,23 @@ const HostSetupForm = () => {
             }}
           >
             No, Add them now
+          </button>
+        </div>
+      </dialog>
+
+      {/* Success Dialog */}
+      <dialog ref={successDialogRef} className="listing-success-dialog">
+        <div className="success-dialog-content">
+          <div className="success-icon">✓</div>
+          <h2 className="success-title">Listing Saved Successfully!</h2>
+          <p className="success-message">
+            Your listing has been created and is now live. You can view it in your listings page.
+          </p>
+          <button 
+            className="success-close-btn" 
+            onClick={handleCloseSuccessDialog}
+          >
+            Go to My Listings
           </button>
         </div>
       </dialog>

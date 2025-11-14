@@ -452,6 +452,98 @@ textarea.form-input {
   box-shadow: 0 6px 20px rgba(49, 50, 111, 0.5);
 }
 
+/* Success Dialog */
+.listing-success-dialog {
+  border: none;
+  border-radius: 20px;
+  padding: 0;
+  width: 90%;
+  max-width: 500px;
+  background: white;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.listing-success-dialog::backdrop {
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.success-dialog-content {
+  padding: 3rem 2.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.success-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  font-weight: bold;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+  animation: scaleIn 0.4s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.success-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1e293b;
+  font-family: 'Poppins', sans-serif;
+}
+
+.success-message {
+  margin: 0;
+  font-size: 1rem;
+  color: #64748b;
+  line-height: 1.6;
+  max-width: 400px;
+}
+
+.success-close-btn {
+  margin-top: 0.5rem;
+  padding: 14px 32px;
+  background: linear-gradient(135deg, #31326F 0%, #637AB9 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(49, 50, 111, 0.4);
+  font-family: 'Poppins', sans-serif;
+}
+
+.success-close-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(49, 50, 111, 0.5);
+}
+
+.success-close-btn:active {
+  transform: translateY(0);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .hostSetupForm {
@@ -524,5 +616,33 @@ textarea.form-input {
 
   .form-subtitle {
     font-size: 0.875rem;
+  }
+
+  .listing-success-dialog {
+    width: 95%;
+    max-width: 400px;
+  }
+
+  .success-dialog-content {
+    padding: 2.5rem 2rem;
+  }
+
+  .success-icon {
+    width: 70px;
+    height: 70px;
+    font-size: 2.5rem;
+  }
+
+  .success-title {
+    font-size: 1.5rem;
+  }
+
+  .success-message {
+    font-size: 0.9375rem;
+  }
+
+  .success-close-btn {
+    width: 100%;
+    padding: 12px 24px;
   }
 }
