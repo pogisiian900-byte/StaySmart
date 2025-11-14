@@ -30,6 +30,8 @@ const AdminProfile = () => {
     totalListings: 0,
     totalRevenue: 0
   })
+  const [transactions, setTransactions] = useState([])
+  const [loadingTransactions, setLoadingTransactions] = useState(true)
   const dialogRef = useRef(null)
   const fileInputRef = useRef(null)
   const paymentDialogRef = useRef(null)
@@ -100,6 +102,65 @@ const AdminProfile = () => {
     }
 
     fetchStats()
+
+    // Fetch admin transactions
+    const fetchTransactions = async () => {
+      if (!authUser) return
+      try {
+        setLoadingTransactions(true)
+        
+        // Query both Transactions and AdminTransactions collections
+        const [transactionsSnap, adminTransactionsSnap] = await Promise.all([
+          getDocs(query(
+            collection(db, 'Transactions'),
+            where('userId', '==', authUser.uid),
+            orderBy('createdAt', 'desc')
+          )).catch(() => {
+            // Fallback without orderBy if index doesn't exist
+            return getDocs(query(
+              collection(db, 'Transactions'),
+              where('userId', '==', authUser.uid)
+            ))
+          }),
+          getDocs(query(
+            collection(db, 'AdminTransactions'),
+            where('adminId', '==', authUser.uid),
+            orderBy('createdAt', 'desc')
+          )).catch(() => {
+            // Fallback without orderBy if index doesn't exist
+            return getDocs(query(
+              collection(db, 'AdminTransactions'),
+              where('adminId', '==', authUser.uid)
+            ))
+          })
+        ])
+
+        const allTransactions = []
+        
+        transactionsSnap.forEach((doc) => {
+          allTransactions.push({ id: doc.id, ...doc.data(), source: 'Transactions' })
+        })
+        
+        adminTransactionsSnap.forEach((doc) => {
+          allTransactions.push({ id: doc.id, ...doc.data(), source: 'AdminTransactions' })
+        })
+
+        // Sort by date (newest first)
+        allTransactions.sort((a, b) => {
+          const dateA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0)
+          const dateB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0)
+          return dateB - dateA
+        })
+
+        setTransactions(allTransactions.slice(0, 50)) // Limit to 50 most recent
+        setLoadingTransactions(false)
+      } catch (error) {
+        console.error('Error fetching transactions:', error)
+        setLoadingTransactions(false)
+      }
+    }
+
+    fetchTransactions()
 
     return () => {
       unsubscribeUser()
@@ -908,6 +969,153 @@ const AdminProfile = () => {
                     : new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
                   }
                 </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Transaction History Card */}
+        <div className="profile-info-card" style={{ gridColumn: '1 / -1' }}>
+          <div className="card-header">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="12" y1="1" x2="12" y2="23"/>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+            <h3>Transaction History</h3>
+          </div>
+
+          {loadingTransactions ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+              <div style={{ fontSize: '1rem' }}>Loading transactions...</div>
+            </div>
+          ) : transactions.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ margin: '0 auto 16px', opacity: 0.5 }}>
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+              <p style={{ margin: 0, fontSize: '0.95rem' }}>No transactions found</p>
+            </div>
+          ) : (
+            <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {transactions.map((transaction) => {
+                  const amount = parseFloat(transaction.amount || 0)
+                  const isPositive = amount >= 0
+                  const formatDate = (dateValue) => {
+                    if (!dateValue) return 'N/A'
+                    if (dateValue.toDate) return dateValue.toDate().toLocaleString()
+                    if (dateValue.toMillis) return new Date(dateValue.toMillis()).toLocaleString()
+                    if (dateValue.seconds) return new Date(dateValue.seconds * 1000).toLocaleString()
+                    return new Date(dateValue).toLocaleString()
+                  }
+
+                  return (
+                    <div
+                      key={transaction.id}
+                      style={{
+                        padding: '16px',
+                        background: '#f9fafb',
+                        borderRadius: '12px',
+                        border: '1px solid #e5e7eb',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        transition: 'all 0.2s',
+                        cursor: 'pointer'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#f3f4f6'
+                        e.currentTarget.style.borderColor = '#d1d5db'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#f9fafb'
+                        e.currentTarget.style.borderColor = '#e5e7eb'
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '10px',
+                            background: isPositive 
+                              ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05))'
+                              : 'linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05))',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: isPositive ? '#10b981' : '#ef4444'
+                          }}>
+                            {isPositive ? (
+                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 5v14M19 12l-7 7-7-7"/>
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 19V5M5 12l7-7 7 7"/>
+                              </svg>
+                            )}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <p style={{
+                              margin: '0 0 4px 0',
+                              fontSize: '0.95rem',
+                              fontWeight: '600',
+                              color: '#1f2937'
+                            }}>
+                              {transaction.description || transaction.type || 'Transaction'}
+                            </p>
+                            <p style={{
+                              margin: 0,
+                              fontSize: '0.85rem',
+                              color: '#6b7280'
+                            }}>
+                              {formatDate(transaction.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                        {transaction.reservationId && (
+                          <p style={{
+                            margin: '4px 0 0 0',
+                            fontSize: '0.8rem',
+                            color: '#9ca3af'
+                          }}>
+                            Reservation ID: {transaction.reservationId}
+                          </p>
+                        )}
+                      </div>
+                      <div style={{
+                        textAlign: 'right',
+                        marginLeft: '16px'
+                      }}>
+                        <p style={{
+                          margin: 0,
+                          fontSize: '1.1rem',
+                          fontWeight: '700',
+                          color: isPositive ? '#10b981' : '#ef4444'
+                        }}>
+                          {isPositive ? '+' : ''}₱{Math.abs(amount).toLocaleString('en-US', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </p>
+                        {transaction.balanceAfter !== undefined && (
+                          <p style={{
+                            margin: '4px 0 0 0',
+                            fontSize: '0.8rem',
+                            color: '#9ca3af'
+                          }}>
+                            Balance: ₱{parseFloat(transaction.balanceAfter || 0).toLocaleString('en-US', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
