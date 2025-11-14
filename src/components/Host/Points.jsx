@@ -210,6 +210,15 @@ const Points = ({ hostId }) => {
     setConversionSuccess(null);
 
     try {
+      const pointsToConvert = parseFloat(conversionAmount);
+      
+      // Validate conversion amount
+      if (!conversionAmount || isNaN(pointsToConvert) || pointsToConvert <= 0) {
+        setConversionError("Please enter a valid amount of points");
+        setConverting(false);
+        return;
+      }
+
       const userRef = doc(db, "Users", hostId);
       const userSnap = await getDoc(userRef);
 
