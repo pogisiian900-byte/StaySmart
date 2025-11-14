@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { collection, onSnapshot, orderBy, query, where, updateDoc, doc, serverTimestamp, addDoc, getDoc } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import ContinuousCalendar from '../../components/ContinuousCalendar'
+import 'dialog-polyfill/dist/dialog-polyfill.css'
+import dialogPolyfill from 'dialog-polyfill'
 import './guest-bookingConfirmation.css'
 import '../booking-responsive.css'
 
@@ -15,7 +17,9 @@ const GuestBookings = () => {
   const [selectedReservation, setSelectedReservation] = useState(null)
   const [processingRefund, setProcessingRefund] = useState(false)
   const [showCompleteDialog, setShowCompleteDialog] = useState(false)
+  const [showRefundDialog, setShowRefundDialog] = useState(false)
   const [processingComplete, setProcessingComplete] = useState(false)
+  const refundDialogRef = useRef(null)
   const [feedback, setFeedback] = useState({
     rating: 0,
     serviceThoughts: '',
@@ -24,6 +28,13 @@ const GuestBookings = () => {
   const [hoveredRating, setHoveredRating] = useState(0)
   const [showCompleted, setShowCompleted] = useState(false)
   const [hostInfo, setHostInfo] = useState(null) // Store host information for selected reservation
+
+  // Register dialog polyfill
+  useEffect(() => {
+    if (refundDialogRef.current && !refundDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(refundDialogRef.current)
+    }
+  }, [showRefundDialog])
 
   useEffect(() => {
     if (!guestId) return
@@ -204,7 +215,8 @@ const GuestBookings = () => {
     }
   }
 
-  const handleRequestRefund = async () => {
+  // Show refund confirmation dialog
+  const handleShowRefundDialog = () => {
     if (!selectedReservation) return
 
     const status = (selectedReservation.status || '').toLowerCase()
@@ -224,14 +236,32 @@ const GuestBookings = () => {
       return
     }
 
-    const confirmRefund = window.confirm(
-      `Are you sure you want to request a refund for this reservation?\n\n` +
-      `Listing: ${selectedReservation.listingTitle}\n` +
-      `Amount: ₱${selectedReservation?.pricing?.total || 0}\n\n` +
-      `Your refund request will be sent to the host for approval.`
-    )
+    setShowRefundDialog(true)
+    if (refundDialogRef.current) {
+      try {
+        if (typeof refundDialogRef.current.showModal === 'function') {
+          refundDialogRef.current.showModal()
+        } else {
+          dialogPolyfill.registerDialog(refundDialogRef.current)
+          refundDialogRef.current.showModal()
+        }
+      } catch (err) {
+        console.error('Error showing refund dialog:', err)
+        refundDialogRef.current.style.display = 'block'
+      }
+    }
+  }
 
-    if (!confirmRefund) return
+  // Close refund dialog
+  const handleCloseRefundDialog = () => {
+    setShowRefundDialog(false)
+    refundDialogRef.current?.close()
+  }
+
+  const handleRequestRefund = async () => {
+    handleCloseRefundDialog()
+    
+    if (!selectedReservation) return
 
     try {
       setProcessingRefund(true)
@@ -1181,7 +1211,7 @@ const GuestBookings = () => {
               )}
               {(selectedReservation.status?.toLowerCase() === 'confirmed' || selectedReservation.status?.toLowerCase() === 'pending') && (
                 <button 
-                  onClick={handleRequestRefund}
+                  onClick={handleShowRefundDialog}
                   disabled={processingRefund}
                   style={{
                     padding: '12px 24px',
@@ -1532,6 +1562,131 @@ const GuestBookings = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Refund Request Confirmation Dialog */}
+      {showRefundDialog && selectedReservation && (
+        <dialog 
+          ref={refundDialogRef} 
+          className="refund-confirmation-dialog" 
+          style={{ 
+            maxWidth: '500px', 
+            width: '90%', 
+            border: 'none', 
+            borderRadius: '16px', 
+            padding: 0, 
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' 
+          }}
+        >
+          <style>
+            {`.refund-confirmation-dialog::backdrop {
+              background: rgba(0, 0, 0, 0.5);
+              backdrop-filter: blur(4px);
+            }`}
+          </style>
+          <div style={{ padding: '30px', textAlign: 'center' }}>
+            <div style={{ fontSize: '48px', marginBottom: '20px' }}>💰</div>
+            <h2 style={{ margin: '0 0 15px 0', fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
+              Request Refund
+            </h2>
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(239, 68, 68, 0.02))',
+              borderRadius: '12px',
+              padding: '20px',
+              margin: '20px 0',
+              border: '2px solid rgba(239, 68, 68, 0.1)'
+            }}>
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Listing
+                </p>
+                <p style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+                  {selectedReservation.listingTitle || 'N/A'}
+                </p>
+              </div>
+              <div style={{
+                width: '100%',
+                height: '1px',
+                background: 'rgba(239, 68, 68, 0.2)',
+                margin: '16px 0'
+              }} />
+              <div>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Refund Amount
+                </p>
+                <p style={{ margin: 0, fontSize: '32px', fontWeight: '700', color: '#ef4444' }}>
+                  ₱{parseFloat(selectedReservation?.pricing?.total || 0).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                </p>
+              </div>
+            </div>
+            <p style={{ margin: '0 0 30px 0', fontSize: '16px', color: '#6b7280', lineHeight: '1.5' }}>
+              Your refund request will be sent to the host for approval. You will be notified once they respond.
+            </p>
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+              <button
+                onClick={handleCloseRefundDialog}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
+                  background: 'white',
+                  color: '#374151',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#f9fafb'
+                  e.target.style.borderColor = '#d1d5db'
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'white'
+                  e.target.style.borderColor = '#e5e7eb'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRequestRefund}
+                disabled={processingRefund}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: processingRefund 
+                    ? 'linear-gradient(135deg, #d1d5db, #e5e7eb)'
+                    : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  color: 'white',
+                  cursor: processingRefund ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: processingRefund ? 'none' : '0 4px 12px rgba(239, 68, 68, 0.3)'
+                }}
+                onMouseOver={(e) => {
+                  if (!processingRefund) {
+                    e.target.style.background = 'linear-gradient(135deg, #dc2626, #b91c1c)'
+                    e.target.style.transform = 'translateY(-1px)'
+                    e.target.style.boxShadow = '0 6px 16px rgba(239, 68, 68, 0.4)'
+                  }
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.transform = 'translateY(0)'
+                  if (!processingRefund) {
+                    e.target.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)'
+                    e.target.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)'
+                  }
+                }}
+              >
+                {processingRefund ? 'Processing...' : 'Confirm Refund Request'}
+              </button>
+            </div>
+          </div>
+        </dialog>
       )}
     </div>
   )

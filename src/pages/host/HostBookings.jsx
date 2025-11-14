@@ -32,6 +32,10 @@ const HostBookings = () => {
   const [showDeclineDialog, setShowDeclineDialog] = useState(false)
   const [reservationToDecline, setReservationToDecline] = useState(null)
   const declineDialogRef = React.useRef(null)
+  const [showRefundApproveDialog, setShowRefundApproveDialog] = useState(false)
+  const [showRefundDeclineDialog, setShowRefundDeclineDialog] = useState(false)
+  const refundApproveDialogRef = React.useRef(null)
+  const refundDeclineDialogRef = React.useRef(null)
   const [showCompleted, setShowCompleted] = useState(false)
   const [guestInfo, setGuestInfo] = useState(null) // Store guest information for selected reservation
 
@@ -104,7 +108,13 @@ const HostBookings = () => {
     if (declineDialogRef.current && !declineDialogRef.current.showModal) {
       dialogPolyfill.registerDialog(declineDialogRef.current)
     }
-  }, [])
+    if (refundApproveDialogRef.current && !refundApproveDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(refundApproveDialogRef.current)
+    }
+    if (refundDeclineDialogRef.current && !refundDeclineDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(refundDeclineDialogRef.current)
+    }
+  }, [showRefundApproveDialog, showRefundDeclineDialog])
 
   const showConfirmBookingDialog = async (reservation) => {
     setReservationToConfirm(reservation)
@@ -179,7 +189,67 @@ const HostBookings = () => {
     await handleDecision(reservationToDecline.id, 'declined')
   }
 
+  // Show refund approve dialog
+  const handleShowRefundApproveDialog = () => {
+    if (!selectedReservation) return
+    setShowRefundApproveDialog(true)
+    setTimeout(() => {
+      if (refundApproveDialogRef.current) {
+        try {
+          if (typeof refundApproveDialogRef.current.showModal === 'function') {
+            refundApproveDialogRef.current.showModal()
+          } else {
+            dialogPolyfill.registerDialog(refundApproveDialogRef.current)
+            refundApproveDialogRef.current.showModal()
+          }
+        } catch (err) {
+          console.error('Error showing refund approve dialog:', err)
+          refundApproveDialogRef.current.style.display = 'block'
+        }
+      }
+    }, 50)
+  }
+
+  // Close refund approve dialog
+  const handleCloseRefundApproveDialog = () => {
+    setShowRefundApproveDialog(false)
+    refundApproveDialogRef.current?.close()
+  }
+
+  // Show refund decline dialog
+  const handleShowRefundDeclineDialog = () => {
+    if (!selectedReservation) return
+    setShowRefundDeclineDialog(true)
+    setTimeout(() => {
+      if (refundDeclineDialogRef.current) {
+        try {
+          if (typeof refundDeclineDialogRef.current.showModal === 'function') {
+            refundDeclineDialogRef.current.showModal()
+          } else {
+            dialogPolyfill.registerDialog(refundDeclineDialogRef.current)
+            refundDeclineDialogRef.current.showModal()
+          }
+        } catch (err) {
+          console.error('Error showing refund decline dialog:', err)
+          refundDeclineDialogRef.current.style.display = 'block'
+        }
+      }
+    }, 50)
+  }
+
+  // Close refund decline dialog
+  const handleCloseRefundDeclineDialog = () => {
+    setShowRefundDeclineDialog(false)
+    refundDeclineDialogRef.current?.close()
+  }
+
   const handleRefundDecision = async (reservationId, approve) => {
+    // Close the appropriate dialog
+    if (approve) {
+      handleCloseRefundApproveDialog()
+    } else {
+      handleCloseRefundDeclineDialog()
+    }
     try {
       setUpdating(reservationId)
       
@@ -210,6 +280,114 @@ const HostBookings = () => {
       const refundRef = doc(db, 'Refunds', refundDoc.id)
       
       if (approve) {
+        // Process refund to guest balance
+        const refundAmount = reservationData.pricing?.total || 0
+        
+        if (refundAmount > 0 && reservationData.guestId) {
+          try {
+            // Get guest's current balance
+            const guestRef = doc(db, 'Users', reservationData.guestId)
+            const guestSnap = await getDoc(guestRef)
+            
+            if (guestSnap.exists()) {
+              const guestData = guestSnap.data()
+              const currentGuestBalance = guestData.balance || guestData.walletBalance || guestData.paypalBalance || 0
+              const newGuestBalance = currentGuestBalance + refundAmount
+              
+              console.log('Processing refund for approved refund request:', {
+                guestId: reservationData.guestId,
+                refundAmount,
+                currentBalance: currentGuestBalance,
+                newBalance: newGuestBalance,
+                reservationId: reservationId
+              })
+              
+              // Update guest's balance
+              await updateDoc(guestRef, {
+                balance: newGuestBalance,
+                updatedAt: serverTimestamp()
+              })
+              
+              // Create refund transaction record in Transactions collection
+              const refundTransaction = {
+                userId: reservationData.guestId,
+                guestId: reservationData.guestId,
+                hostId: hostId,
+                reservationId: reservationId,
+                listingId: reservationData.listingId,
+                type: 'refund',
+                amount: refundAmount,
+                balanceBefore: currentGuestBalance,
+                balanceAfter: newGuestBalance,
+                description: `Refund for reservation: ${reservationData.listingTitle || 'Reservation'}`,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              }
+              await addDoc(collection(db, 'Transactions'), refundTransaction)
+              
+              console.log(`✅ Refunded ₱${refundAmount} to guest balance. New guest balance: ₱${newGuestBalance}`)
+            } else {
+              console.warn('Guest document not found, cannot process refund')
+            }
+          } catch (refundError) {
+            console.error('Error processing refund:', refundError)
+            // Don't throw - refund failure shouldn't prevent refund approval
+            alert(`⚠️ Refund approved, but there was an error processing the refund to guest balance. Please contact support. Error: ${refundError.message}`)
+          }
+        }
+        
+        // Deduct from host balance if reservation was confirmed (host already received payment)
+        // Check if the original status was 'confirmed' by checking refundRequestedAt
+        // If refundRequestedAt exists, it means the reservation was confirmed before refund was requested
+        if (reservationData.refundRequestedAt && reservationData.pricing) {
+          try {
+            const hostRef = doc(db, 'Users', hostId)
+            const hostSnap = await getDoc(hostRef)
+            
+            if (hostSnap.exists()) {
+              const hostData = hostSnap.data()
+              const currentHostBalance = hostData.balance || hostData.walletBalance || 0
+              // Deduct the subtotal (what host received) from host balance
+              const hostEarnings = reservationData.pricing.subtotal || reservationData.pricing.total || 0
+              const newHostBalance = Math.max(0, currentHostBalance - hostEarnings)
+              
+              console.log('Deducting refund from host balance:', {
+                hostId: hostId,
+                hostEarnings,
+                currentBalance: currentHostBalance,
+                newBalance: newHostBalance,
+                reservationId: reservationId
+              })
+              
+              await updateDoc(hostRef, {
+                balance: newHostBalance,
+                updatedAt: serverTimestamp()
+              })
+              
+              // Create transaction record for host deduction
+              await addDoc(collection(db, 'Transactions'), {
+                userId: hostId,
+                hostId: hostId,
+                reservationId: reservationId,
+                listingId: reservationData.listingId,
+                type: 'refund_deduction',
+                amount: -hostEarnings,
+                balanceBefore: currentHostBalance,
+                balanceAfter: newHostBalance,
+                description: `Refund deduction for reservation: ${reservationData.listingTitle || 'Reservation'}`,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              })
+              
+              console.log(`✅ Deducted ₱${hostEarnings} from host balance. New host balance: ₱${newHostBalance}`)
+            }
+          } catch (hostDeductionError) {
+            console.error('Error deducting from host balance:', hostDeductionError)
+            // Don't throw - host deduction failure shouldn't prevent refund approval
+            console.warn('⚠️ Refund approved, but there was an error deducting from host balance')
+          }
+        }
+        
         // Approve refund - set status to refunded
         await updateDoc(reservationRef, {
           status: 'refunded',
@@ -232,13 +410,13 @@ const HostBookings = () => {
           reservationId: reservationId,
           listingId: reservationData.listingId,
           title: 'Refund Approved',
-          body: `Your refund request for ${reservationData.listingTitle} has been approved. Amount: ₱${reservationData?.pricing?.total || 0}`,
-          message: `Your refund request has been approved. The refund will be processed shortly.`,
+          body: `Your payment of ₱${refundAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} has been refunded to your account balance.`,
+          message: `Your refund request has been approved. Amount: ₱${refundAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
           read: false,
           createdAt: serverTimestamp()
         })
         
-        alert('Refund approved successfully! The guest has been notified.')
+        alert(`Refund approved successfully! ₱${refundAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} has been refunded to the guest's account balance.`)
       } else {
         // Cancel refund - restore original status
         const originalStatus = reservationData.status === 'refund_pending' 
@@ -1768,11 +1946,7 @@ const HostBookings = () => {
                 <>
                   <button 
                     disabled={updating===selectedReservation.id} 
-                    onClick={() => {
-                      if (window.confirm(`Are you sure you want to approve this refund request?\n\nAmount: ₱${selectedReservation?.pricing?.total || 0}\n\nThe guest will be refunded and the reservation will be cancelled.`)) {
-                        handleRefundDecision(selectedReservation.id, true)
-                      }
-                    }}
+                    onClick={handleShowRefundApproveDialog}
                     style={{
                       padding: '12px 24px',
                       borderRadius: '10px',
@@ -1801,11 +1975,7 @@ const HostBookings = () => {
                   </button>
                   <button 
                     disabled={updating===selectedReservation.id} 
-                    onClick={() => {
-                      if (window.confirm(`Are you sure you want to decline this refund request?\n\nThe reservation will remain active and the guest will be notified.`)) {
-                        handleRefundDecision(selectedReservation.id, false)
-                      }
-                    }}
+                    onClick={handleShowRefundDeclineDialog}
                     style={{
                       padding: '12px 24px',
                       borderRadius: '10px',
@@ -2185,6 +2355,253 @@ const HostBookings = () => {
           </div>
         </div>
       </dialog>
+
+      {/* Refund Approve Confirmation Dialog */}
+      {showRefundApproveDialog && selectedReservation && (
+        <dialog 
+          ref={refundApproveDialogRef} 
+          className="refund-approve-dialog" 
+          style={{ 
+            maxWidth: '500px', 
+            width: '90%', 
+            border: 'none', 
+            borderRadius: '16px', 
+            padding: 0, 
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' 
+          }}
+        >
+          <style>
+            {`.refund-approve-dialog::backdrop {
+              background: rgba(0, 0, 0, 0.5);
+              backdrop-filter: blur(4px);
+            }`}
+          </style>
+          <div style={{ padding: '30px', textAlign: 'center' }}>
+            <div style={{ fontSize: '48px', marginBottom: '20px' }}>✅</div>
+            <h2 style={{ margin: '0 0 15px 0', fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
+              Approve Refund Request
+            </h2>
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(16, 185, 129, 0.02))',
+              borderRadius: '12px',
+              padding: '20px',
+              margin: '20px 0',
+              border: '2px solid rgba(16, 185, 129, 0.1)'
+            }}>
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Listing
+                </p>
+                <p style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+                  {selectedReservation.listingTitle || 'N/A'}
+                </p>
+              </div>
+              <div style={{
+                width: '100%',
+                height: '1px',
+                background: 'rgba(16, 185, 129, 0.2)',
+                margin: '16px 0'
+              }} />
+              <div>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Refund Amount
+                </p>
+                <p style={{ margin: 0, fontSize: '32px', fontWeight: '700', color: '#10b981' }}>
+                  ₱{parseFloat(selectedReservation?.pricing?.total || 0).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                </p>
+              </div>
+            </div>
+            <p style={{ margin: '0 0 30px 0', fontSize: '16px', color: '#6b7280', lineHeight: '1.5' }}>
+              The guest will be refunded and the reservation will be cancelled. This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+              <button
+                onClick={handleCloseRefundApproveDialog}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
+                  background: 'white',
+                  color: '#374151',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#f9fafb'
+                  e.target.style.borderColor = '#d1d5db'
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'white'
+                  e.target.style.borderColor = '#e5e7eb'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleRefundDecision(selectedReservation.id, true)}
+                disabled={updating === selectedReservation.id}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: updating === selectedReservation.id
+                    ? 'linear-gradient(135deg, #d1d5db, #e5e7eb)'
+                    : 'linear-gradient(135deg, #10b981, #059669)',
+                  color: 'white',
+                  cursor: updating === selectedReservation.id ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: updating === selectedReservation.id ? 'none' : '0 4px 12px rgba(16, 185, 129, 0.3)'
+                }}
+                onMouseOver={(e) => {
+                  if (updating !== selectedReservation.id) {
+                    e.target.style.background = 'linear-gradient(135deg, #059669, #047857)'
+                    e.target.style.transform = 'translateY(-1px)'
+                    e.target.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)'
+                  }
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.transform = 'translateY(0)'
+                  if (updating !== selectedReservation.id) {
+                    e.target.style.background = 'linear-gradient(135deg, #10b981, #059669)'
+                    e.target.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)'
+                  }
+                }}
+              >
+                {updating === selectedReservation.id ? 'Processing...' : 'Approve Refund'}
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
+
+      {/* Refund Decline Confirmation Dialog */}
+      {showRefundDeclineDialog && selectedReservation && (
+        <dialog 
+          ref={refundDeclineDialogRef} 
+          className="refund-decline-dialog" 
+          style={{ 
+            maxWidth: '500px', 
+            width: '90%', 
+            border: 'none', 
+            borderRadius: '16px', 
+            padding: 0, 
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' 
+          }}
+        >
+          <style>
+            {`.refund-decline-dialog::backdrop {
+              background: rgba(0, 0, 0, 0.5);
+              backdrop-filter: blur(4px);
+            }`}
+          </style>
+          <div style={{ padding: '30px', textAlign: 'center' }}>
+            <div style={{ fontSize: '48px', marginBottom: '20px' }}>❌</div>
+            <h2 style={{ margin: '0 0 15px 0', fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
+              Decline Refund Request
+            </h2>
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(239, 68, 68, 0.02))',
+              borderRadius: '12px',
+              padding: '20px',
+              margin: '20px 0',
+              border: '2px solid rgba(239, 68, 68, 0.1)'
+            }}>
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Listing
+                </p>
+                <p style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#1f2937' }}>
+                  {selectedReservation.listingTitle || 'N/A'}
+                </p>
+              </div>
+              <div style={{
+                width: '100%',
+                height: '1px',
+                background: 'rgba(239, 68, 68, 0.2)',
+                margin: '16px 0'
+              }} />
+              <div>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Requested Refund Amount
+                </p>
+                <p style={{ margin: 0, fontSize: '32px', fontWeight: '700', color: '#ef4444' }}>
+                  ₱{parseFloat(selectedReservation?.pricing?.total || 0).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                </p>
+              </div>
+            </div>
+            <p style={{ margin: '0 0 30px 0', fontSize: '16px', color: '#6b7280', lineHeight: '1.5' }}>
+              The reservation will remain active and the guest will be notified of your decision.
+            </p>
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+              <button
+                onClick={handleCloseRefundDeclineDialog}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
+                  background: 'white',
+                  color: '#374151',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#f9fafb'
+                  e.target.style.borderColor = '#d1d5db'
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'white'
+                  e.target.style.borderColor = '#e5e7eb'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleRefundDecision(selectedReservation.id, false)}
+                disabled={updating === selectedReservation.id}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: '2px solid #dc2626',
+                  background: updating === selectedReservation.id
+                    ? '#d1d5db'
+                    : 'white',
+                  color: updating === selectedReservation.id ? '#9ca3af' : '#dc2626',
+                  cursor: updating === selectedReservation.id ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  if (updating !== selectedReservation.id) {
+                    e.target.style.background = '#fef2f2'
+                    e.target.style.borderColor = '#b91c1c'
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (updating !== selectedReservation.id) {
+                    e.target.style.background = 'white'
+                    e.target.style.borderColor = '#dc2626'
+                  }
+                }}
+              >
+                {updating === selectedReservation.id ? 'Processing...' : 'Decline Refund'}
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
     </div>
       </>
   )
