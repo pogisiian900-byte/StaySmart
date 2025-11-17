@@ -427,39 +427,184 @@ const AdminUsers = () => {
       {/* Filters and Search */}
       <div className="admin-section-card" style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Search Bar */}
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+              Search Users
+            </label>
             <input
               type="text"
               placeholder="Search by name, email, phone, or user ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
-                flex: '1',
-                minWidth: '200px',
-                padding: '10px 16px',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                fontSize: '14px'
-              }}
-            />
-            <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              style={{
-                padding: '10px 16px',
-                border: '1px solid #e5e7eb',
+                width: '100%',
+                padding: '12px 16px',
+                border: '2px solid #e5e7eb',
                 borderRadius: '8px',
                 fontSize: '14px',
-                background: 'white',
-                cursor: 'pointer'
+                transition: 'all 0.2s ease'
               }}
-            >
-              <option value="all">All Roles</option>
-              <option value="host">Hosts</option>
-              <option value="guest">Guests</option>
-              <option value="admin">Admins</option>
-            </select>
+              onFocus={(e) => {
+                e.target.style.borderColor = '#31326F'
+                e.target.style.boxShadow = '0 0 0 3px rgba(49, 50, 111, 0.1)'
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#e5e7eb'
+                e.target.style.boxShadow = 'none'
+              }}
+            />
           </div>
+
+          {/* Quick Filter Buttons */}
+          <div>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+              Filter by Role
+            </label>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setFilterRole('all')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  background: filterRole === 'all' ? '#31326F' : '#f3f4f6',
+                  color: filterRole === 'all' ? 'white' : '#374151',
+                  boxShadow: filterRole === 'all' ? '0 2px 8px rgba(49, 50, 111, 0.3)' : 'none'
+                }}
+                onMouseEnter={(e) => {
+                  if (filterRole !== 'all') {
+                    e.target.style.background = '#e5e7eb'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (filterRole !== 'all') {
+                    e.target.style.background = '#f3f4f6'
+                  }
+                }}
+              >
+                All Users ({stats.total})
+              </button>
+              <button
+                onClick={() => setFilterRole('host')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  background: filterRole === 'host' ? '#10b981' : '#f3f4f6',
+                  color: filterRole === 'host' ? 'white' : '#374151',
+                  boxShadow: filterRole === 'host' ? '0 2px 8px rgba(16, 185, 129, 0.3)' : 'none'
+                }}
+                onMouseEnter={(e) => {
+                  if (filterRole !== 'host') {
+                    e.target.style.background = '#e5e7eb'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (filterRole !== 'host') {
+                    e.target.style.background = '#f3f4f6'
+                  }
+                }}
+              >
+                Hosts ({stats.hosts})
+              </button>
+              <button
+                onClick={() => setFilterRole('guest')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  background: filterRole === 'guest' ? '#f59e0b' : '#f3f4f6',
+                  color: filterRole === 'guest' ? 'white' : '#374151',
+                  boxShadow: filterRole === 'guest' ? '0 2px 8px rgba(245, 158, 11, 0.3)' : 'none'
+                }}
+                onMouseEnter={(e) => {
+                  if (filterRole !== 'guest') {
+                    e.target.style.background = '#e5e7eb'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (filterRole !== 'guest') {
+                    e.target.style.background = '#f3f4f6'
+                  }
+                }}
+              >
+                Guests ({stats.guests})
+              </button>
+              <button
+                onClick={() => setFilterRole('admin')}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  background: filterRole === 'admin' ? '#6b7280' : '#f3f4f6',
+                  color: filterRole === 'admin' ? 'white' : '#374151',
+                  boxShadow: filterRole === 'admin' ? '0 2px 8px rgba(107, 114, 128, 0.3)' : 'none'
+                }}
+                onMouseEnter={(e) => {
+                  if (filterRole !== 'admin') {
+                    e.target.style.background = '#e5e7eb'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (filterRole !== 'admin') {
+                    e.target.style.background = '#f3f4f6'
+                  }
+                }}
+              >
+                Admins ({stats.admins})
+              </button>
+            </div>
+          </div>
+
+          {/* Active Filter Indicator */}
+          {filterRole !== 'all' && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: '6px',
+              fontSize: '14px',
+              color: '#1e40af'
+            }}>
+              <span>Filtering by:</span>
+              <span style={{ fontWeight: '600', textTransform: 'capitalize' }}>{filterRole}</span>
+              <button
+                onClick={() => setFilterRole('all')}
+                style={{
+                  marginLeft: 'auto',
+                  background: 'none',
+                  border: 'none',
+                  color: '#1e40af',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  textDecoration: 'underline',
+                  padding: '0'
+                }}
+              >
+                Clear filter
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

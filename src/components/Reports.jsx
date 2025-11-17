@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import Loading from './Loading'
-import jsPDF from 'jspdf'
+import { generateBookingsPDF, generatePaymentsPDF } from '../utils/pdfGenerators'
 
 const Reports = ({ hostId: propHostId }) => {
   const params = useParams()
@@ -199,332 +199,6 @@ const Reports = ({ hostId: propHostId }) => {
     })
   }
 
-  // Generate PDF for Bookings
-  const generateBookingsPDF = async (data) => {
-    const doc = new jsPDF('landscape', 'mm', 'a4')
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    let yPos = 20
-    const margin = 15
-    const lineHeight = 7
-    const tableStartY = 60
-
-    // Add logo
-    try {
-      const logoUrl = '/static/ss.png'
-      const img = new Image()
-      img.src = logoUrl
-      await new Promise((resolve, reject) => {
-        img.onload = () => {
-          try {
-            doc.addImage(img, 'PNG', margin, 8, 25, 8)
-            resolve()
-          } catch (err) {
-            reject(err)
-          }
-        }
-        img.onerror = reject
-        setTimeout(reject, 3000) // Timeout after 3 seconds
-      })
-    } catch (err) {
-      console.log('Logo not loaded, continuing without it')
-    }
-
-    // Header with gradient effect
-    doc.setFillColor(102, 126, 234)
-    doc.rect(0, 0, pageWidth, 45, 'F')
-    
-    // White text on blue background
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(22)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Bookings Report', margin + 30, 20)
-    
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Generated on: ${new Date().toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    })}`, margin + 30, 28)
-    
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.text(`Total Bookings: ${data.length}`, margin + 30, 35)
-
-    // Reset text color
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(8)
-
-    // Table headers
-    const headers = ['ID', 'Listing', 'Guest', 'Check-In', 'Check-Out', 'Nights', 'Status', 'Amount']
-    const colWidths = [28, 45, 38, 32, 32, 16, 22, 28]
-    let xPos = margin
-
-    // Draw header row with better styling
-    doc.setFillColor(102, 126, 234)
-    doc.rect(margin, tableStartY - 6, pageWidth - 2 * margin, 9, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    headers.forEach((header, i) => {
-      const headerText = header === 'Amount' ? 'Amount (PHP)' : header
-      doc.text(headerText, xPos + 3, tableStartY)
-      xPos += colWidths[i]
-    })
-
-    // Table data with alternating row colors
-    yPos = tableStartY + 4
-    doc.setTextColor(0, 0, 0)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    
-    data.forEach((booking, index) => {
-      if (yPos > pageHeight - 25) {
-        doc.addPage()
-        yPos = margin + 10
-        // Redraw headers on new page
-        doc.setFillColor(102, 126, 234)
-        doc.rect(margin, yPos - 6, pageWidth - 2 * margin, 9, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        xPos = margin
-        headers.forEach((header, i) => {
-          const headerText = header === 'Amount' ? 'Amount (PHP)' : header
-          doc.text(headerText, xPos + 3, yPos)
-          xPos += colWidths[i]
-        })
-        yPos += 4
-        doc.setTextColor(0, 0, 0)
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
-      }
-
-      // Alternate row background
-      if (index % 2 === 0) {
-        doc.setFillColor(250, 250, 250)
-        doc.rect(margin, yPos - 4, pageWidth - 2 * margin, lineHeight, 'F')
-      }
-
-      xPos = margin
-      const totalAmount = booking.pricing?.total || 0
-      // Format amount without peso symbol first, then add it separately
-      const amountValue = totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      const amountText = `PHP ${amountValue}`
-      
-      const rowData = [
-        (booking.id || 'N/A').substring(0, 10),
-        (booking.listingTitle || 'N/A').substring(0, 22),
-        (booking.guestName || 'Guest').substring(0, 20),
-        formatDate(booking.checkIn).substring(0, 10),
-        formatDate(booking.checkOut).substring(0, 10),
-        String(booking.nights || 0),
-        (booking.status || 'N/A').substring(0, 10),
-        amountText
-      ]
-
-      rowData.forEach((cell, i) => {
-        // Right align amount column
-        if (i === 7) {
-          const textWidth = doc.getTextWidth(String(cell))
-          doc.text(String(cell), xPos + colWidths[i] - textWidth - 3, yPos)
-        } else {
-          doc.text(String(cell), xPos + 3, yPos)
-        }
-        xPos += colWidths[i]
-      })
-
-      yPos += lineHeight
-    })
-
-    // Footer with summary box
-    const totalRevenue = data
-      .filter(b => b.status?.toLowerCase() === 'confirmed')
-      .reduce((sum, b) => sum + (b.pricing?.total || 0), 0)
-    
-    yPos = pageHeight - 20
-    doc.setFillColor(102, 126, 234)
-    doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 12, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    const revenueText = `Total Revenue: PHP ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    doc.text(revenueText, margin + 5, yPos + 3)
-    
-    // Footer text
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(150, 150, 150)
-    doc.text('StaySmart - Booking Management System', pageWidth / 2, pageHeight - 5, { align: 'center' })
-
-    return doc
-  }
-
-  // Generate PDF for Payment & Transactions
-  const generatePaymentsPDF = async (data) => {
-    const doc = new jsPDF('landscape', 'mm', 'a4')
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    let yPos = 20
-    const margin = 15
-    const lineHeight = 8
-    const tableStartY = 60
-
-    // Add logo
-    try {
-      const logoUrl = '/static/ss.png'
-      const img = new Image()
-      img.src = logoUrl
-      await new Promise((resolve, reject) => {
-        img.onload = () => {
-          try {
-            doc.addImage(img, 'PNG', margin, 8, 25, 8)
-            resolve()
-          } catch (err) {
-            reject(err)
-          }
-        }
-        img.onerror = reject
-        setTimeout(reject, 3000)
-      })
-    } catch (err) {
-      console.log('Logo not loaded, continuing without it')
-    }
-
-    // Header with gradient effect
-    doc.setFillColor(102, 126, 234)
-    doc.rect(0, 0, pageWidth, 45, 'F')
-    
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(22)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Payment & Transaction Report', margin + 30, 20)
-    
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Generated on: ${new Date().toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    })}`, margin + 30, 28)
-    
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.text(`Total Transactions: ${data.length}`, margin + 30, 35)
-
-    // Reset text color
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(8)
-
-    // Table headers
-    const headers = ['Booking ID', 'Listing', 'Guest', 'Amount', 'Service Fee', 'Total', 'Date', 'Status']
-    const colWidths = [25, 40, 30, 25, 25, 25, 30, 20]
-    let xPos = margin
-
-    // Draw header row with better styling
-    doc.setFillColor(102, 126, 234)
-    doc.rect(margin, tableStartY - 6, pageWidth - 2 * margin, 9, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    headers.forEach((header, i) => {
-      doc.text(header, xPos + 2, tableStartY)
-      xPos += colWidths[i]
-    })
-
-    // Table data with alternating row colors
-    yPos = tableStartY + 4
-    doc.setTextColor(0, 0, 0)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    
-    data.forEach((review, index) => {
-      if (yPos > pageHeight - 25) {
-        doc.addPage()
-        yPos = margin + 10
-        // Redraw headers on new page
-        doc.setFillColor(102, 126, 234)
-        doc.rect(margin, yPos - 6, pageWidth - 2 * margin, 9, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        xPos = margin
-        headers.forEach((header, i) => {
-          doc.text(header, xPos + 3, yPos)
-          xPos += colWidths[i]
-        })
-        yPos += 4
-        doc.setTextColor(0, 0, 0)
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
-      }
-
-      // Alternate row background
-      if (index % 2 === 0) {
-        doc.setFillColor(250, 250, 250)
-        doc.rect(margin, yPos - 4, pageWidth - 2 * margin, lineHeight, 'F')
-      }
-
-      xPos = margin
-      const booking = data[index]
-      const totalAmount = booking.pricing?.total || 0
-      const serviceFee = booking.pricing?.serviceFee || 0
-      const subtotal = booking.pricing?.subtotal || 0
-      const amountText = `PHP ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      const serviceFeeText = `PHP ${serviceFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      const subtotalText = `PHP ${subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      
-      const bookingDate = booking.createdAt?.toDate ? booking.createdAt.toDate() : new Date(booking.createdAt)
-      
-      const rowData = [
-        (booking.id || 'N/A').substring(0, 10),
-        (booking.listingTitle || 'N/A').substring(0, 22),
-        (booking.guestName || 'Guest').substring(0, 18),
-        subtotalText,
-        serviceFeeText,
-        amountText,
-        formatDate(bookingDate).substring(0, 10),
-        (booking.status || 'N/A').substring(0, 10)
-      ]
-
-      rowData.forEach((cell, i) => {
-        // Right align amount columns (indices 3, 4, 5)
-        if (i === 3 || i === 4 || i === 5) {
-          const textWidth = doc.getTextWidth(String(cell))
-          doc.text(String(cell), xPos + colWidths[i] - textWidth - 3, yPos)
-        } else {
-          doc.text(String(cell), xPos + 3, yPos)
-        }
-        xPos += colWidths[i]
-      })
-
-      yPos += lineHeight
-    })
-
-    // Footer with summary
-    const totalRevenue = data.reduce((sum, b) => sum + (b.pricing?.total || 0), 0)
-    const totalServiceFees = data.reduce((sum, b) => sum + (b.pricing?.serviceFee || 0), 0)
-    const totalSubtotal = data.reduce((sum, b) => sum + (b.pricing?.subtotal || 0), 0)
-    
-    yPos = pageHeight - 20
-    doc.setFillColor(102, 126, 234)
-    doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 12, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    const revenueText = `Total Revenue: PHP ${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Service Fees: PHP ${totalServiceFees.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Subtotal: PHP ${totalSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    doc.text(revenueText, margin + 5, yPos + 3)
-    
-    // Footer text
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(150, 150, 150)
-    doc.text('StaySmart - Booking Management System', pageWidth / 2, pageHeight - 5, { align: 'center' })
-
-    return doc
-  }
-
   // Generate Bookings Report
   const generateBookingsReport = async () => {
     // Validate date range
@@ -541,7 +215,10 @@ const Reports = ({ hostId: propHostId }) => {
 
     setGenerating(true)
     try {
-      const pdf = await generateBookingsPDF(filteredBookings)
+      const pdf = await generateBookingsPDF(filteredBookings, {
+        isAdmin: false,
+        dateRange
+      })
       pdf.save(`bookings-report-${new Date().toISOString().split('T')[0]}.pdf`)
       alert('✅ Bookings report generated successfully!')
     } catch (error) {
@@ -582,7 +259,10 @@ const Reports = ({ hostId: propHostId }) => {
         return
       }
 
-      const pdf = await generatePaymentsPDF(filteredPayments)
+      const pdf = await generatePaymentsPDF(filteredPayments, {
+        isAdmin: false,
+        dateRange
+      })
       pdf.save(`payments-report-${new Date().toISOString().split('T')[0]}.pdf`)
       alert(`✅ Payment & Transaction report generated successfully! (${filteredPayments.length} transactions)`)
     } catch (error) {

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { collection, getDocs, query, where, doc, getDoc, or } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import Loading from './Loading'
-import jsPDF from 'jspdf'
+import { generateBookingsPDF } from '../utils/pdfGenerators'
 
 const BookingReport = ({ hostId, admin = false }) => {
   const [bookings, setBookings] = useState([])
@@ -160,6 +160,31 @@ const BookingReport = ({ hostId, admin = false }) => {
 
   // Generate PDF Report
   const generatePDFReport = async () => {
+    if (filteredBookings.length === 0) {
+      alert('⚠️ No bookings found for the selected filters.')
+      return
+    }
+
+    setGenerating(true)
+    try {
+      const pdf = await generateBookingsPDF(filteredBookings, {
+        isAdmin: admin,
+        dateRange
+      })
+      const filename = `booking-report-${new Date().toISOString().split('T')[0]}.pdf`
+      pdf.save(filename)
+      alert(`✅ Booking report generated successfully! (${filteredBookings.length} bookings)`)
+    } catch (error) {
+      console.error('Error generating PDF report:', error)
+      alert('❌ Failed to generate report. Please try again.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  // OLD SPECIALIZED PDF GENERATION REMOVED - Now using utility from pdfGenerators
+  /*
+  const _old_generatePDFReport = async () => {
     if (filteredBookings.length === 0) {
       alert('⚠️ No bookings found for the selected filters.')
       return
