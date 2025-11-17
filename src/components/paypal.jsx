@@ -874,7 +874,27 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
                 </div>
               ) : (
                 <div className="transaction-list">
-                  {transactions.map((transaction) => (
+                  {transactions.map((transaction) => {
+                    // Map transaction types to user-friendly labels
+                    const getTransactionLabel = (transaction) => {
+                      if (transaction.description) return transaction.description
+                      
+                      const type = transaction.type || ''
+                      const typeMap = {
+                        'service_fee': 'Service Fee',
+                        'booking_earnings': 'Booking Earnings',
+                        'deposit': 'Deposit',
+                        'withdrawal': 'Withdrawal',
+                        'payment': 'Payment',
+                        'topup': 'Top Up',
+                        'refund': 'Refund',
+                        'earnings': 'Earnings'
+                      }
+                      
+                      return typeMap[type] || type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ') || 'Transaction'
+                    }
+
+                    return (
                     <div key={transaction.id} className="transaction-item">
                       <div className="transaction-icon">
                         {(transaction.type === 'deposit' || transaction.type === 'topup') ? (
@@ -894,7 +914,7 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
                         )}
                       </div>
                       <div className="transaction-details" style={{ flex: 1 }}>
-                        <div className="transaction-title">{transaction.description || `${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}`}</div>
+                        <div className="transaction-title">{getTransactionLabel(transaction)}</div>
                         <div className="transaction-date">{formatDate(transaction.createdAt)}</div>
                         {transaction.payoutBatchId && (
                           <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
@@ -911,7 +931,8 @@ const PayPal = ({ userId, userRole, paymentMethod, onClose }) => {
                         {(transaction.type === 'deposit' || transaction.type === 'topup') ? '+' : '-'}₱{transaction.amount?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

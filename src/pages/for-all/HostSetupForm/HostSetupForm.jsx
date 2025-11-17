@@ -13,6 +13,7 @@ import {
 import RoomSetup from "./RoomSetup";
 import ExperienceSetup from "./ExperienceSetup";
 import ServiceSetup from "./ServiceSetup";
+import LocationMap from "../../../components/LocationMap";
 
 const HostSetupForm = () => {
   const { serviceType, hostId, draftId } = useParams();
@@ -32,6 +33,7 @@ const HostSetupForm = () => {
     description: "",
     price: "",
     location: "",
+    coordinates: null,
     maxGuests: "",
     amenities: [],
     propertyType: "",
@@ -302,16 +304,16 @@ const HostSetupForm = () => {
               />
             </label>
 
-            <label className="form-label">
-              Location:
-              <input
-                className="form-input"
-                type="text"
-                value={generalData.location}
-                onChange={(e) => handleChange("location", e.target.value)}
-                required
-              />
-            </label>
+            <LocationMap
+              onLocationChange={(address, coordinates) => {
+                handleChange("location", address);
+                if (coordinates) {
+                  handleChange("coordinates", coordinates);
+                }
+              }}
+              initialLocation={generalData.location}
+              initialCoords={generalData.coordinates ? [generalData.coordinates.lat, generalData.coordinates.lng] : null}
+            />
 
             <label className="form-label">
               Maximum Guests:

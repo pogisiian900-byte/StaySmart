@@ -1010,6 +1010,25 @@ const AdminProfile = () => {
                     return new Date(dateValue).toLocaleString()
                   }
 
+                  // Map transaction types to user-friendly labels
+                  const getTransactionLabel = (transaction) => {
+                    if (transaction.description) return transaction.description
+                    
+                    const type = transaction.type || ''
+                    const typeMap = {
+                      'service_fee': 'Service Fee',
+                      'booking_earnings': 'Booking Earnings',
+                      'deposit': 'Deposit',
+                      'withdrawal': 'Withdrawal',
+                      'payment': 'Payment',
+                      'topup': 'Top Up',
+                      'refund': 'Refund',
+                      'earnings': 'Earnings'
+                    }
+                    
+                    return typeMap[type] || type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ') || 'Transaction'
+                  }
+
                   return (
                     <div
                       key={transaction.id}
@@ -1064,7 +1083,7 @@ const AdminProfile = () => {
                               fontWeight: '600',
                               color: '#1f2937'
                             }}>
-                              {transaction.description || transaction.type || 'Transaction'}
+                              {getTransactionLabel(transaction)}
                             </p>
                             <p style={{
                               margin: 0,

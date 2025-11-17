@@ -1013,6 +1013,10 @@ const HostBookings = () => {
               console.log('Calculated total from subtotal + serviceFee:', guestChargedAmount)
             }
             
+            // Get host PayPal email and payer ID for transaction record
+            const hostPayPalEmail = hostData.paymentMethod?.paypalEmail || null
+            const hostPayerId = hostData.paymentMethod?.payerId || null
+            
             // Create transaction record with payment details
             const transaction = {
               hostId,
@@ -1026,8 +1030,11 @@ const HostBookings = () => {
               type: 'booking_earnings',
               status: 'completed',
               paymentMethod: paymentMethod,
+              hostPayPalEmail: hostPayPalEmail,
+              hostPayerId: hostPayerId, // Store host account ID
               balanceBefore: currentHostBalance,
               balanceAfter: newHostBalance,
+              accountId: hostPayerId || null, // Account ID for balance tracking
               checkIn: reservationData.checkIn,
               checkOut: reservationData.checkOut,
               nights: reservationData.nights || 0,
@@ -1035,13 +1042,52 @@ const HostBookings = () => {
               updatedAt: serverTimestamp(),
             }
 
-            // Add to Transactions collection (for Firebase balance system)
-            await addDoc(collection(db, 'Transactions'), transaction)
-            
-            // Also add to HostTransactions for backward compatibility
-            await addDoc(collection(db, 'HostTransactions'), transaction)
-            
-            console.log('✅ Host transaction recorded:', transaction)
+            // Add transaction to HostTransactions collection (with error handling)
+            try {
+              // Add to Transactions collection (for Firebase balance system)
+              await addDoc(collection(db, 'Transactions'), transaction)
+              
+              // Also add to HostTransactions for backward compatibility
+              await addDoc(collection(db, 'HostTransactions'), transaction)
+              
+              // Add to PayPalTransactions for payment history (with userId field)
+              const paypalTransaction = {
+                userId: hostId, // Required for payment history queries
+                hostId: hostId,
+                userRole: 'host',
+                type: 'deposit', // Deposit/earnings to host account
+                amount: hostEarnings,
+                currency: 'PHP',
+                status: 'completed',
+                description: `Earnings from booking: ${reservationData.listingTitle || 'Reservation'}`,
+                reservationId: id,
+                guestId: reservationData.guestId,
+                listingId: reservationData.listingId,
+                listingTitle: reservationData.listingTitle || '',
+                serviceFee: serviceFee,
+                guestChargedAmount: guestChargedAmount,
+                paymentMethod: paymentMethod,
+                hostPayPalEmail: hostPayPalEmail,
+                hostPayerId: hostPayerId,
+                balanceBefore: currentHostBalance,
+                balanceAfter: newHostBalance,
+                checkIn: reservationData.checkIn,
+                checkOut: reservationData.checkOut,
+                nights: reservationData.nights || 0,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              };
+              
+              await addDoc(collection(db, 'PayPalTransactions'), paypalTransaction)
+              
+              console.log('✅ Host transaction recorded:', transaction)
+              console.log('✅ Host PayPal transaction recorded for payment history')
+            } catch (transactionError) {
+              console.error('Error creating host transaction:', transactionError)
+              // Don't throw - transaction record failure shouldn't fail the booking confirmation
+              // But log it for debugging
+              alert('⚠️ Booking confirmed and balance updated, but there was an error recording the transaction. Please contact support.')
+            }
             
             // Create notification for host
             const notification = {

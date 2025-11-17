@@ -40,8 +40,8 @@ const Points = ({ hostId }) => {
   const [showConversionDialog, setShowConversionDialog] = useState(false);
   const conversionDialogRef = useRef(null);
   
-  // Conversion rate: 1 point = 1 peso (you can adjust this)
-  const CONVERSION_RATE = 1; // 1 point = 1 peso
+  // Conversion rate: 50 points = 1 peso (1 point = 0.02 pesos)
+  const CONVERSION_RATE = 0.02; // 50 points per 1 peso
 
   // Register dialog polyfill
   useEffect(() => {
@@ -449,7 +449,7 @@ const Points = ({ hostId }) => {
                 color: '#6b7280', 
                 fontSize: '0.9rem' 
               }}>
-                Instant conversion • {CONVERSION_RATE} point = ₱{CONVERSION_RATE}
+                Instant conversion • 50 points = ₱1
               </p>
             </div>
           </div>

@@ -475,12 +475,37 @@ const SelectedListingBookingConfirmation = () => {
           const hostSnap = await getDoc(hostRef);
           if (hostSnap.exists()) {
             const hostData = hostSnap.data();
-            hostBalance = (hostData.balance || hostData.walletBalance || 0) + subtotal;
+            const currentHostBalance = hostData.balance || hostData.walletBalance || 0;
+            hostBalance = currentHostBalance + subtotal;
             await updateDoc(hostRef, {
               balance: hostBalance,
               updatedAt: serverTimestamp()
             });
             console.log(`✅ Added ₱${subtotal} to host balance. New host balance: ₱${hostBalance}`);
+            
+            // Create transaction record for host earnings in PayPalTransactions
+            const hostEarningsTransaction = {
+              userId: listing.hostId,
+              hostId: listing.hostId,
+              userRole: 'host',
+              type: 'deposit', // Deposit/earnings to host account
+              amount: subtotal,
+              currency: 'PHP',
+              status: 'completed',
+              description: `Earnings from booking: ${listing?.title || 'Listing'}`,
+              listingId: listing?.id || listingId,
+              listingTitle: listing?.title || '',
+              reservationId: null, // Will be set after reservation is created
+              balanceBefore: currentHostBalance,
+              balanceAfter: hostBalance,
+              paymentMethod: 'balance',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            };
+            
+            await addDoc(collection(db, 'PayPalTransactions'), hostEarningsTransaction);
+            await addDoc(collection(db, 'Transactions'), hostEarningsTransaction);
+            console.log(`✅ Host earnings transaction recorded: ₱${subtotal}`);
           }
         } catch (hostError) {
           console.error('Error updating host balance:', hostError);
@@ -537,6 +562,12 @@ const SelectedListingBookingConfirmation = () => {
       
       // Add transaction and get the document reference
       const transactionRef = await addDoc(collection(db, 'Transactions'), paymentTransaction);
+      
+      // Also add to PayPalTransactions for payment history
+      await addDoc(collection(db, 'PayPalTransactions'), {
+        ...paymentTransaction,
+        paypalTransactionId: transactionRef.id
+      });
       
       console.log(`✅ Deducted ₱${grandTotal} from guest balance. New balance: ₱${newGuestBalance}`);
       console.log(`💰 Payment split - Host: ₱${subtotal}, Admin: ₱${serviceFee}`);

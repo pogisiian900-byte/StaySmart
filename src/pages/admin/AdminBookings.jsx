@@ -285,7 +285,54 @@ const AdminBookings = () => {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
               }
-              await addDoc(collection(db, 'HostTransactions'), transaction)
+              
+              // Add transaction to HostTransactions collection (with error handling)
+              try {
+                // Add to Transactions collection (for Firebase balance system)
+                await addDoc(collection(db, 'Transactions'), transaction)
+                
+                // Also add to HostTransactions for backward compatibility
+                await addDoc(collection(db, 'HostTransactions'), transaction)
+                
+                // Add to PayPalTransactions for payment history (with userId field)
+                const paypalTransaction = {
+                  userId: hostId, // Required for payment history queries
+                  hostId: hostId,
+                  userRole: 'host',
+                  type: 'deposit', // Deposit/earnings to host account
+                  amount: hostEarnings,
+                  currency: 'PHP',
+                  status: 'completed',
+                  description: `Earnings from booking: ${bookingData.listingTitle || 'Reservation'}`,
+                  reservationId: bookingId,
+                  guestId: bookingData.guestId,
+                  listingId: bookingData.listingId,
+                  listingTitle: bookingData.listingTitle || '',
+                  serviceFee: serviceFee,
+                  guestChargedAmount: bookingData.pricing.total || (bookingData.pricing.subtotal + serviceFee),
+                  paymentMethod: bookingData.paymentSummary?.methodType || 'card',
+                  hostPayPalEmail: hostPayPalEmail,
+                  hostPayerId: hostPayerId,
+                  balanceBefore: currentPayPalBalance,
+                  balanceAfter: newPayPalBalance,
+                  accountId: hostPayerId || null,
+                  checkIn: bookingData.checkIn,
+                  checkOut: bookingData.checkOut,
+                  nights: bookingData.nights || 0,
+                  createdAt: serverTimestamp(),
+                  updatedAt: serverTimestamp()
+                };
+                
+                await addDoc(collection(db, 'PayPalTransactions'), paypalTransaction)
+                
+                console.log('✅ Host transaction recorded:', transaction)
+                console.log('✅ Host PayPal transaction recorded for payment history')
+              } catch (transactionError) {
+                console.error('Error creating host transaction:', transactionError)
+                // Don't throw - transaction record failure shouldn't fail the booking confirmation
+                // But log it for debugging
+                alert('⚠️ Booking confirmed and balance updated, but there was an error recording the transaction. Please contact support.')
+              }
 
               // Create points transaction record
               if (pointsEarned > 0) {
