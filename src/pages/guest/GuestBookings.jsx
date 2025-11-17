@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { collection, onSnapshot, orderBy, query, where, updateDoc, doc, serverTimestamp, addDoc, getDoc } from 'firebase/firestore'
+import { collection, onSnapshot, orderBy, query, where, updateDoc, doc, serverTimestamp, addDoc, getDoc, getDocs } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import ContinuousCalendar from '../../components/ContinuousCalendar'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
@@ -28,6 +28,7 @@ const GuestBookings = () => {
   const [hoveredRating, setHoveredRating] = useState(0)
   const [showCompleted, setShowCompleted] = useState(false)
   const [hostInfo, setHostInfo] = useState(null) // Store host information for selected reservation
+  const [wishlistData, setWishlistData] = useState(null) // Store wishlist/feedback data for completed bookings
 
   // Register dialog polyfill
   useEffect(() => {
@@ -78,6 +79,44 @@ const GuestBookings = () => {
     }
     
     fetchHostInfo()
+  }, [selectedReservation])
+
+  // Fetch wishlist/feedback data when reservation is selected and status is completed
+  useEffect(() => {
+    const fetchWishlistData = async () => {
+      if (!selectedReservation?.id) {
+        setWishlistData(null)
+        return
+      }
+
+      // Only fetch wishlist if booking is completed
+      const status = (selectedReservation.status || '').toLowerCase()
+      if (status !== 'completed') {
+        setWishlistData(null)
+        return
+      }
+
+      try {
+        const wishlistQuery = query(
+          collection(db, 'Wishlist'),
+          where('reservationId', '==', selectedReservation.id)
+        )
+        const wishlistSnapshot = await getDocs(wishlistQuery)
+        
+        if (!wishlistSnapshot.empty) {
+          // Get the first matching wishlist entry
+          const wishlistDoc = wishlistSnapshot.docs[0]
+          setWishlistData({ id: wishlistDoc.id, ...wishlistDoc.data() })
+        } else {
+          setWishlistData(null)
+        }
+      } catch (error) {
+        console.error('Error fetching wishlist data:', error)
+        setWishlistData(null)
+      }
+    }
+    
+    fetchWishlistData()
   }, [selectedReservation])
 
   const bookedDates = useMemo(() => {
@@ -584,6 +623,7 @@ const GuestBookings = () => {
           onClick={() => {
             setSelectedReservation(null)
             setHostInfo(null)
+            setWishlistData(null)
           }}
           style={{
             position: 'fixed',
@@ -629,7 +669,11 @@ const GuestBookings = () => {
                 {selectedReservation.listingTitle || 'Reservation Details'}
               </h3>
               <button 
-                onClick={() => setSelectedReservation(null)}
+                onClick={() => {
+                  setSelectedReservation(null)
+                  setHostInfo(null)
+                  setWishlistData(null)
+                }}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -1170,6 +1214,143 @@ const GuestBookings = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Your Feedback (for completed bookings) */}
+                {selectedReservation.status?.toLowerCase() === 'completed' && wishlistData && (
+                  <div style={{
+                    padding: '20px',
+                    background: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+                    borderRadius: '12px',
+                    border: '2px solid #3b82f6',
+                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)'
+                  }}>
+                    <h3 style={{
+                      margin: '0 0 16px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: '#1e40af',
+                      borderBottom: '2px solid #3b82f6',
+                      paddingBottom: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1e40af" strokeWidth="2">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                      </svg>
+                      Your Feedback
+                    </h3>
+                    
+                    {/* Rating */}
+                    {wishlistData.rating > 0 && (
+                      <div style={{
+                        marginBottom: '16px',
+                        padding: '12px',
+                        background: 'rgba(255, 255, 255, 0.6)',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#1e40af',
+                          marginBottom: '8px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          Your Rating
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          gap: '4px',
+                          alignItems: 'center'
+                        }}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <svg
+                              key={star}
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill={star <= wishlistData.rating ? '#fbbf24' : 'none'}
+                              stroke={star <= wishlistData.rating ? '#fbbf24' : '#d1d5db'}
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                            </svg>
+                          ))}
+                          <span style={{
+                            marginLeft: '8px',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            color: '#1e40af'
+                          }}>
+                            {wishlistData.rating} {wishlistData.rating === 1 ? 'star' : 'stars'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Service Thoughts */}
+                    {wishlistData.serviceThoughts && (
+                      <div style={{
+                        marginBottom: '16px',
+                        padding: '12px',
+                        background: 'rgba(255, 255, 255, 0.6)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(59, 130, 246, 0.3)'
+                      }}>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#1e40af',
+                          marginBottom: '8px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          Your Thoughts
+                        </div>
+                        <p style={{
+                          fontSize: '14px',
+                          color: '#1e3a8a',
+                          margin: 0,
+                          lineHeight: 1.6
+                        }}>
+                          {wishlistData.serviceThoughts}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Improvements/Suggestions */}
+                    {wishlistData.improvements && (
+                      <div style={{
+                        padding: '12px',
+                        background: 'rgba(255, 255, 255, 0.6)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(59, 130, 246, 0.3)'
+                      }}>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#1e40af',
+                          marginBottom: '8px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          Your Suggestions
+                        </div>
+                        <p style={{
+                          fontSize: '14px',
+                          color: '#1e3a8a',
+                          margin: 0,
+                          lineHeight: 1.6
+                        }}>
+                          {wishlistData.improvements}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1245,7 +1426,11 @@ const GuestBookings = () => {
                 </button>
               )}
               <button 
-                onClick={() => setSelectedReservation(null)}
+                onClick={() => {
+                  setSelectedReservation(null)
+                  setHostInfo(null)
+                  setWishlistData(null)
+                }}
                 style={{
                   padding: '12px 24px',
                   borderRadius: '10px',

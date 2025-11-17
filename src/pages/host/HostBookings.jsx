@@ -38,6 +38,7 @@ const HostBookings = () => {
   const refundDeclineDialogRef = React.useRef(null)
   const [showCompleted, setShowCompleted] = useState(false)
   const [guestInfo, setGuestInfo] = useState(null) // Store guest information for selected reservation
+  const [wishlistData, setWishlistData] = useState(null) // Store wishlist/feedback data for completed bookings
 
   // Read date from URL params on mount
   useEffect(() => {
@@ -97,6 +98,44 @@ const HostBookings = () => {
     }
     
     fetchGuestInfo()
+  }, [selectedReservation])
+
+  // Fetch wishlist/feedback data when reservation is selected and status is completed
+  useEffect(() => {
+    const fetchWishlistData = async () => {
+      if (!selectedReservation?.id) {
+        setWishlistData(null)
+        return
+      }
+
+      // Only fetch wishlist if booking is completed
+      const status = (selectedReservation.status || '').toLowerCase()
+      if (status !== 'completed') {
+        setWishlistData(null)
+        return
+      }
+
+      try {
+        const wishlistQuery = query(
+          collection(db, 'Wishlist'),
+          where('reservationId', '==', selectedReservation.id)
+        )
+        const wishlistSnapshot = await getDocs(wishlistQuery)
+        
+        if (!wishlistSnapshot.empty) {
+          // Get the first matching wishlist entry
+          const wishlistDoc = wishlistSnapshot.docs[0]
+          setWishlistData({ id: wishlistDoc.id, ...wishlistDoc.data() })
+        } else {
+          setWishlistData(null)
+        }
+      } catch (error) {
+        console.error('Error fetching wishlist data:', error)
+        setWishlistData(null)
+      }
+    }
+    
+    fetchWishlistData()
   }, [selectedReservation])
 
 
@@ -805,8 +844,20 @@ const HostBookings = () => {
         // IMPORTANT: Only add subtotal to host account, NOT the total (grandTotal)
         // The total includes service fee which goes to ADMIN
         const hostEarnings = reservationData.pricing.subtotal || 0 // Host gets subtotal (excluding service fee)
-        // Service fee is 10% of subtotal (fallback for old bookings)
-        const serviceFee = reservationData.pricing.serviceFee || Math.round(hostEarnings * 0.1)
+        // Service fee from booking data, or calculate from system settings, or fallback to 10%
+        let serviceFee = reservationData.pricing.serviceFee
+        if (!serviceFee) {
+          // Try to get from system settings
+          try {
+            const settingsRef = doc(db, 'SystemSettings', 'system_settings')
+            const settingsSnap = await getDoc(settingsRef)
+            const serviceFeePercent = settingsSnap.exists() ? (settingsSnap.data().serviceFeePercent || 10) : 10
+            serviceFee = Math.round((hostEarnings * serviceFeePercent) / 100)
+          } catch (err) {
+            // Fallback to 10% if settings can't be loaded
+            serviceFee = Math.round(hostEarnings * 0.1)
+          }
+        }
         // DO NOT use reservationData.pricing.total or grandTotal - that includes service fee
         
         console.log('Reservation pricing data:', reservationData.pricing)
@@ -1344,6 +1395,7 @@ const HostBookings = () => {
           onClick={() => {
             setSelectedReservation(null)
             setGuestInfo(null)
+            setWishlistData(null)
           }}
           style={{
             position: 'fixed',
@@ -1389,7 +1441,11 @@ const HostBookings = () => {
                 {selectedReservation.listingTitle || 'Reservation Details'}
               </h3>
               <button 
-                onClick={() => setSelectedReservation(null)}
+                onClick={() => {
+                  setSelectedReservation(null)
+                  setGuestInfo(null)
+                  setWishlistData(null)
+                }}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -1928,6 +1984,143 @@ const HostBookings = () => {
                         </span>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Guest Wishlist/Feedback (for completed bookings) */}
+                {selectedReservation.status?.toLowerCase() === 'completed' && wishlistData && (
+                  <div style={{
+                    padding: '20px',
+                    background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                    borderRadius: '12px',
+                    border: '2px solid #fbbf24',
+                    boxShadow: '0 4px 12px rgba(251, 191, 36, 0.2)'
+                  }}>
+                    <h3 style={{
+                      margin: '0 0 16px',
+                      fontSize: '16px',
+                      fontWeight: 700,
+                      color: '#92400e',
+                      borderBottom: '2px solid #fbbf24',
+                      paddingBottom: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#92400e" strokeWidth="2">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                      </svg>
+                      WishList
+                    </h3>
+                    
+                    {/* Rating */}
+                    {wishlistData.rating > 0 && (
+                      <div style={{
+                        marginBottom: '16px',
+                        padding: '12px',
+                        background: 'rgba(255, 255, 255, 0.6)',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#92400e',
+                          marginBottom: '8px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          Rating
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          gap: '4px',
+                          alignItems: 'center'
+                        }}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <svg
+                              key={star}
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill={star <= wishlistData.rating ? '#fbbf24' : 'none'}
+                              stroke={star <= wishlistData.rating ? '#fbbf24' : '#d1d5db'}
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                            </svg>
+                          ))}
+                          <span style={{
+                            marginLeft: '8px',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            color: '#92400e'
+                          }}>
+                            {wishlistData.rating} {wishlistData.rating === 1 ? 'star' : 'stars'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Service Thoughts */}
+                    {wishlistData.serviceThoughts && (
+                      <div style={{
+                        marginBottom: '16px',
+                        padding: '12px',
+                        background: 'rgba(255, 255, 255, 0.6)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(251, 191, 36, 0.3)'
+                      }}>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#92400e',
+                          marginBottom: '8px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          Guest's Thoughts
+                        </div>
+                        <p style={{
+                          fontSize: '14px',
+                          color: '#78350f',
+                          margin: 0,
+                          lineHeight: 1.6
+                        }}>
+                          {wishlistData.serviceThoughts}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Improvements/Suggestions */}
+                    {wishlistData.improvements && (
+                      <div style={{
+                        padding: '12px',
+                        background: 'rgba(255, 255, 255, 0.6)',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(251, 191, 36, 0.3)'
+                      }}>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#92400e',
+                          marginBottom: '8px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          Suggestions & Improvements
+                        </div>
+                        <p style={{
+                          fontSize: '14px',
+                          color: '#78350f',
+                          margin: 0,
+                          lineHeight: 1.6
+                        }}>
+                          {wishlistData.improvements}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

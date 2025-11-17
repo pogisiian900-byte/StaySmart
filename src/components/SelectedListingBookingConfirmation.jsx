@@ -36,6 +36,7 @@ const SelectedListingBookingConfirmation = () => {
   const recommendationsDialogRef = useRef(null);
   const [recommendedListings, setRecommendedListings] = useState([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [serviceFeePercent, setServiceFeePercent] = useState(10); // Default 10%, will be fetched from Firestore
   // Removed PayPal-related states - using Firebase balance instead
   
   // Booking data state (fallback if location.state is missing)
@@ -52,6 +53,27 @@ const SelectedListingBookingConfirmation = () => {
     cvv: '',
     billingAddress: ''
   });
+
+  // Fetch system settings (service fee) from Firestore
+  useEffect(() => {
+    const fetchSystemSettings = async () => {
+      try {
+        const settingsRef = doc(db, 'SystemSettings', 'system_settings');
+        const settingsSnap = await getDoc(settingsRef);
+        
+        if (settingsSnap.exists()) {
+          const data = settingsSnap.data();
+          setServiceFeePercent(data.serviceFeePercent || 10);
+        }
+        // If settings don't exist, keep default 10%
+      } catch (error) {
+        console.error('Error fetching system settings:', error);
+        // Keep default 10% on error
+      }
+    };
+
+    fetchSystemSettings();
+  }, []);
 
   // Fetch listing from Firestore if bookingData is missing (e.g., page refresh)
   useEffect(() => {
@@ -200,8 +222,9 @@ const SelectedListingBookingConfirmation = () => {
   const discountPercent = (hasEnteredPromoCode && listing.discount) ? listing.discount : 0;
   const discountAmount = discountPercent > 0 ? (baseTotal * discountPercent / 100) : 0;
   const subtotal = baseTotal - discountAmount;
-  // Service fee is 10% of the booking subtotal
-  const serviceFee = Math.round(subtotal * 0.1);
+  // Service fee is calculated from system settings (percentage of subtotal)
+  const serviceFeePercentValue = serviceFeePercent || 10; // Fallback to 10% if not loaded
+  const serviceFee = Math.round((subtotal * serviceFeePercentValue) / 100);
   const grandTotal = subtotal + serviceFee;
   
   // Legacy total for backwards compatibility (used in some places)

@@ -200,8 +200,20 @@ const AdminBookings = () => {
       // If confirmed, process payments (host gets subtotal, admin gets service fee)
       if (newStatus === 'confirmed' && bookingData.pricing) {
         const hostEarnings = bookingData.pricing.subtotal || 0 // Host gets subtotal
-        // Service fee is 10% of subtotal (fallback for old bookings)
-        const serviceFee = bookingData.pricing.serviceFee || Math.round(hostEarnings * 0.1)
+        // Service fee from booking data, or calculate from system settings, or fallback to 10%
+        let serviceFee = bookingData.pricing.serviceFee
+        if (!serviceFee) {
+          // Try to get from system settings
+          try {
+            const settingsRef = doc(db, 'SystemSettings', 'system_settings')
+            const settingsSnap = await getDoc(settingsRef)
+            const serviceFeePercent = settingsSnap.exists() ? (settingsSnap.data().serviceFeePercent || 10) : 10
+            serviceFee = Math.round((hostEarnings * serviceFeePercent) / 100)
+          } catch (err) {
+            // Fallback to 10% if settings can't be loaded
+            serviceFee = Math.round(hostEarnings * 0.1)
+          }
+        }
         const hostId = bookingData.hostId
 
         if (hostEarnings > 0 && hostId) {

@@ -9,27 +9,105 @@ const PolicyComplianceDialog = ({ userId, userEmail, onPolicyAccepted }) => {
   const [policyAccepted, setPolicyAccepted] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [policyText, setPolicyText] = useState('')
+  const [loadingPolicy, setLoadingPolicy] = useState(true)
   const dialogRef = useRef(null)
+
+  // Default policy text fallback
+  const getDefaultPolicyText = () => {
+    return `1. Acceptance of Terms
+By accessing and using StaySmart, you accept and agree to be bound by the terms and provision of this agreement.
+
+2. User Responsibilities
+You are responsible for maintaining the confidentiality of your account and password. You agree to accept responsibility for all activities that occur under your account.
+
+3. Booking and Payment
+All bookings are subject to availability and confirmation. Payment must be made in full at the time of booking unless otherwise specified. Cancellation policies apply as stated in individual listings.
+
+4. Privacy and Data Protection
+We are committed to protecting your privacy. Your personal information will be used in accordance with our Privacy Policy. We implement appropriate security measures to protect your data.
+
+5. Prohibited Activities
+You agree not to use the platform for any unlawful purpose or in any way that could damage, disable, or impair the service. Harassment, fraud, or misrepresentation is strictly prohibited.
+
+6. Limitation of Liability
+StaySmart acts as an intermediary between hosts and guests. We are not responsible for the quality, safety, or legality of listings, or the accuracy of information provided by users.
+
+7. Modifications to Terms
+We reserve the right to modify these terms at any time. Continued use of the platform after changes constitutes acceptance of the new terms.
+
+8. Contact Information
+For questions about these Terms and Conditions, please contact us through our support channels.`
+  }
+
+  // Fetch policy text from Firestore
+  useEffect(() => {
+    const fetchPolicyText = async () => {
+      try {
+        const settingsRef = doc(db, 'SystemSettings', 'system_settings')
+        const settingsSnap = await getDoc(settingsRef)
+        
+        if (settingsSnap.exists()) {
+          const data = settingsSnap.data()
+          setPolicyText(data.policyText || getDefaultPolicyText())
+        } else {
+          setPolicyText(getDefaultPolicyText())
+        }
+      } catch (error) {
+        console.error('Error fetching policy text:', error)
+        setPolicyText(getDefaultPolicyText())
+      } finally {
+        setLoadingPolicy(false)
+      }
+    }
+
+    fetchPolicyText()
+  }, [])
 
   useEffect(() => {
     const checkPolicyStatus = async () => {
-      if (!userId) {
-        setLoading(false)
+      if (!userId || loadingPolicy) {
+        if (!loadingPolicy) {
+          setLoading(false)
+        }
         return
       }
 
       try {
-        const userRef = doc(db, 'Users', userId)
-        const userSnap = await getDoc(userRef)
+        const [userSnap, settingsSnap] = await Promise.all([
+          getDoc(doc(db, 'Users', userId)),
+          getDoc(doc(db, 'SystemSettings', 'system_settings'))
+        ])
         
         if (userSnap.exists()) {
           const userData = userSnap.data()
-          // Check if policy has been accepted
-          if (userData.policyAccepted && userData.policyAcceptedAt) {
+          const policyAcceptedAt = userData.policyAcceptedAt
+          const policyAccepted = userData.policyAccepted
+
+          // Check if policy has been updated after user's acceptance
+          let needsReAcceptance = false
+          if (settingsSnap.exists()) {
+            const settingsData = settingsSnap.data()
+            const policyLastUpdated = settingsData.policyLastUpdated
+            
+            // If policy was updated after user accepted, force re-acceptance
+            if (policyLastUpdated && policyAcceptedAt) {
+              const lastUpdatedTime = policyLastUpdated.toMillis ? policyLastUpdated.toMillis() : (policyLastUpdated.seconds ? policyLastUpdated.seconds * 1000 : 0)
+              const acceptedTime = policyAcceptedAt.toMillis ? policyAcceptedAt.toMillis() : (policyAcceptedAt.seconds ? policyAcceptedAt.seconds * 1000 : 0)
+              
+              if (lastUpdatedTime > acceptedTime) {
+                needsReAcceptance = true
+              }
+            }
+          }
+
+          // Show dialog if policy not accepted or needs re-acceptance
+          if (!policyAccepted || !policyAcceptedAt || needsReAcceptance) {
+            setShowDialog(true)
+            setPolicyAccepted(false)
+          } else {
             setPolicyAccepted(true)
             setShowDialog(false)
-          } else {
-            setShowDialog(true)
           }
         } else {
           setShowDialog(true)
@@ -43,7 +121,7 @@ const PolicyComplianceDialog = ({ userId, userEmail, onPolicyAccepted }) => {
     }
 
     checkPolicyStatus()
-  }, [userId])
+  }, [userId, loadingPolicy])
 
   useEffect(() => {
     if (dialogRef.current && !dialogRef.current.showModal) {
@@ -98,8 +176,40 @@ const PolicyComplianceDialog = ({ userId, userEmail, onPolicyAccepted }) => {
     }
   }
 
-  if (loading || policyAccepted) {
+  if (loading || loadingPolicy || policyAccepted) {
     return null
+  }
+
+  // Format policy text for display (convert newlines to paragraphs)
+  const formatPolicyText = (text) => {
+    if (!text) return getDefaultPolicyText()
+    
+    // Split by double newlines for paragraphs, or single newlines
+    const paragraphs = text.split(/\n\n+/).filter(p => p.trim())
+    
+    return paragraphs.map((paragraph, index) => {
+      const lines = paragraph.trim().split('\n')
+      return (
+        <div key={index} style={{ marginBottom: index < paragraphs.length - 1 ? '16px' : '0' }}>
+          {lines.map((line, lineIndex) => {
+            // Check if line starts with a number (section header)
+            const isHeader = /^\d+\./.test(line.trim())
+            if (isHeader) {
+              return (
+                <p key={lineIndex} style={{ margin: lineIndex === 0 ? '0 0 16px 0' : '0 0 16px 0' }}>
+                  <strong>{line.trim()}</strong>
+                </p>
+              )
+            }
+            return (
+              <p key={lineIndex} style={{ margin: '0 0 16px 0' }}>
+                {line.trim()}
+              </p>
+            )
+          })}
+        </div>
+      )
+    })
   }
 
   return (
@@ -193,45 +303,7 @@ const PolicyComplianceDialog = ({ userId, userEmail, onPolicyAccepted }) => {
               color: '#4b5563',
               lineHeight: '1.8'
             }}>
-              <p style={{ margin: '0 0 16px 0' }}>
-                <strong>1. Acceptance of Terms</strong><br />
-                By accessing and using StaySmart, you accept and agree to be bound by the terms and provision of this agreement.
-              </p>
-              
-              <p style={{ margin: '0 0 16px 0' }}>
-                <strong>2. User Responsibilities</strong><br />
-                You are responsible for maintaining the confidentiality of your account and password. You agree to accept responsibility for all activities that occur under your account.
-              </p>
-              
-              <p style={{ margin: '0 0 16px 0' }}>
-                <strong>3. Booking and Payment</strong><br />
-                All bookings are subject to availability and confirmation. Payment must be made in full at the time of booking unless otherwise specified. Cancellation policies apply as stated in individual listings.
-              </p>
-              
-              <p style={{ margin: '0 0 16px 0' }}>
-                <strong>4. Privacy and Data Protection</strong><br />
-                We are committed to protecting your privacy. Your personal information will be used in accordance with our Privacy Policy. We implement appropriate security measures to protect your data.
-              </p>
-              
-              <p style={{ margin: '0 0 16px 0' }}>
-                <strong>5. Prohibited Activities</strong><br />
-                You agree not to use the platform for any unlawful purpose or in any way that could damage, disable, or impair the service. Harassment, fraud, or misrepresentation is strictly prohibited.
-              </p>
-              
-              <p style={{ margin: '0 0 16px 0' }}>
-                <strong>6. Limitation of Liability</strong><br />
-                StaySmart acts as an intermediary between hosts and guests. We are not responsible for the quality, safety, or legality of listings, or the accuracy of information provided by users.
-              </p>
-              
-              <p style={{ margin: '0 0 16px 0' }}>
-                <strong>7. Modifications to Terms</strong><br />
-                We reserve the right to modify these terms at any time. Continued use of the platform after changes constitutes acceptance of the new terms.
-              </p>
-              
-              <p style={{ margin: 0 }}>
-                <strong>8. Contact Information</strong><br />
-                For questions about these Terms and Conditions, please contact us through our support channels.
-              </p>
+              {formatPolicyText(policyText)}
             </div>
           </div>
 
