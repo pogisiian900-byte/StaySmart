@@ -54,6 +54,9 @@ const [imageIndex, setImageIndex] = useState(0);
     description: ""
   });
   const [savingDiscount, setSavingDiscount] = useState(false);
+  const [showPromoCalendar, setShowPromoCalendar] = useState(false);
+  const [promoCalendarMonth, setPromoCalendarMonth] = useState(new Date().getMonth());
+  const [promoCalendarYear, setPromoCalendarYear] = useState(new Date().getFullYear());
   
   // 🔹 Dialog Refs
   const editDialogRef = useRef(null);
@@ -64,11 +67,26 @@ const [imageIndex, setImageIndex] = useState(0);
   const handleDiscount = () => {
     // Pre-populate discount data if exists
     if (selectedListing?.discount) {
+      // Convert Firestore Timestamps to date strings (YYYY-MM-DD)
+      const formatDateForInput = (dateValue) => {
+        if (!dateValue) return "";
+        if (dateValue?.toDate) {
+          return dateValue.toDate().toISOString().split('T')[0];
+        }
+        if (dateValue instanceof Date) {
+          return dateValue.toISOString().split('T')[0];
+        }
+        if (typeof dateValue === 'string' && dateValue.includes('T')) {
+          return dateValue.split('T')[0];
+        }
+        return dateValue;
+      };
+      
       setDiscountData({
         discount: selectedListing.discount || 0,
         promoCode: selectedListing.promoCode || "",
-        startDate: selectedListing.discountStartDate || "",
-        endDate: selectedListing.discountEndDate || "",
+        startDate: formatDateForInput(selectedListing.discountStartDate),
+        endDate: formatDateForInput(selectedListing.discountEndDate),
         description: selectedListing.discountDescription || ""
       });
     } else {
@@ -250,6 +268,16 @@ const confirmUpdate = async () => {
   // 🔹 Handle discount data change
   const handleDiscountChange = (field, value) => {
     setDiscountData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // 🔹 Helper function to format date as YYYY-MM-DD
+  const formatDate = (date) => {
+    if (!date) return '';
+    const d = date instanceof Date ? date : new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   // 🔹 Save/Update discount
@@ -2363,29 +2391,363 @@ const confirmUpdate = async () => {
 
           <div className="discount-form-group">
             <label className="form-label">
-              Start Date (Optional):
-              <input
-                className="form-input"
-                type="date"
-                value={discountData.startDate}
-                onChange={(e) => handleDiscountChange("startDate", e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-              />
-              <small>When the discount should start</small>
-            </label>
-          </div>
+              Date Range (Optional):
+              {/* Date Display Buttons */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: '1fr 1fr',
+                gap: '12px',
+                marginBottom: '12px'
+              }}>
+                <div
+                  onClick={() => {
+                    const now = new Date();
+                    setPromoCalendarMonth(now.getMonth());
+                    setPromoCalendarYear(now.getFullYear());
+                    setShowPromoCalendar(true);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '2px solid #e5e7eb',
+                    fontSize: '14px',
+                    background: 'white',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#667eea'
+                    e.currentTarget.style.background = '#f9fafb'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = '#e5e7eb'
+                    e.currentTarget.style.background = 'white'
+                  }}
+                >
+                  <span style={{ color: discountData.startDate ? '#1f2937' : '#9ca3af' }}>
+                    {discountData.startDate 
+                      ? new Date(discountData.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : 'Start date'}
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                </div>
+                <div
+                  onClick={() => {
+                    const now = new Date();
+                    setPromoCalendarMonth(now.getMonth());
+                    setPromoCalendarYear(now.getFullYear());
+                    setShowPromoCalendar(true);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '2px solid #e5e7eb',
+                    fontSize: '14px',
+                    background: 'white',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#667eea'
+                    e.currentTarget.style.background = '#f9fafb'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = '#e5e7eb'
+                    e.currentTarget.style.background = 'white'
+                  }}
+                >
+                  <span style={{ color: discountData.endDate ? '#1f2937' : '#9ca3af' }}>
+                    {discountData.endDate 
+                      ? new Date(discountData.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : 'End date'}
+                  </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                </div>
+              </div>
 
-          <div className="discount-form-group">
-            <label className="form-label">
-              End Date (Optional):
-              <input
-                className="form-input"
-                type="date"
-                value={discountData.endDate}
-                onChange={(e) => handleDiscountChange("endDate", e.target.value)}
-                min={discountData.startDate || new Date().toISOString().split('T')[0]}
-              />
-              <small>When the discount should end</small>
+              {/* Calendar Component */}
+              {showPromoCalendar && (() => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                return (
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '20px',
+                    background: 'white',
+                    borderRadius: '12px',
+                    border: '2px solid #e5e7eb',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '20px'
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (promoCalendarMonth === 0) {
+                            setPromoCalendarMonth(11);
+                            setPromoCalendarYear(promoCalendarYear - 1);
+                          } else {
+                            setPromoCalendarMonth(promoCalendarMonth - 1);
+                          }
+                        }}
+                        style={{
+                          padding: '8px 12px',
+                          background: '#f3f4f6',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '1.2rem',
+                          color: '#374151',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = '#e5e7eb'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.background = '#f3f4f6'
+                        }}
+                      >
+                        ❮
+                      </button>
+                      <h3 style={{
+                        margin: 0,
+                        fontSize: '1.1rem',
+                        fontWeight: 700,
+                        color: '#111827'
+                      }}>
+                        {new Date(promoCalendarYear, promoCalendarMonth).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (promoCalendarMonth === 11) {
+                            setPromoCalendarMonth(0);
+                            setPromoCalendarYear(promoCalendarYear + 1);
+                          } else {
+                            setPromoCalendarMonth(promoCalendarMonth + 1);
+                          }
+                        }}
+                        style={{
+                          padding: '8px 12px',
+                          background: '#f3f4f6',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '1.2rem',
+                          color: '#374151',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = '#e5e7eb'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.background = '#f3f4f6'
+                        }}
+                      >
+                        ❯
+                      </button>
+                    </div>
+
+                    {/* Calendar Grid */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(7, 1fr)',
+                      gap: '6px',
+                      marginBottom: '12px'
+                    }}>
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                        <div key={day} style={{
+                          textAlign: 'center',
+                          fontWeight: 600,
+                          fontSize: '0.8rem',
+                          color: '#6b7280',
+                          padding: '6px 0'
+                        }}>
+                          {day}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(7, 1fr)',
+                      gap: '6px'
+                    }}>
+                      {(() => {
+                        const firstDay = new Date(promoCalendarYear, promoCalendarMonth, 1).getDay();
+                        const daysInMonth = new Date(promoCalendarYear, promoCalendarMonth + 1, 0).getDate();
+                        const days = [];
+                        
+                        // Empty cells for days before month starts
+                        for (let i = 0; i < firstDay; i++) {
+                          days.push(
+                            <div key={`empty-${i}`} style={{ aspectRatio: '1', minHeight: '36px' }}></div>
+                          );
+                        }
+                        
+                        // Days of the month
+                        for (let day = 1; day <= daysInMonth; day++) {
+                          const dateStr = formatDate(new Date(promoCalendarYear, promoCalendarMonth, day));
+                          const dateObj = new Date(promoCalendarYear, promoCalendarMonth, day);
+                          dateObj.setHours(0, 0, 0, 0);
+                          const isPast = dateObj < today;
+                          const isToday = day === today.getDate() && 
+                                         promoCalendarMonth === today.getMonth() && 
+                                         promoCalendarYear === today.getFullYear();
+                          const isStartDate = discountData.startDate === dateStr;
+                          const isEndDate = discountData.endDate === dateStr;
+                          
+                          // Check if date is in range
+                          let isInRange = false;
+                          if (discountData.startDate && discountData.endDate) {
+                            const startDate = new Date(discountData.startDate);
+                            const endDate = new Date(discountData.endDate);
+                            isInRange = dateObj > startDate && dateObj < endDate;
+                          } else if (discountData.startDate && !discountData.endDate) {
+                            const startDate = new Date(discountData.startDate);
+                            isInRange = dateObj > startDate;
+                          }
+
+                          days.push(
+                            <div
+                              key={day}
+                              onClick={() => {
+                                if (isPast) return;
+                                
+                                if (!discountData.startDate || (discountData.startDate && discountData.endDate)) {
+                                  // Set start date
+                                  handleDiscountChange("startDate", dateStr);
+                                  handleDiscountChange("endDate", "");
+                                } else if (discountData.startDate && !discountData.endDate) {
+                                  // Set end date
+                                  const startDate = new Date(discountData.startDate);
+                                  if (dateObj <= startDate) {
+                                    alert('End date must be after start date');
+                                    return;
+                                  }
+                                  handleDiscountChange("endDate", dateStr);
+                                }
+                              }}
+                              style={{
+                                aspectRatio: '1',
+                                minHeight: '36px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: '6px',
+                                cursor: isPast ? 'not-allowed' : 'pointer',
+                                background: isStartDate || isEndDate
+                                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                                  : isInRange
+                                  ? '#e0e7ff'
+                                  : isPast
+                                  ? '#f3f4f6'
+                                  : 'white',
+                                color: isStartDate || isEndDate
+                                  ? 'white'
+                                  : isPast
+                                  ? '#9ca3af'
+                                  : '#111827',
+                                border: isStartDate || isEndDate
+                                  ? '2px solid #667eea'
+                                  : isPast
+                                  ? '2px solid #d1d5db'
+                                  : '2px solid #e5e7eb',
+                                fontWeight: isStartDate || isEndDate ? 700 : 500,
+                                fontSize: '0.85rem',
+                                transition: 'all 0.2s ease',
+                                position: 'relative'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isPast && !isStartDate && !isEndDate) {
+                                  e.target.style.background = '#f9fafb';
+                                  e.target.style.borderColor = '#667eea';
+                                  e.target.style.transform = 'scale(1.05)';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isPast && !isStartDate && !isEndDate) {
+                                  e.target.style.background = isInRange ? '#e0e7ff' : 'white';
+                                  e.target.style.borderColor = '#e5e7eb';
+                                  e.target.style.transform = 'scale(1)';
+                                }
+                              }}
+                            >
+                              <span>{day}</span>
+                              {isToday && !isStartDate && !isEndDate && (
+                                <span style={{
+                                  fontSize: '0.6rem',
+                                  marginTop: '2px',
+                                  color: '#667eea',
+                                  fontWeight: 700
+                                }}>
+                                  Today
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+                        
+                        return days;
+                      })()}
+                    </div>
+
+                    {/* Close Calendar Button */}
+                    <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowPromoCalendar(false)}
+                        style={{
+                          padding: '8px 16px',
+                          background: '#667eea',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          fontWeight: 600,
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = '#5568d3';
+                          e.target.style.transform = 'translateY(-1px)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.background = '#667eea';
+                          e.target.style.transform = 'translateY(0)';
+                        }}
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+              <small>Select the start and end dates for when the discount should be valid</small>
             </label>
           </div>
 

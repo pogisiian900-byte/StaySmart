@@ -1,4 +1,5 @@
 import { Route, createBrowserRouter, createRoutesFromElements, RouterProvider } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import './App.css';
 import './index.css';
 import './pages/for-all/HostRegis.css'
@@ -14,35 +15,43 @@ import RootLayout from './layout/RootLayout.jsx';
 import ProtectedRoute from './layout/ProtectedRoute.jsx';
 import PublicRoute from './layout/PublicRoute.jsx';
 import Error from './components/Error.jsx';
-import Registration_forAll from './pages/for-all/registration-forAll.jsx';
-import LoginPage_Host from './pages/host/loginPage-all.jsx';
-import SetupService from './pages/for-all/setupService.jsx';
-import GetStarted from './pages/for-all/getStarted.jsx';
-import GuestMainLogged from './pages/guest/guest-MainLogged.jsx';
-import Guest_Main from './pages/guest/guest-Main.jsx';
-import HostMain from './pages/host/host-Main.jsx';
-import Admin_Main from './pages/admin/admin-Main.jsx';
 import { AuthProvider } from './layout/AuthContext.jsx';
-import Profile from './components/Profile.jsx';
-import HostSetupForm from './pages/for-all/HostSetupForm/HostSetupForm.jsx';
-import ViewListing from './components/Host/viewListing.jsx';
-import SelectListingItem from './components/SelectListingItem.jsx';
-import Guest_Main_NextPageOutlet from './pages/guest/GuestLayout.jsx';
-import GuestLayout from './pages/guest/GuestLayout.jsx';
-import SelectedListingBookingConfirmation from './components/SelectedListingBookingConfirmation.jsx';
-import ChatPage from './pages/for-all/messages/ChatPage.jsx';
-import GuestConvoList from './pages/for-all/messages/GuestConvoList.jsx';
-import HostConvoList from './pages/for-all/messages/HostConvoList.jsx';
-import GuestBookings from './pages/guest/GuestBookings.jsx';
-import HostBookings from './pages/host/HostBookings.jsx';
-import GuestNotifications from './pages/guest/GuestNotifications.jsx';
-import HostNotifications from './pages/host/HostNotifications.jsx';
-import GuestSearch from './pages/guest/GuestSearch.jsx';
-import GuestFavourites from './pages/guest/GuestFavourites.jsx';
-import GuestAccountSettings from './pages/guest/GuestAccountSettings.jsx';
-import GuestReviews from './pages/guest/GuestReviews.jsx';
-import HostAccountSettings from './pages/host/HostAccountSettings.jsx';
-import SharedListing from './pages/for-all/SharedListing.jsx';
+
+// Lazy load all route components for code splitting
+const Registration_forAll = lazy(() => import('./pages/for-all/registration-forAll.jsx'));
+const LoginPage_Host = lazy(() => import('./pages/host/loginPage-all.jsx'));
+const SetupService = lazy(() => import('./pages/for-all/setupService.jsx'));
+const GetStarted = lazy(() => import('./pages/for-all/getStarted.jsx'));
+const GuestMainLogged = lazy(() => import('./pages/guest/guest-MainLogged.jsx'));
+const Guest_Main = lazy(() => import('./pages/guest/guest-Main.jsx'));
+const HostMain = lazy(() => import('./pages/host/host-Main.jsx'));
+const Admin_Main = lazy(() => import('./pages/admin/admin-Main.jsx'));
+const Profile = lazy(() => import('./components/Profile.jsx'));
+const HostSetupForm = lazy(() => import('./pages/for-all/HostSetupForm/HostSetupForm.jsx'));
+const ViewListing = lazy(() => import('./components/Host/viewListing.jsx'));
+const SelectListingItem = lazy(() => import('./components/SelectListingItem.jsx'));
+const GuestLayout = lazy(() => import('./pages/guest/GuestLayout.jsx'));
+const SelectedListingBookingConfirmation = lazy(() => import('./components/SelectedListingBookingConfirmation.jsx'));
+const ChatPage = lazy(() => import('./pages/for-all/messages/ChatPage.jsx'));
+const GuestConvoList = lazy(() => import('./pages/for-all/messages/GuestConvoList.jsx'));
+const HostConvoList = lazy(() => import('./pages/for-all/messages/HostConvoList.jsx'));
+const GuestBookings = lazy(() => import('./pages/guest/GuestBookings.jsx'));
+const HostBookings = lazy(() => import('./pages/host/HostBookings.jsx'));
+const GuestNotifications = lazy(() => import('./pages/guest/GuestNotifications.jsx'));
+const HostNotifications = lazy(() => import('./pages/host/HostNotifications.jsx'));
+const GuestSearch = lazy(() => import('./pages/guest/GuestSearch.jsx'));
+const GuestFavourites = lazy(() => import('./pages/guest/GuestFavourites.jsx'));
+const GuestAccountSettings = lazy(() => import('./pages/guest/GuestAccountSettings.jsx'));
+const GuestReviews = lazy(() => import('./pages/guest/GuestReviews.jsx'));
+const HostAccountSettings = lazy(() => import('./pages/host/HostAccountSettings.jsx'));
+const SharedListing = lazy(() => import('./pages/for-all/SharedListing.jsx'));
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+    <div>Loading...</div>
+  </div>
+);
 
 function App() {
   const router = createBrowserRouter(
@@ -50,52 +59,62 @@ function App() {
       <Route path="/" element={<RootLayout />}>
         <Route index element={
           <PublicRoute>
+            <Suspense fallback={<LoadingFallback />}>
               <Guest_Main />
+            </Suspense>
           </PublicRoute>
           } />
 
         <Route
           path="/register"
           element={
+            <Suspense fallback={<LoadingFallback />}>
               <Registration_forAll />
+            </Suspense>
           }
         />
 
           <Route  
           path="/listing/:listingId"
           element={
+            <Suspense fallback={<LoadingFallback />}>
               <SharedListing />
+            </Suspense>
           }/>
      <Route
             path="/guest/:guestId"
             element={
               <ProtectedRoute allowedRole="guest">
-                <GuestLayout />
+                <Suspense fallback={<LoadingFallback />}>
+                  <GuestLayout />
+                </Suspense>
               </ProtectedRoute>
             }
           >
-            <Route index element={<GuestMainLogged />} />
-            <Route path="account-settings" element={<GuestAccountSettings />} />
-            <Route path="listing/:listingId" element={<SelectListingItem />} />
-            <Route path="messages" element={<GuestConvoList />} />
-            <Route path="bookings" element={<GuestBookings />} />
-            <Route path="favourites" element={<GuestFavourites />} />
-            <Route path="reviews" element={<GuestReviews />} />
-            <Route path="notifications" element={<GuestNotifications />} />
-            <Route path="search" element={<GuestSearch />} />
+            <Route index element={<Suspense fallback={<LoadingFallback />}><GuestMainLogged /></Suspense>} />
+            <Route path="account-settings" element={<Suspense fallback={<LoadingFallback />}><GuestAccountSettings /></Suspense>} />
+            <Route path="listing/:listingId" element={<Suspense fallback={<LoadingFallback />}><SelectListingItem /></Suspense>} />
+            <Route path="messages" element={<Suspense fallback={<LoadingFallback />}><GuestConvoList /></Suspense>} />
+            <Route path="bookings" element={<Suspense fallback={<LoadingFallback />}><GuestBookings /></Suspense>} />
+            <Route path="favourites" element={<Suspense fallback={<LoadingFallback />}><GuestFavourites /></Suspense>} />
+            <Route path="reviews" element={<Suspense fallback={<LoadingFallback />}><GuestReviews /></Suspense>} />
+            <Route path="notifications" element={<Suspense fallback={<LoadingFallback />}><GuestNotifications /></Suspense>} />
+            <Route path="search" element={<Suspense fallback={<LoadingFallback />}><GuestSearch /></Suspense>} />
             {/* ✅ Fix here */}
             <Route
               path="chat/:conversationId"
               element={
                 <ProtectedRoute allowedRole={["guest", "host"]}>
-                  <ChatPage />
+                  <Suspense fallback={<LoadingFallback />}>
+                    <ChatPage />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
 
             <Route
               path="listing/:listingId/booking"
-              element={<SelectedListingBookingConfirmation />}
+              element={<Suspense fallback={<LoadingFallback />}><SelectedListingBookingConfirmation /></Suspense>}
             />
           </Route>
 
@@ -103,22 +122,22 @@ function App() {
           
 
        <Route path="/getStarted/:hostId">
-              <Route index element={<GetStarted />} />
+              <Route index element={<Suspense fallback={<LoadingFallback />}><GetStarted /></Suspense>} />
 
               {/* Setup service selection */}
-              <Route path="setupService" element={<SetupService useCase={"getStarted"} />} />
+              <Route path="setupService" element={<Suspense fallback={<LoadingFallback />}><SetupService useCase={"getStarted"} /></Suspense>} />
 
               {/* ✅ Create new listing */}
-              <Route path="setupService/:serviceType" element={<HostSetupForm />} />
+              <Route path="setupService/:serviceType" element={<Suspense fallback={<LoadingFallback />}><HostSetupForm /></Suspense>} />
               
               {/* ✅ Support direct pattern for backwards compatibility */}
-              <Route path=":serviceType" element={<HostSetupForm />} />
+              <Route path=":serviceType" element={<Suspense fallback={<LoadingFallback />}><HostSetupForm /></Suspense>} />
 
           
           
             </Route>
 
-          <Route path='/login' element={<LoginPage_Host />} />
+          <Route path='/login' element={<Suspense fallback={<LoadingFallback />}><LoginPage_Host /></Suspense>} />
       <Route path="/host">
        
        
@@ -126,26 +145,30 @@ function App() {
           path=":hostId"
           element={
             <ProtectedRoute allowedRole="host">
-              <HostMain />
+              <Suspense fallback={<LoadingFallback />}>
+                <HostMain />
+              </Suspense>
             </ProtectedRoute>
           }
         >
           <Route index element={<div />} />
-          <Route path=":listingId" element={<ViewListing />} />
-          <Route path="startingListing" element={<SetupService />} />
-          <Route path="getStarted/:serviceType" element={<HostSetupForm />} />
-          <Route path="draft/:serviceType/:draftId" element={<HostSetupForm />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="bookings" element={<HostBookings />} />
-          <Route path="notifications" element={<HostNotifications />} />
-          <Route path="account-settings" element={<HostAccountSettings />} />
+          <Route path=":listingId" element={<Suspense fallback={<LoadingFallback />}><ViewListing /></Suspense>} />
+          <Route path="startingListing" element={<Suspense fallback={<LoadingFallback />}><SetupService /></Suspense>} />
+          <Route path="getStarted/:serviceType" element={<Suspense fallback={<LoadingFallback />}><HostSetupForm /></Suspense>} />
+          <Route path="draft/:serviceType/:draftId" element={<Suspense fallback={<LoadingFallback />}><HostSetupForm /></Suspense>} />
+          <Route path="profile" element={<Suspense fallback={<LoadingFallback />}><Profile /></Suspense>} />
+          <Route path="bookings" element={<Suspense fallback={<LoadingFallback />}><HostBookings /></Suspense>} />
+          <Route path="notifications" element={<Suspense fallback={<LoadingFallback />}><HostNotifications /></Suspense>} />
+          <Route path="account-settings" element={<Suspense fallback={<LoadingFallback />}><HostAccountSettings /></Suspense>} />
 
           {/* ✅ Host Messaging Routes */}
           <Route
             path="messages"
             element={
               <ProtectedRoute allowedRole="host">
-                <HostConvoList />
+                <Suspense fallback={<LoadingFallback />}>
+                  <HostConvoList />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -153,7 +176,9 @@ function App() {
             path="chat/:conversationId"
             element={
               <ProtectedRoute allowedRole={["host", "guest"]}>
-                <ChatPage />
+                <Suspense fallback={<LoadingFallback />}>
+                  <ChatPage />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -165,7 +190,9 @@ function App() {
   
         <Route path="/admin" element={
           <ProtectedRoute allowedRole="admin">
-            <Admin_Main />
+            <Suspense fallback={<LoadingFallback />}>
+              <Admin_Main />
+            </Suspense>
           </ProtectedRoute>
         } />
         <Route path="*" element={<Error />} />
