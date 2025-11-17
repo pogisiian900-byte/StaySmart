@@ -33,12 +33,15 @@
 .navActive {
   color: #31326F;
   font-weight: bold;
+  border-bottom: 2px solid #31326F;
 }
 
 .navItem a{
     display: flex;
     align-items: center;
     gap: 0.5em;
+    text-decoration: none;
+    color: inherit;
 }
 
 

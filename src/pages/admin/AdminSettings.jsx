@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc, serverTimestamp, onSnapshot, collection, getDocs, 
 import { db } from '../../config/firebase'
 import { useAuth } from '../../layout/AuthContext'
 import Loading from '../../components/Loading'
+import { generatePolicyPDF } from '../../utils/pdfGenerators/policyPDF'
 import 'dialog-polyfill/dist/dialog-polyfill.css'
 import dialogPolyfill from 'dialog-polyfill'
 
@@ -769,24 +770,69 @@ For questions about these Terms and Conditions, please contact us through our su
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '12px',
+          justifyContent: 'space-between',
           marginBottom: '24px'
         }}>
           <div style={{
-            width: '4px',
-            height: '24px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: '2px'
-          }}></div>
-          <h2 style={{
-            fontSize: '1.5rem',
-            fontWeight: 700,
-            color: '#111827',
-            margin: 0,
-            letterSpacing: '-0.3px'
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
           }}>
-            📋 Policy & Compliance Terms
-          </h2>
+            <div style={{
+              width: '4px',
+              height: '24px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              borderRadius: '2px'
+            }}></div>
+            <h2 style={{
+              fontSize: '1.5rem',
+              fontWeight: 700,
+              color: '#111827',
+              margin: 0,
+              letterSpacing: '-0.3px'
+            }}>
+              📋 Policy & Compliance Terms
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const currentPolicyText = policyText || getDefaultPolicyText()
+                const pdfDoc = await generatePolicyPDF(currentPolicyText)
+                pdfDoc.save('StaySmart-Terms-and-Conditions.pdf')
+              } catch (error) {
+                console.error('Error generating policy PDF:', error)
+                alert('Failed to generate PDF. Please try again.')
+              }
+            }}
+            style={{
+              padding: '12px 24px',
+              border: 'none',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #31326F 0%, #4a4d8c 100%)',
+              color: 'white',
+              fontWeight: 600,
+              fontSize: '0.95rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 4px 12px rgba(49, 50, 111, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = 'translateY(-2px)'
+              e.target.style.boxShadow = '0 6px 16px rgba(49, 50, 111, 0.4)'
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'translateY(0)'
+              e.target.style.boxShadow = '0 4px 12px rgba(49, 50, 111, 0.3)'
+            }}
+          >
+            <span>🖨️</span>
+            Print Policy
+          </button>
         </div>
 
         <p style={{

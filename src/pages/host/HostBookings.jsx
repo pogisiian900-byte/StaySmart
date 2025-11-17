@@ -39,6 +39,7 @@ const HostBookings = () => {
   const [showCompleted, setShowCompleted] = useState(false)
   const [guestInfo, setGuestInfo] = useState(null) // Store guest information for selected reservation
   const [wishlistData, setWishlistData] = useState(null) // Store wishlist/feedback data for completed bookings
+  const [showDetails, setShowDetails] = useState(false) // Toggle for showing/hiding detailed information
 
   // Read date from URL params on mount
   useEffect(() => {
@@ -1392,7 +1393,7 @@ const HostBookings = () => {
         )}
         <div className="booking-list">
           {filtered.map((r) => (
-            <div key={r.id} className="booking-card" onClick={() => setSelectedReservation(r)} style={{ cursor: 'pointer' }}>
+            <div key={r.id} className="booking-card" onClick={() => { setSelectedReservation(r); setShowDetails(false); }} style={{ cursor: 'pointer' }}>
               <div className="booking-row">
                 {r.listingThumbnail && (
                   <img src={r.listingThumbnail} alt={r.listingTitle} className="booking-thumb" />
@@ -1442,6 +1443,7 @@ const HostBookings = () => {
             setSelectedReservation(null)
             setGuestInfo(null)
             setWishlistData(null)
+            setShowDetails(false)
           }}
           style={{
             position: 'fixed',
@@ -1491,6 +1493,7 @@ const HostBookings = () => {
                   setSelectedReservation(null)
                   setGuestInfo(null)
                   setWishlistData(null)
+                  setShowDetails(false)
                 }}
                 style={{
                   background: 'none',
@@ -1717,63 +1720,110 @@ const HostBookings = () => {
                   </div>
                 )}
 
-                {/* Reservation ID and Created Date */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '16px',
-                  padding: '16px',
-                  background: '#f9fafb',
-                  borderRadius: '12px',
-                  border: '1px solid #e5e7eb'
-                }}>
-                  <div>
-                    <div style={{
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      color: '#6b7280',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                      marginBottom: '6px'
-                    }}>
-                      Reservation ID
-                    </div>
-                    <div style={{
+                {/* View Details Button */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
+                  <button
+                    onClick={() => setShowDetails(!showDetails)}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      border: '2px solid #31326F',
+                      background: showDetails ? '#31326F' : 'transparent',
+                      color: showDetails ? 'white' : '#31326F',
                       fontSize: '14px',
                       fontWeight: 600,
-                      color: '#1f2937',
-                      fontFamily: 'monospace'
-                    }}>
-                      {selectedReservation.id.substring(0, 8).toUpperCase()}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      color: '#6b7280',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px',
-                      marginBottom: '6px'
-                    }}>
-                      Created Date
-                    </div>
-                    <div style={{
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      color: '#1f2937'
-                    }}>
-                      {selectedReservation.createdAt 
-                        ? (selectedReservation.createdAt.toDate 
-                          ? selectedReservation.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                          : new Date(selectedReservation.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))
-                        : 'N/A'}
-                    </div>
-                  </div>
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!showDetails) {
+                        e.target.style.background = '#f3f4f6'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!showDetails) {
+                        e.target.style.background = 'transparent'
+                      }
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      {showDetails ? (
+                        <>
+                          <path d="M18 6L6 18M6 6l12 12"/>
+                        </>
+                      ) : (
+                        <>
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                          <circle cx="12" cy="12" r="3"/>
+                        </>
+                      )}
+                    </svg>
+                    {showDetails ? 'Hide Details' : 'View Details'}
+                  </button>
                 </div>
 
-                {/* Guest Information */}
-                {guestInfo && (
+                {/* Reservation ID and Created Date - Hidden by default */}
+                {showDetails && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '16px',
+                    padding: '16px',
+                    background: '#f9fafb',
+                    borderRadius: '12px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <div>
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#6b7280',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        marginBottom: '6px'
+                      }}>
+                        Reservation ID
+                      </div>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color: '#1f2937',
+                        fontFamily: 'monospace'
+                      }}>
+                        {selectedReservation.id.substring(0, 8).toUpperCase()}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#6b7280',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        marginBottom: '6px'
+                      }}>
+                        Created Date
+                      </div>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color: '#1f2937'
+                      }}>
+                        {selectedReservation.createdAt 
+                          ? (selectedReservation.createdAt.toDate 
+                            ? selectedReservation.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : new Date(selectedReservation.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))
+                          : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Guest Information - Hidden by default */}
+                {showDetails && guestInfo && (
                   <div style={{
                     padding: '20px',
                     background: '#f9fafb',
@@ -1857,8 +1907,8 @@ const HostBookings = () => {
                   </div>
                 )}
 
-                {/* Payment Information */}
-                {selectedReservation.paymentSummary && (
+                {/* Payment Information - Hidden by default */}
+                {showDetails && selectedReservation.paymentSummary && (
                   <div style={{
                     padding: '20px',
                     background: '#f9fafb',
@@ -1947,8 +1997,8 @@ const HostBookings = () => {
                   </div>
                 )}
 
-                {/* Pricing Breakdown */}
-                {selectedReservation.pricing && (
+                {/* Pricing Breakdown - Hidden by default */}
+                {showDetails && selectedReservation.pricing && (
                   <div style={{
                     padding: '20px',
                     background: '#f9fafb',

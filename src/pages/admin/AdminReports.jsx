@@ -3,13 +3,13 @@ import { createPortal } from 'react-dom'
 import { collection, getDocs, query, doc, getDoc } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import Loading from '../../components/Loading'
-import { generateBookingsPDF, generatePaymentsPDF, generateReviewsPDF } from '../../utils/pdfGenerators'
+import { generateBookingsPDF, generatePaymentsPDF, generateReviewsPDF, generateBookingReviewsPDF } from '../../utils/pdfGenerators'
 
 const AdminReports = () => {
   const [listings, setListings] = useState([])
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
-  const [reportType, setReportType] = useState('bookings') // 'bookings', 'reviews', or 'payments'
+  const [reportType, setReportType] = useState('bookings') // 'bookings', 'reviews', 'bookingReviews', or 'payments'
   const [selectedListing, setSelectedListing] = useState('all')
   const [selectedHost, setSelectedHost] = useState('all')
   const [dateRange, setDateRange] = useState({
@@ -206,7 +206,7 @@ const AdminReports = () => {
             listingTitle: listing.title || listing.name || 'Untitled',
             hostId: listing.hostId,
             userName: rating.userName || rating.userName || 'Anonymous',
-            rating: rating.rating || 0,
+            rating: Number(rating.rating) || 0, // Ensure rating is a number
             comment: rating.comment || '',
             timestamp: reviewTimestamp,
             userId: rating.userId || ''
@@ -427,6 +427,204 @@ const AdminReports = () => {
     }
   }
 
+  // Fetch booking reviews from Wishlist collection
+  const fetchBookingReviews = async () => {
+    const bookingReviewsData = []
+    try {
+      // Fetch all wishlist entries (booking reviews)
+      const wishlistSnapshot = await getDocs(collection(db, 'Wishlist'))
+      
+      for (const wishlistDoc of wishlistSnapshot.docs) {
+        const wishlistData = { id: wishlistDoc.id, ...wishlistDoc.data() }
+        
+        // Get reservation details
+        let reservationData = null
+        if (wishlistData.reservationId) {
+          try {
+            const reservationRef = doc(db, 'Reservation', wishlistData.reservationId)
+            const reservationSnap = await getDoc(reservationRef)
+            if (reservationSnap.exists()) {
+              reservationData = { id: reservationSnap.id, ...reservationSnap.data() }
+            }
+          } catch (err) {
+            console.error('Error fetching reservation:', err)
+          }
+        }
+        
+        // Get guest information
+        let guestName = 'Guest'
+        if (wishlistData.guestId) {
+          try {
+            const guestRef = doc(db, 'Users', wishlistData.guestId)
+            const guestSnap = await getDoc(guestRef)
+            if (guestSnap.exists()) {
+              const guestData = guestSnap.data()
+              guestName = guestData.firstName 
+                ? `${guestData.firstName} ${guestData.lastName || ''}`.trim()
+                : guestData.emailAddress || 'Guest'
+            }
+          } catch (err) {
+            console.error('Error fetching guest:', err)
+          }
+        }
+        
+        // Get host information from reservation
+        let hostName = 'Host'
+        let hostId = null
+        if (reservationData?.hostId) {
+          hostId = reservationData.hostId
+          try {
+            const hostRef = doc(db, 'Users', reservationData.hostId)
+            const hostSnap = await getDoc(hostRef)
+            if (hostSnap.exists()) {
+              const hostData = hostSnap.data()
+              hostName = hostData.firstName 
+                ? `${hostData.firstName} ${hostData.lastName || ''}`.trim()
+                : hostData.emailAddress || 'Host'
+            }
+          } catch (err) {
+            console.error('Error fetching host:', err)
+          }
+        }
+        
+        // Get listing information
+        let listingTitle = 'N/A'
+        let listingId = null
+        if (reservationData?.listingId) {
+          listingId = reservationData.listingId
+          try {
+            const listingRef = doc(db, 'Listings', reservationData.listingId)
+            const listingSnap = await getDoc(listingRef)
+            if (listingSnap.exists()) {
+              const listingData = listingSnap.data()
+              listingTitle = listingData.title || listingData.name || 'Untitled'
+            }
+          } catch (err) {
+            console.error('Error fetching listing:', err)
+          }
+        }
+        
+        bookingReviewsData.push({
+          id: wishlistData.id,
+          reservationId: wishlistData.reservationId || 'N/A',
+          guestId: wishlistData.guestId,
+          guestName: guestName,
+          hostId: hostId,
+          hostName: hostName,
+          listingId: listingId,
+          listingTitle: listingTitle,
+          rating: Number(wishlistData.rating) || 0,
+          serviceThoughts: wishlistData.serviceThoughts || '',
+          improvements: wishlistData.improvements || '',
+          createdAt: wishlistData.createdAt || wishlistData.timestamp,
+          timestamp: wishlistData.createdAt || wishlistData.timestamp
+        })
+      }
+      
+      // Sort by createdAt descending
+      const toMs = (v) => (v?.toMillis ? v.toMillis() : (v?.seconds ? v.seconds * 1000 : (Date.parse(v) || 0)))
+      bookingReviewsData.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt))
+      
+      return bookingReviewsData
+    } catch (error) {
+      console.error('Error fetching booking reviews:', error)
+      return []
+    }
+  }
+
+  // Generate Booking Reviews Report
+  const generateBookingReviewsReport = async () => {
+    // Validate date range
+    if (!dateRange.startDate || !dateRange.endDate) {
+      alert('⚠️ Please select both Start Date and End Date before generating the report.')
+      return
+    }
+
+    // Validate that end date is after start date
+    if (new Date(dateRange.endDate) < new Date(dateRange.startDate)) {
+      alert('⚠️ End Date must be after Start Date.')
+      return
+    }
+
+    setGenerating(true)
+    try {
+      const bookingReviews = await fetchBookingReviews()
+      
+      let filteredReviews = bookingReviews
+
+      // Filter by host first
+      if (selectedHost !== 'all') {
+        filteredReviews = filteredReviews.filter(r => r.hostId === selectedHost)
+      }
+
+      // Filter by listing
+      if (selectedListing !== 'all') {
+        filteredReviews = filteredReviews.filter(r => r.listingId === selectedListing)
+      }
+
+      // Filter by date range
+      if (dateRange.startDate) {
+        const startDate = new Date(dateRange.startDate)
+        startDate.setHours(0, 0, 0, 0)
+        filteredReviews = filteredReviews.filter(r => {
+          if (!r.createdAt && !r.timestamp) return false
+          let reviewDate
+          const dateValue = r.createdAt || r.timestamp
+          if (dateValue instanceof Date) {
+            reviewDate = dateValue
+          } else if (dateValue?.toDate) {
+            reviewDate = dateValue.toDate()
+          } else if (dateValue?.seconds) {
+            reviewDate = new Date(dateValue.seconds * 1000)
+          } else {
+            reviewDate = new Date(dateValue)
+          }
+          reviewDate.setHours(0, 0, 0, 0)
+          return reviewDate >= startDate
+        })
+      }
+
+      if (dateRange.endDate) {
+        const endDate = new Date(dateRange.endDate)
+        endDate.setHours(23, 59, 59, 999)
+        filteredReviews = filteredReviews.filter(r => {
+          if (!r.createdAt && !r.timestamp) return false
+          let reviewDate
+          const dateValue = r.createdAt || r.timestamp
+          if (dateValue instanceof Date) {
+            reviewDate = dateValue
+          } else if (dateValue?.toDate) {
+            reviewDate = dateValue.toDate()
+          } else if (dateValue?.seconds) {
+            reviewDate = new Date(dateValue.seconds * 1000)
+          } else {
+            reviewDate = new Date(dateValue)
+          }
+          return reviewDate <= endDate
+        })
+      }
+      
+      console.log('Filtered booking reviews after date range:', filteredReviews.length)
+
+      if (filteredReviews.length === 0) {
+        alert('⚠️ No booking reviews found for the selected filters. Please adjust your date range or filters.')
+        setGenerating(false)
+        return
+      }
+
+      const pdf = await generateBookingReviewsPDF(filteredReviews, {
+        dateRange
+      })
+      pdf.save(`admin-booking-reviews-report-${new Date().toISOString().split('T')[0]}.pdf`)
+      alert(`✅ Booking Reviews report generated successfully! (${filteredReviews.length} reviews)`)
+    } catch (error) {
+      console.error('Error generating booking reviews report:', error)
+      alert('❌ Failed to generate report. Please try again.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
   // Generate Payment & Transaction Report
   const generatePaymentsReport = async () => {
     // Validate date range
@@ -552,7 +750,7 @@ const AdminReports = () => {
           margin: 0,
           color: 'rgba(255, 255, 255, 0.9)'
         }}>
-          Generate comprehensive reports for all bookings and reviews across the platform
+          Generate comprehensive reports for all bookings, reviews, and booking reviews across the platform
         </p>
       </div>
 
@@ -633,6 +831,34 @@ const AdminReports = () => {
             }}
           >
             ⭐ Reviews Report
+          </button>
+          <button
+            onClick={() => setReportType('bookingReviews')}
+            style={{
+              padding: '12px 24px',
+              border: 'none',
+              borderRadius: '10px',
+              background: reportType === 'bookingReviews' 
+                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                : '#f3f4f6',
+              color: reportType === 'bookingReviews' ? 'white' : '#374151',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              fontSize: '0.95rem'
+            }}
+            onMouseEnter={(e) => {
+              if (reportType !== 'bookingReviews') {
+                e.target.style.background = '#e5e7eb'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (reportType !== 'bookingReviews') {
+                e.target.style.background = '#f3f4f6'
+              }
+            }}
+          >
+            📝 Booking Reviews Report
           </button>
           <button
             onClick={() => setReportType('payments')}
@@ -1309,7 +1535,12 @@ const AdminReports = () => {
         zIndex: 1
       }}>
         <button
-          onClick={reportType === 'bookings' ? generateBookingsReport : generateReviewsReport}
+          onClick={
+            reportType === 'bookings' ? generateBookingsReport :
+            reportType === 'reviews' ? generateReviewsReport :
+            reportType === 'bookingReviews' ? generateBookingReviewsReport :
+            generatePaymentsReport
+          }
           disabled={generating || !dateRange.startDate || !dateRange.endDate}
           style={{
             padding: '16px 32px',
@@ -1371,7 +1602,12 @@ const AdminReports = () => {
                 <polyline points="17 8 12 3 7 8"/>
                 <line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
-              Generate {reportType === 'bookings' ? 'Bookings' : reportType === 'reviews' ? 'Reviews' : 'Payment & Transaction'} Report
+              Generate {
+                reportType === 'bookings' ? 'Bookings' : 
+                reportType === 'reviews' ? 'Reviews' : 
+                reportType === 'bookingReviews' ? 'Booking Reviews' : 
+                'Payment & Transaction'
+              } Report
             </>
           )}
         </button>

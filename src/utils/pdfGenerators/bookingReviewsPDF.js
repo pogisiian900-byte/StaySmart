@@ -1,19 +1,19 @@
 /**
- * PDF Generator for Reviews Reports
- * Handles admin reviews reports
+ * PDF Generator for Booking Reviews Reports
+ * Handles admin booking reviews reports from Wishlist collection
  */
 
 import jsPDF from 'jspdf'
 import { addLogo, addHeader, addFooter, formatDate, drawTableHeader, drawTableRow } from './commonPDF.js'
 
 /**
- * Generate Reviews PDF Report
- * @param {Array} data - Array of review objects
+ * Generate Booking Reviews PDF Report
+ * @param {Array} data - Array of booking review objects from Wishlist
  * @param {Object} options - Report options
  * @param {Object} options.dateRange - Date range object with startDate and endDate
  * @returns {Promise<jsPDF>} - jsPDF document instance
  */
-export const generateReviewsPDF = async (data, options = {}) => {
+export const generateBookingReviewsPDF = async (data, options = {}) => {
   const {
     dateRange = {}
   } = options
@@ -22,7 +22,7 @@ export const generateReviewsPDF = async (data, options = {}) => {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const margin = 15
-  const lineHeight = 9
+  const lineHeight = 10
   const tableStartY = 60
 
   // Color scheme
@@ -43,9 +43,9 @@ export const generateReviewsPDF = async (data, options = {}) => {
     day: 'numeric'
   })
 
-  const title = 'Admin Reviews Report'
+  const title = 'Admin Booking Reviews Report'
   const subtitle = `Generated on: ${generatedDate}`
-  const metadata = `Total Reviews: ${data.length}`
+  const metadata = `Total Booking Reviews: ${data.length}`
 
   addHeader(doc, {
     title,
@@ -57,8 +57,8 @@ export const generateReviewsPDF = async (data, options = {}) => {
   })
 
   // Table headers with improved column widths
-  const headers = ['Listing', 'Host', 'Reviewer', 'Rating', 'Comment', 'Date']
-  const colWidths = [48, 38, 32, 14, 52, 28]
+  const headers = ['Reservation ID', 'Guest', 'Host', 'Listing', 'Rating', 'Date']
+  const colWidths = [30, 35, 35, 40, 15, 25]
 
   // Draw table header
   drawTableHeader(doc, headers, colWidths, margin, tableStartY, margin, pageWidth, colors.primary)
@@ -78,7 +78,7 @@ export const generateReviewsPDF = async (data, options = {}) => {
 
   data.forEach((review, index) => {
     // Check for new page
-    if (yPos > pageHeight - 30) {
+    if (yPos > pageHeight - 50) {
       doc.addPage()
       yPos = margin + 15
 
@@ -87,34 +87,59 @@ export const generateReviewsPDF = async (data, options = {}) => {
       yPos += 6
     }
 
-    // Prepare row data with better truncation
-    const comment = truncateText(review.comment, 50)
-    // Ensure rating is a number and convert to stars (using ★ for better PDF compatibility)
+    // Prepare row data
+    const reservationId = truncateText(review.reservationId, 12)
+    const guestName = truncateText(review.guestName, 20)
+    const hostName = truncateText(review.hostName, 20)
+    const listingTitle = truncateText(review.listingTitle, 25)
+    
+    // Ensure rating is a number and format it
     const ratingValue = Number(review.rating) || 0
     const clampedRating = Math.min(5, Math.max(0, ratingValue))
-    const fullStars = Math.floor(clampedRating)
-    const hasHalfStar = clampedRating % 1 >= 0.5
-    // Use ★ (U+2605) instead of ⭐ for better PDF compatibility
-    const ratingStars = '★'.repeat(fullStars) + (hasHalfStar ? '½' : '') + '☆'.repeat(5 - fullStars - (hasHalfStar ? 1 : 0))
-    // Alternative: Show as "4.5/5" format for clarity
     const ratingDisplay = `${clampedRating.toFixed(1)}/5`
-    const formattedDate = formatDate(review.timestamp)
+    
+    const formattedDate = formatDate(review.createdAt || review.timestamp)
 
     const rowData = [
-      truncateText(review.listingTitle, 28),
-      truncateText(review.hostName, 22),
-      truncateText(review.userName, 18),
-      ratingDisplay, // Use numeric format instead of stars for better PDF compatibility
-      comment,
+      reservationId,
+      guestName,
+      hostName,
+      listingTitle,
+      ratingDisplay,
       formattedDate
     ]
 
     // Draw row with center-aligned rating
     drawTableRow(doc, rowData, colWidths, margin, yPos, margin, pageWidth, lineHeight, index, {
-      centerAlignColumns: [3] // Center align rating column
+      centerAlignColumns: [4] // Center align rating column
     })
 
-    yPos += lineHeight + 0.5
+    yPos += lineHeight + 1
+
+    // Add review details below the row if available
+    const hasDetails = review.serviceThoughts || review.improvements
+    if (hasDetails && yPos < pageHeight - 40) {
+      doc.setFontSize(7.5)
+      doc.setTextColor(80, 80, 80)
+      
+      let detailY = yPos
+      
+      if (review.serviceThoughts) {
+        const thoughts = truncateText(review.serviceThoughts, 80)
+        doc.text(`Thoughts: ${thoughts}`, margin + 2, detailY)
+        detailY += 4
+      }
+      
+      if (review.improvements) {
+        const improvements = truncateText(review.improvements, 80)
+        doc.text(`Suggestions: ${improvements}`, margin + 2, detailY)
+        detailY += 4
+      }
+      
+      yPos = detailY + 2
+      doc.setFontSize(8.5)
+      doc.setTextColor(colors.text[0], colors.text[1], colors.text[2])
+    }
   })
 
   // Calculate summary statistics
@@ -124,7 +149,7 @@ export const generateReviewsPDF = async (data, options = {}) => {
 
   // Add footer
   addFooter(doc, {
-    summary: `Average Rating: ${averageRating}/5`,
+    summary: `Average Rating: ${averageRating}/5 | Total Reviews: ${data.length}`,
     margin,
     primaryColor: colors.primary
   })
