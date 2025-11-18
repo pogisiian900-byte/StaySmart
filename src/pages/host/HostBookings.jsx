@@ -456,6 +456,172 @@ const HostBookings = () => {
           createdAt: serverTimestamp()
         })
         
+        // Send confirmation email to guest when refund is approved
+        if (reservationData.guestId) {
+          try {
+            // Fetch guest information to get email and name
+            const guestRef = doc(db, 'Users', reservationData.guestId)
+            const guestSnap = await getDoc(guestRef)
+            
+            if (guestSnap.exists()) {
+              const guestData = guestSnap.data()
+              // Try multiple possible email field names
+              const guestEmail = guestData.emailAddress || guestData.email || guestData.userEmail || ''
+              const guestName = `${guestData.firstName || ''} ${guestData.lastName || ''}`.trim() || 'Guest'
+              
+              console.log('Guest data retrieved for refund email:', {
+                guestId: reservationData.guestId,
+                emailAddress: guestData.emailAddress,
+                email: guestData.email,
+                guestEmail: guestEmail,
+                guestName: guestName
+              })
+              
+              if (guestEmail && guestEmail.trim() !== '') {
+                // Format dates for email
+                const checkInDate = new Date(reservationData.checkIn).toLocaleDateString('en-US', { 
+                  month: 'long', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                })
+                const checkOutDate = new Date(reservationData.checkOut).toLocaleDateString('en-US', { 
+                  month: 'long', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                })
+                
+                // Helper function to sanitize strings for EmailJS
+                const sanitizeString = (str) => {
+                  if (!str) return ''
+                  // Convert to string, remove null/undefined, trim whitespace
+                  return String(str).trim().replace(/\0/g, '') || ''
+                }
+                
+                // Helper function to format currency safely
+                const formatCurrency = (amount) => {
+                  if (!amount && amount !== 0) return 'PHP 0'
+                  const num = typeof amount === 'number' ? amount : parseFloat(amount) || 0
+                  return `PHP ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                }
+                
+                // Validate email before preparing template params
+                const sanitizedEmail = sanitizeString(guestEmail)
+                if (!sanitizedEmail || sanitizedEmail.trim() === '' || !sanitizedEmail.includes('@')) {
+                  console.error('❌ Email is empty or invalid! Cannot send email.')
+                  console.error('Guest data:', {
+                    guestId: reservationData.guestId,
+                    guestEmail: guestEmail,
+                    guestName: guestName,
+                    sanitizedEmail: sanitizedEmail
+                  })
+                  // Don't try to send if email is empty or invalid
+                  return
+                }
+                
+                // Prepare email template parameters
+                // Simplified to match the EmailJS template - only essential variables
+                // All values are sanitized to prevent "corrupted variables" error
+                // IMPORTANT: EmailJS template must have "To Email" field set to one of these variable names
+                const templateParams = {
+                  to_name: sanitizeString(guestName) || 'Guest',
+                  to_email: sanitizedEmail, // Primary email field
+                  reply_to: sanitizedEmail, // Some EmailJS templates use this for recipient
+                  email: sanitizedEmail, // Alternative name some templates use
+                  listing_title: sanitizeString(reservationData.listingTitle) || 'Your listing',
+                  check_in: sanitizeString(checkInDate),
+                  check_out: sanitizeString(checkOutDate),
+                  nights: String(reservationData.nights || 0),
+                  nights_plural: (reservationData.nights || 0) !== 1 ? 's' : '',
+                  reservation_id: sanitizeString(reservationId.substring(0, 8).toUpperCase()),
+                  total_amount: formatCurrency(reservationData.pricing?.total || 0),
+                  dashboard_url: sanitizeString(`${window.location.origin}/guest/${reservationData.guestId}`),
+                }
+                
+                // Remove any undefined or null values (EmailJS doesn't like them)
+                Object.keys(templateParams).forEach(key => {
+                  if (templateParams[key] === undefined || templateParams[key] === null) {
+                    templateParams[key] = ''
+                  }
+                })
+                
+                console.log('✅ Refund confirmation email template parameters prepared (sanitized):', {
+                  to_email: templateParams.to_email,
+                  to_name: templateParams.to_name,
+                  hasEmail: !!templateParams.to_email && templateParams.to_email.length > 0,
+                  emailValid: templateParams.to_email.includes('@'),
+                  total_amount: templateParams.total_amount,
+                  reservation_id: templateParams.reservation_id,
+                  allParams: Object.keys(templateParams),
+                })
+                
+                // Validate all parameters are strings (EmailJS requirement)
+                const invalidParams = Object.entries(templateParams).filter(([key, value]) => {
+                  return typeof value !== 'string' && typeof value !== 'number'
+                })
+                if (invalidParams.length > 0) {
+                  console.warn('⚠️ Non-string/number parameters found:', invalidParams)
+                }
+
+                // CRITICAL: Log the exact payload being sent to EmailJS
+                console.log('📧 Sending refund confirmation email to EmailJS:', {
+                  serviceId: EMAILJS_CONFIG.serviceId,
+                  templateId: EMAILJS_CONFIG.templateId,
+                  publicKey: EMAILJS_CONFIG.publicKey.substring(0, 10) + '...',
+                  templateParams: {
+                    ...templateParams,
+                    to_email: templateParams.to_email, // Explicitly show email
+                    emailLength: templateParams.to_email?.length || 0
+                  }
+                })
+
+                // Send email using EmailJS
+                try {
+                  const emailResponse = await emailjs.send(
+                    EMAILJS_CONFIG.serviceId,
+                    EMAILJS_CONFIG.templateId,
+                    templateParams,
+                    EMAILJS_CONFIG.publicKey
+                  )
+                  
+                  console.log('✅ Refund confirmation email sent successfully to:', guestEmail)
+                  console.log('EmailJS Response:', emailResponse)
+                } catch (emailSendError) {
+                  console.error('❌ Failed to send refund confirmation email:', emailSendError)
+                  console.error('Full error object:', JSON.stringify(emailSendError, null, 2))
+                  // Log detailed error for debugging
+                  if (emailSendError.text) {
+                    console.error('EmailJS Error Details:', emailSendError.text)
+                  }
+                  if (emailSendError.status) {
+                    console.error('EmailJS Error Status:', emailSendError.status)
+                  }
+                  // Log what was actually sent
+                  console.error('What was sent to EmailJS:', {
+                    to_email: templateParams.to_email,
+                    to_email_type: typeof templateParams.to_email,
+                    to_email_length: templateParams.to_email?.length,
+                    allParams: templateParams
+                  })
+                  // Still continue - don't block refund approval if email fails
+                }
+              } else {
+                console.error('❌ Guest email is empty or invalid:', {
+                  guestId: reservationData.guestId,
+                  emailAddress: guestData.emailAddress,
+                  email: guestData.email,
+                  allGuestData: guestData
+                })
+                console.warn('Guest email not found, skipping email notification')
+              }
+            } else {
+              console.warn('Guest document not found, skipping email notification')
+            }
+          } catch (emailError) {
+            console.error('Error sending refund confirmation email:', emailError)
+            // Don't throw - email failure shouldn't prevent refund approval
+          }
+        }
+        
         alert(`Refund approved successfully! ₱${refundAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} has been refunded to the guest's account balance.`)
       } else {
         // Cancel refund - restore original status
