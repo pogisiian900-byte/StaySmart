@@ -110,7 +110,18 @@ const AdminBookings = () => {
       // Status filter
       if (filterStatus !== 'all') {
         const bookingStatus = (booking.status || '').toLowerCase()
-        if (bookingStatus !== filterStatus.toLowerCase()) {
+        const filterStatusLower = filterStatus.toLowerCase()
+        
+        // Handle refund statuses with variations
+        if (filterStatusLower === 'refund_pending' || filterStatusLower === 'refund pending') {
+          if (bookingStatus !== 'refund_pending' && bookingStatus !== 'refund pending') {
+            return false
+          }
+        } else if (filterStatusLower === 'refunded' || filterStatusLower === 'refund completed') {
+          if (bookingStatus !== 'refunded' && bookingStatus !== 'refund completed') {
+            return false
+          }
+        } else if (bookingStatus !== filterStatusLower) {
           return false
         }
       }
@@ -148,11 +159,19 @@ const AdminBookings = () => {
     const pending = bookings.filter(b => (b.status || '').toLowerCase() === 'pending').length
     const declined = bookings.filter(b => (b.status || '').toLowerCase() === 'declined').length
     const cancelled = bookings.filter(b => (b.status || '').toLowerCase() === 'cancelled').length
+    const refundPending = bookings.filter(b => {
+      const status = (b.status || '').toLowerCase()
+      return status === 'refund_pending' || status === 'refund pending'
+    }).length
+    const refunded = bookings.filter(b => {
+      const status = (b.status || '').toLowerCase()
+      return status === 'refunded' || status === 'refund completed'
+    }).length
     const totalRevenue = bookings
       .filter(b => (b.status || '').toLowerCase() === 'confirmed')
       .reduce((sum, b) => sum + (b.pricing?.total || b.pricing?.grandTotal || 0), 0)
 
-    return { total, confirmed, pending, declined, cancelled, totalRevenue }
+    return { total, confirmed, pending, declined, cancelled, refundPending, refunded, totalRevenue }
   }, [bookings])
 
   const handleViewDetails = (booking) => {
@@ -577,6 +596,8 @@ const AdminBookings = () => {
     if (s === 'pending') return 'status-badge pending'
     if (s === 'declined') return 'status-badge declined'
     if (s === 'cancelled') return 'status-badge cancelled'
+    if (s === 'refund_pending' || s === 'refund pending') return 'status-badge refund-pending'
+    if (s === 'refunded' || s === 'refund completed') return 'status-badge refunded'
     return 'status-badge'
   }
 
@@ -678,7 +699,8 @@ const AdminBookings = () => {
                 borderRadius: '8px',
                 fontSize: '14px',
                 background: 'white',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                minWidth: '180px'
               }}
             >
               <option value="all">All Status</option>
@@ -686,6 +708,8 @@ const AdminBookings = () => {
               <option value="pending">Pending</option>
               <option value="declined">Declined</option>
               <option value="cancelled">Cancelled</option>
+              <option value="refund_pending">Refund Pending</option>
+              <option value="refunded">Refunded</option>
             </select>
           </div>
         </div>

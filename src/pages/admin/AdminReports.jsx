@@ -12,6 +12,7 @@ const AdminReports = () => {
   const [reportType, setReportType] = useState('bookings') // 'bookings', 'reviews', 'bookingReviews', or 'payments'
   const [selectedListing, setSelectedListing] = useState('all')
   const [selectedHost, setSelectedHost] = useState('all')
+  const [bookingStatusFilter, setBookingStatusFilter] = useState('all')
   const [dateRange, setDateRange] = useState({
     startDate: '',
     endDate: ''
@@ -241,6 +242,23 @@ const AdminReports = () => {
       filtered = filtered.filter(b => b.listingId === selectedListing)
     }
 
+    // Filter by booking status
+    if (bookingStatusFilter !== 'all') {
+      filtered = filtered.filter(b => {
+        const bookingStatus = (b.status || '').toLowerCase()
+        const filterStatusLower = bookingStatusFilter.toLowerCase()
+        
+        // Handle status variations
+        if (filterStatusLower === 'refund_pending' || filterStatusLower === 'refund pending') {
+          return bookingStatus === 'refund_pending' || bookingStatus === 'refund pending'
+        } else if (filterStatusLower === 'refunded' || filterStatusLower === 'refund completed') {
+          return bookingStatus === 'refunded' || bookingStatus === 'refund completed'
+        } else {
+          return bookingStatus === filterStatusLower
+        }
+      })
+    }
+
     // Filter by date range
     if (dateRange.startDate) {
       const startDate = new Date(dateRange.startDate)
@@ -262,7 +280,7 @@ const AdminReports = () => {
     }
 
     return filtered
-  }, [bookings, selectedListing, selectedHost, dateRange])
+  }, [bookings, selectedListing, selectedHost, bookingStatusFilter, dateRange])
 
   // Reset listing selection when host changes if current listing doesn't belong to new host
   useEffect(() => {
@@ -273,6 +291,13 @@ const AdminReports = () => {
       }
     }
   }, [selectedHost, selectedListing, listings])
+
+  // Reset booking status filter when switching away from bookings report
+  useEffect(() => {
+    if (reportType !== 'bookings') {
+      setBookingStatusFilter('all')
+    }
+  }, [reportType])
 
   // Format date helper for PDF display
   const formatDateForDisplay = (dateValue) => {
@@ -1005,6 +1030,50 @@ const AdminReports = () => {
               ))}
             </select>
           </div>
+
+          {/* Booking Status Filter - Only show for bookings report */}
+          {reportType === 'bookings' && (
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: 600,
+                color: '#374151',
+                marginBottom: '8px'
+              }}>
+                Booking Status
+              </label>
+              <select
+                value={bookingStatusFilter}
+                onChange={(e) => setBookingStatusFilter(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '10px',
+                  fontSize: '0.95rem',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#667eea'
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#e5e7eb'
+                }}
+              >
+                <option value="all">All Status</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="pending">Pending</option>
+                <option value="declined">Declined</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="completed">Completed</option>
+                <option value="refund_pending">Refund Pending</option>
+                <option value="refunded">Refunded</option>
+              </select>
+            </div>
+          )}
 
           {/* Date Range - Single Calendar Picker */}
           <div style={{ position: 'relative', gridColumn: 'span 2' }}>

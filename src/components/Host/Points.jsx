@@ -33,13 +33,13 @@ const Points = ({ hostId }) => {
   const [error, setError] = useState(null);
   const [historyError, setHistoryError] = useState(null); // Separate error for history
   
-  // Conversion states
-  const [conversionAmount, setConversionAmount] = useState("");
-  const [converting, setConverting] = useState(false);
-  const [conversionError, setConversionError] = useState(null);
-  const [conversionSuccess, setConversionSuccess] = useState(null);
-  const [showConversionDialog, setShowConversionDialog] = useState(false);
-  const conversionDialogRef = useRef(null);
+  // Redemption states (replacing conversion)
+  const [selectedCashAmount, setSelectedCashAmount] = useState(null);
+  const [redeemingCash, setRedeemingCash] = useState(false);
+  const [redemptionCashError, setRedemptionCashError] = useState(null);
+  const [redemptionCashSuccess, setRedemptionCashSuccess] = useState(null);
+  const [showCashRedemptionDialog, setShowCashRedemptionDialog] = useState(false);
+  const cashRedemptionDialogRef = useRef(null);
   
   // Reward redemption states
   const [selectedReward, setSelectedReward] = useState(null);
@@ -51,6 +51,13 @@ const Points = ({ hostId }) => {
   
   // Conversion rate: 50 points = 1 peso (1 point = 0.02 pesos)
   const CONVERSION_RATE = 0.02; // 50 points per 1 peso
+
+  // Pre-converted cash redemption options
+  const CASH_REDEMPTION_OPTIONS = [
+    { cashAmount: 10, pointsRequired: 500, label: '₱10' },
+    { cashAmount: 50, pointsRequired: 2500, label: '₱50' },
+    { cashAmount: 100, pointsRequired: 5000, label: '₱100' }
+  ];
 
   // Available rewards
   const AVAILABLE_REWARDS = [
@@ -106,10 +113,10 @@ const Points = ({ hostId }) => {
 
   // Register dialog polyfill
   useEffect(() => {
-    if (conversionDialogRef.current && !conversionDialogRef.current.showModal) {
-      dialogPolyfill.registerDialog(conversionDialogRef.current);
+    if (cashRedemptionDialogRef.current && !cashRedemptionDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(cashRedemptionDialogRef.current);
     }
-  }, [showConversionDialog]);
+  }, [showCashRedemptionDialog]);
 
   useEffect(() => {
     if (rewardDialogRef.current && !rewardDialogRef.current.showModal) {
@@ -220,78 +227,69 @@ const Points = ({ hostId }) => {
     return (points * CONVERSION_RATE).toFixed(2);
   };
 
-  // Show conversion confirmation dialog
-  const handleShowConversionDialog = () => {
+  // Show cash redemption confirmation dialog
+  const handleShowCashRedemptionDialog = (option) => {
     if (!hostId) {
-      setConversionError("User ID not found");
+      setRedemptionCashError("User ID not found");
       return;
     }
 
-    const pointsToConvert = parseFloat(conversionAmount);
-    
-    // Validation
-    if (!conversionAmount || isNaN(pointsToConvert) || pointsToConvert <= 0) {
-      setConversionError("Please enter a valid amount of points");
+    if (!option) {
+      setRedemptionCashError("Please select a cash amount");
       return;
     }
 
-    if (pointsToConvert > computedPoints.currentPoints) {
-      setConversionError(`You only have ${computedPoints.currentPoints.toFixed(2)} points available`);
+    // Check if user has enough points
+    if (computedPoints.currentPoints < option.pointsRequired) {
+      setRedemptionCashError(`You need ${option.pointsRequired.toLocaleString()} points to redeem ₱${option.cashAmount}. You currently have ${computedPoints.currentPoints.toLocaleString()} points.`);
       return;
     }
 
-    // Minimum conversion (optional - you can remove this)
-    if (pointsToConvert < 1) {
-      setConversionError("Minimum conversion is 1 point");
-      return;
-    }
-
-    setShowConversionDialog(true);
-    if (conversionDialogRef.current) {
+    setSelectedCashAmount(option);
+    setRedemptionCashError(null);
+    setShowCashRedemptionDialog(true);
+    if (cashRedemptionDialogRef.current) {
       try {
-        if (typeof conversionDialogRef.current.showModal === 'function') {
-          conversionDialogRef.current.showModal();
+        if (typeof cashRedemptionDialogRef.current.showModal === 'function') {
+          cashRedemptionDialogRef.current.showModal();
         } else {
-          dialogPolyfill.registerDialog(conversionDialogRef.current);
-          conversionDialogRef.current.showModal();
+          dialogPolyfill.registerDialog(cashRedemptionDialogRef.current);
+          cashRedemptionDialogRef.current.showModal();
         }
       } catch (err) {
-        console.error('Error showing conversion dialog:', err);
-        conversionDialogRef.current.style.display = 'block';
+        console.error('Error showing cash redemption dialog:', err);
+        cashRedemptionDialogRef.current.style.display = 'block';
       }
     }
   };
 
-  // Close conversion dialog
-  const handleCloseConversionDialog = () => {
-    setShowConversionDialog(false);
-    conversionDialogRef.current?.close();
+  // Close cash redemption dialog
+  const handleCloseCashRedemptionDialog = () => {
+    setShowCashRedemptionDialog(false);
+    setSelectedCashAmount(null);
+    cashRedemptionDialogRef.current?.close();
   };
 
-  // Handle points to cash conversion (after confirmation)
-  const handleConvertPoints = async () => {
-    handleCloseConversionDialog();
+  // Handle cash redemption (after confirmation)
+  const handleRedeemCash = async () => {
+    if (!selectedCashAmount) {
+      setRedemptionCashError("No cash amount selected");
+      return;
+    }
+
+    handleCloseCashRedemptionDialog();
     
-    setConverting(true);
-    setConversionError(null);
-    setConversionSuccess(null);
+    setRedeemingCash(true);
+    setRedemptionCashError(null);
+    setRedemptionCashSuccess(null);
 
     try {
-      const pointsToConvert = parseFloat(conversionAmount);
-      
-      // Validate conversion amount
-      if (!conversionAmount || isNaN(pointsToConvert) || pointsToConvert <= 0) {
-        setConversionError("Please enter a valid amount of points");
-        setConverting(false);
-        return;
-      }
-
       const userRef = doc(db, "Users", hostId);
       const userSnap = await getDoc(userRef);
 
       if (!userSnap.exists()) {
-        setConversionError("User account not found");
-        setConverting(false);
+        setRedemptionCashError("User account not found");
+        setRedeemingCash(false);
         return;
       }
 
@@ -300,16 +298,15 @@ const Points = ({ hostId }) => {
       const currentBalance = userData.balance || userData.walletBalance || 0;
 
       // Double-check points availability
-      if (pointsToConvert > currentPoints) {
-        setConversionError(`Insufficient points. You have ${currentPoints.toFixed(2)} points available`);
-        setConverting(false);
+      if (currentPoints < selectedCashAmount.pointsRequired) {
+        setRedemptionCashError(`Insufficient points. You have ${currentPoints.toLocaleString()} points, but need ${selectedCashAmount.pointsRequired.toLocaleString()} points.`);
+        setRedeemingCash(false);
         return;
       }
 
-      // Calculate cash amount
-      const cashAmount = pointsToConvert * CONVERSION_RATE;
-      const newPoints = currentPoints - pointsToConvert;
-      const newBalance = currentBalance + cashAmount;
+      // Calculate new balances
+      const newPoints = currentPoints - selectedCashAmount.pointsRequired;
+      const newBalance = currentBalance + selectedCashAmount.cashAmount;
 
       // Update user document
       await updateDoc(userRef, {
@@ -322,12 +319,12 @@ const Points = ({ hostId }) => {
       const pointsTransaction = {
         userId: hostId,
         hostId: hostId,
-        points: -pointsToConvert,
-        title: "Points to Cash Conversion",
-        reason: `Converted ${pointsToConvert.toFixed(2)} points to ₱${cashAmount.toFixed(2)}`,
-        type: "points_conversion",
-        cashAmount: cashAmount,
-        conversionRate: CONVERSION_RATE,
+        points: -selectedCashAmount.pointsRequired,
+        title: "Cash Redemption",
+        reason: `Redeemed ₱${selectedCashAmount.cashAmount} for ${selectedCashAmount.pointsRequired.toLocaleString()} points`,
+        type: "cash_redemption",
+        cashAmount: selectedCashAmount.cashAmount,
+        pointsUsed: selectedCashAmount.pointsRequired,
         createdAt: serverTimestamp(),
       };
       await addDoc(collection(db, "PointsTransactions"), pointsTransaction);
@@ -336,12 +333,12 @@ const Points = ({ hostId }) => {
       const balanceTransaction = {
         userId: hostId,
         hostId: hostId,
-        amount: cashAmount,
-        type: "points_conversion",
-        description: `Converted ${pointsToConvert.toFixed(2)} points to cash`,
+        amount: selectedCashAmount.cashAmount,
+        type: "cash_redemption",
+        description: `Redeemed ₱${selectedCashAmount.cashAmount} from points`,
         balanceBefore: currentBalance,
         balanceAfter: newBalance,
-        pointsConverted: pointsToConvert,
+        pointsRedeemed: selectedCashAmount.pointsRequired,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
@@ -349,31 +346,30 @@ const Points = ({ hostId }) => {
 
       // Create notification
       await addDoc(collection(db, "Notifications"), {
-        type: "points_converted",
+        type: "cash_redeemed",
         recipientId: hostId,
         hostId: hostId,
-        title: "Points Converted",
-        body: `Successfully converted ${pointsToConvert.toFixed(2)} points to ₱${cashAmount.toFixed(2)}`,
-        message: `Successfully converted ${pointsToConvert.toFixed(2)} points to ₱${cashAmount.toFixed(2)}`,
+        title: "Cash Redeemed",
+        body: `Successfully redeemed ₱${selectedCashAmount.cashAmount} from ${selectedCashAmount.pointsRequired.toLocaleString()} points`,
+        message: `Successfully redeemed ₱${selectedCashAmount.cashAmount} from ${selectedCashAmount.pointsRequired.toLocaleString()} points`,
         read: false,
         createdAt: serverTimestamp(),
       });
 
-      setConversionSuccess(
-        `Successfully converted ${pointsToConvert.toFixed(2)} points to ₱${cashAmount.toFixed(2)}`
+      setRedemptionCashSuccess(
+        `Successfully redeemed ₱${selectedCashAmount.cashAmount}! Cash has been added to your account balance.`
       );
-      setConversionAmount("");
       
       // Clear success message after 5 seconds
       setTimeout(() => {
-        setConversionSuccess(null);
+        setRedemptionCashSuccess(null);
       }, 5000);
 
     } catch (err) {
-      console.error("Error converting points:", err);
-      setConversionError("Failed to convert points. Please try again later.");
+      console.error("Error redeeming cash:", err);
+      setRedemptionCashError("Failed to redeem cash. Please try again later.");
     } finally {
-      setConverting(false);
+      setRedeemingCash(false);
     }
   };
 
@@ -632,8 +628,8 @@ const Points = ({ hostId }) => {
         </div>
       </section>
 
-      {/* Points to Cash Conversion Section */}
-      <section className="host-points-conversion" style={{
+      {/* Cash Redemption Section */}
+      <section className="host-points-redemption" style={{
         background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
         borderRadius: '20px',
         padding: '32px',
@@ -683,39 +679,39 @@ const Points = ({ hostId }) => {
                 color: '#1f2937',
                 letterSpacing: '-0.02em'
               }}>
-                Convert Points to Cash
+                Redeem Points for Cash
               </h2>
               <p style={{ 
                 margin: '4px 0 0', 
                 color: '#6b7280', 
                 fontSize: '0.9rem' 
               }}>
-                Instant conversion • 50 points = ₱1
+                Instant redemption • 50 points = ₱1
               </p>
             </div>
           </div>
 
-          {conversionSuccess && (
+          {redemptionCashSuccess && (
             <div style={{
-              background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.1), rgba(49, 50, 111, 0.05))',
-              border: '2px solid rgba(49, 50, 111, 0.3)',
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05))',
+              border: '2px solid rgba(16, 185, 129, 0.3)',
               borderRadius: '12px',
               padding: '16px',
               marginTop: '20px',
               marginBottom: '20px',
-              color: '#31326f',
+              color: '#059669',
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
               fontWeight: '500',
-              boxShadow: '0 2px 8px rgba(49, 50, 111, 0.1)'
+              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.1)'
             }}>
               <span style={{ fontSize: '20px' }}>✓</span>
-              <span>{conversionSuccess}</span>
+              <span>{redemptionCashSuccess}</span>
             </div>
           )}
 
-          {conversionError && (
+          {redemptionCashError && (
             <div style={{
               background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05))',
               border: '2px solid rgba(239, 68, 68, 0.3)',
@@ -731,7 +727,7 @@ const Points = ({ hostId }) => {
               boxShadow: '0 2px 8px rgba(239, 68, 68, 0.1)'
             }}>
               <span style={{ fontSize: '20px' }}>⚠</span>
-              <span>{conversionError}</span>
+              <span>{redemptionCashError}</span>
             </div>
           )}
 
@@ -741,194 +737,82 @@ const Points = ({ hostId }) => {
             gap: '20px',
             marginTop: '24px'
           }}>
-            <div style={{
-              background: 'white',
-              borderRadius: '16px',
-              padding: '20px',
-              border: '2px solid rgba(49, 50, 111, 0.1)',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 2px 8px rgba(49, 50, 111, 0.05)'
-            }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '12px',
-                fontWeight: '600',
-                color: '#374151',
-                fontSize: '0.9rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                Points to Convert
-              </label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="number"
-                  min="1"
-                  max={computedPoints.currentPoints}
-                  step="0.01"
-                  value={conversionAmount}
-                  onChange={(e) => {
-                    setConversionAmount(e.target.value);
-                    setConversionError(null);
-                    setConversionSuccess(null);
-                  }}
-                  placeholder="0.00"
-                  disabled={converting || loadingAccount}
+            {CASH_REDEMPTION_OPTIONS.map((option) => {
+              const canAfford = computedPoints.currentPoints >= option.pointsRequired;
+              return (
+                <button
+                  key={option.cashAmount}
+                  type="button"
+                  onClick={() => handleShowCashRedemptionDialog(option)}
+                  disabled={!canAfford || redeemingCash || loadingAccount}
                   style={{
-                    width: '100%',
-                    padding: '16px 16px 16px 48px',
-                    borderRadius: '12px',
-                    border: '2px solid rgba(49, 50, 111, 0.15)',
-                    fontSize: '1.25rem',
-                    fontWeight: '600',
-                    outline: 'none',
-                    transition: 'all 0.2s',
-                    background: '#f9fafb',
-                    color: '#1f2937'
+                    background: canAfford && !redeemingCash && !loadingAccount
+                      ? 'linear-gradient(135deg, #ffffff, #f8fafc)'
+                      : 'linear-gradient(135deg, #f3f4f6, #e5e7eb)',
+                    borderRadius: '16px',
+                    padding: '24px',
+                    border: `2px solid ${canAfford && !redeemingCash && !loadingAccount ? 'rgba(49, 50, 111, 0.2)' : 'rgba(209, 213, 219, 0.5)'}`,
+                    transition: 'all 0.3s ease',
+                    boxShadow: canAfford && !redeemingCash && !loadingAccount
+                      ? '0 4px 12px rgba(49, 50, 111, 0.15)'
+                      : 'none',
+                    cursor: canAfford && !redeemingCash && !loadingAccount ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    textAlign: 'center',
+                    position: 'relative',
+                    overflow: 'hidden'
                   }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#31326f';
-                    e.target.style.background = 'white';
-                    e.target.style.boxShadow = '0 0 0 4px rgba(49, 50, 111, 0.1)';
+                  onMouseEnter={(e) => {
+                    if (canAfford && !redeemingCash && !loadingAccount) {
+                      e.currentTarget.style.transform = 'translateY(-4px)';
+                      e.currentTarget.style.boxShadow = '0 8px 20px rgba(49, 50, 111, 0.25)';
+                      e.currentTarget.style.borderColor = 'rgba(49, 50, 111, 0.4)';
+                    }
                   }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = 'rgba(49, 50, 111, 0.15)';
-                    e.target.style.background = '#f9fafb';
-                    e.target.style.boxShadow = 'none';
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    if (canAfford && !redeemingCash && !loadingAccount) {
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(49, 50, 111, 0.15)';
+                      e.currentTarget.style.borderColor = 'rgba(49, 50, 111, 0.2)';
+                    }
                   }}
-                />
-                <span style={{
-                  position: 'absolute',
-                  left: '16px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  fontSize: '1.25rem',
-                  fontWeight: '600',
-                  color: '#6b7280'
-                }}>⭐</span>
-              </div>
-              <p style={{
-                marginTop: '8px',
-                fontSize: '0.8rem',
-                color: '#9ca3af',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}>
-                <span>Available:</span>
-                <span style={{ fontWeight: '600', color: '#31326f' }}>
-                  {loadingAccount ? "—" : computedPoints.currentPoints.toFixed(2)} pts
-                </span>
-              </p>
-            </div>
-
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.05), rgba(49, 50, 111, 0.02))',
-              borderRadius: '16px',
-              padding: '20px',
-              border: '2px solid rgba(49, 50, 111, 0.1)',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center'
-            }}>
-              <label style={{
-                display: 'block',
-                marginBottom: '12px',
-                fontWeight: '600',
-                color: '#374151',
-                fontSize: '0.9rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                Cash Value
-              </label>
-              <div style={{
-                fontSize: '1.75rem',
-                fontWeight: '700',
-                color: '#31326f',
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: '4px'
-              }}>
-                <span style={{ fontSize: '1.25rem', color: '#6b7280' }}>₱</span>
-                <span>
-                  {conversionAmount && !isNaN(parseFloat(conversionAmount)) 
-                    ? parseFloat(calculateCashValue(parseFloat(conversionAmount))).toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                      })
-                    : '0.00'}
-                </span>
-              </div>
-            </div>
-
-            <div style={{
-              display: 'flex',
-              alignItems: 'flex-end'
-            }}>
-              <button
-                type="button"
-                onClick={handleShowConversionDialog}
-                disabled={converting || loadingAccount || !conversionAmount || parseFloat(conversionAmount) <= 0}
-                style={{
-                  width: '100%',
-                  padding: '16px 24px',
-                  borderRadius: '12px',
-                  background: converting || loadingAccount || !conversionAmount || parseFloat(conversionAmount) <= 0
-                    ? 'linear-gradient(135deg, #d1d5db, #e5e7eb)'
-                    : 'linear-gradient(135deg, #31326f, #4a4d8c)',
-                  color: 'white',
-                  border: 'none',
-                  fontSize: '1rem',
-                  fontWeight: '700',
-                  cursor: converting || loadingAccount || !conversionAmount || parseFloat(conversionAmount) <= 0
-                    ? 'not-allowed'
-                    : 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: converting || loadingAccount || !conversionAmount || parseFloat(conversionAmount) <= 0
-                    ? 'none'
-                    : '0 4px 16px rgba(49, 50, 111, 0.3)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px'
-                }}
-                onMouseEnter={(e) => {
-                  if (!converting && !loadingAccount && conversionAmount && parseFloat(conversionAmount) > 0) {
-                    e.target.style.transform = 'translateY(-2px)';
-                    e.target.style.boxShadow = '0 6px 20px rgba(49, 50, 111, 0.4)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = 'translateY(0)';
-                  if (!converting && !loadingAccount && conversionAmount && parseFloat(conversionAmount) > 0) {
-                    e.target.style.boxShadow = '0 4px 16px rgba(49, 50, 111, 0.3)';
-                  }
-                }}
-              >
-                {converting ? (
-                  <>
-                    <span style={{ 
-                      width: '16px', 
-                      height: '16px', 
-                      border: '2px solid white',
-                      borderTop: '2px solid transparent',
-                      borderRadius: '50%',
-                      animation: 'spin 0.8s linear infinite',
-                      display: 'inline-block'
-                    }} />
-                    Converting...
-                  </>
-                ) : (
-                  <>
-                    <span>💸</span>
-                    Convert Now
-                  </>
-                )}
-              </button>
-            </div>
+                >
+                  <div style={{
+                    fontSize: '2.5rem',
+                    fontWeight: '700',
+                    color: canAfford && !redeemingCash && !loadingAccount ? '#31326f' : '#9ca3af',
+                    marginBottom: '12px'
+                  }}>
+                    {option.label}
+                  </div>
+                  <div style={{
+                    fontSize: '0.9rem',
+                    color: '#6b7280',
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <span>⭐</span>
+                    <span>{option.pointsRequired.toLocaleString()} points</span>
+                  </div>
+                  {!canAfford && (
+                    <div style={{
+                      fontSize: '0.75rem',
+                      color: '#ef4444',
+                      fontWeight: '600',
+                      padding: '4px 12px',
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      borderRadius: '8px'
+                    }}>
+                      Insufficient Points
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           <div style={{
@@ -945,7 +829,8 @@ const Points = ({ hostId }) => {
           }}>
             <span style={{ fontSize: '18px' }}>ℹ️</span>
             <span>
-              <strong style={{ color: '#374151' }}>Instant conversion:</strong> Cash is added to your account balance immediately. No waiting time.
+              <strong style={{ color: '#374151' }}>Available points:</strong> {loadingAccount ? "—" : computedPoints.currentPoints.toLocaleString()} pts • 
+              <strong style={{ color: '#374151', marginLeft: '8px' }}>Instant redemption:</strong> Cash is added to your account balance immediately.
             </span>
           </div>
         </div>
@@ -1522,11 +1407,11 @@ const Points = ({ hostId }) => {
         ) : null}
       </section>
 
-      {/* Conversion Confirmation Dialog */}
-      {showConversionDialog && (
+      {/* Cash Redemption Confirmation Dialog */}
+      {showCashRedemptionDialog && selectedCashAmount && (
         <dialog 
-          ref={conversionDialogRef} 
-          className="conversion-confirmation-dialog" 
+          ref={cashRedemptionDialogRef} 
+          className="cash-redemption-confirmation-dialog" 
           style={{ 
             maxWidth: '500px', 
             width: '90%', 
@@ -1537,7 +1422,7 @@ const Points = ({ hostId }) => {
           }}
         >
           <style>
-            {`.conversion-confirmation-dialog::backdrop {
+            {`.cash-redemption-confirmation-dialog::backdrop {
               background: rgba(0, 0, 0, 0.5);
               backdrop-filter: blur(4px);
             }`}
@@ -1545,7 +1430,7 @@ const Points = ({ hostId }) => {
           <div style={{ padding: '30px', textAlign: 'center' }}>
             <div style={{ fontSize: '48px', marginBottom: '20px' }}>💰</div>
             <h2 style={{ margin: '0 0 15px 0', fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
-              Confirm Points Conversion
+              Confirm Cash Redemption
             </h2>
             <div style={{
               background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.05), rgba(49, 50, 111, 0.02))',
@@ -1556,13 +1441,13 @@ const Points = ({ hostId }) => {
             }}>
               <div style={{ marginBottom: '16px' }}>
                 <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
-                  Points to Convert
+                  Cash Amount
                 </p>
-                <p style={{ margin: 0, fontSize: '28px', fontWeight: '700', color: '#31326f' }}>
-                  {parseFloat(conversionAmount || 0).toLocaleString('en-US', {
+                <p style={{ margin: 0, fontSize: '32px', fontWeight: '700', color: '#10b981' }}>
+                  ₱{selectedCashAmount.cashAmount.toLocaleString('en-US', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
-                  })} <span style={{ fontSize: '18px', color: '#6b7280' }}>pts</span>
+                  })}
                 </p>
               </div>
               <div style={{
@@ -1573,22 +1458,34 @@ const Points = ({ hostId }) => {
               }} />
               <div>
                 <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
-                  Cash Value
+                  Points Required
                 </p>
-                <p style={{ margin: 0, fontSize: '32px', fontWeight: '700', color: '#10b981' }}>
-                  ₱{parseFloat(calculateCashValue(parseFloat(conversionAmount || 0))).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                  })}
+                <p style={{ margin: 0, fontSize: '28px', fontWeight: '700', color: '#31326f', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <span>⭐</span>
+                  {selectedCashAmount.pointsRequired.toLocaleString()} <span style={{ fontSize: '18px', color: '#6b7280' }}>pts</span>
+                </p>
+              </div>
+              <div style={{
+                width: '100%',
+                height: '1px',
+                background: 'rgba(49, 50, 111, 0.2)',
+                margin: '16px 0'
+              }} />
+              <div>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Remaining Points
+                </p>
+                <p style={{ margin: 0, fontSize: '24px', fontWeight: '700', color: '#31326f' }}>
+                  {(computedPoints.currentPoints - selectedCashAmount.pointsRequired).toLocaleString()} <span style={{ fontSize: '16px', color: '#6b7280' }}>pts</span>
                 </p>
               </div>
             </div>
             <p style={{ margin: '0 0 30px 0', fontSize: '16px', color: '#6b7280', lineHeight: '1.5' }}>
-              Are you sure you want to convert these points to cash? This action cannot be undone.
+              Are you sure you want to redeem ₱{selectedCashAmount.cashAmount}? {selectedCashAmount.pointsRequired.toLocaleString()} points will be deducted from your account.
             </p>
             <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
               <button
-                onClick={handleCloseConversionDialog}
+                onClick={handleCloseCashRedemptionDialog}
                 style={{
                   padding: '12px 24px',
                   fontSize: '16px',
@@ -1612,7 +1509,7 @@ const Points = ({ hostId }) => {
                 Cancel
               </button>
               <button
-                onClick={handleConvertPoints}
+                onClick={handleRedeemCash}
                 style={{
                   padding: '12px 24px',
                   fontSize: '16px',
@@ -1636,7 +1533,7 @@ const Points = ({ hostId }) => {
                   e.target.style.boxShadow = '0 4px 12px rgba(49, 50, 111, 0.3)';
                 }}
               >
-                Confirm Conversion
+                Confirm Redemption
               </button>
             </div>
           </div>

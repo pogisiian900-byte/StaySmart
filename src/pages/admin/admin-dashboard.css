@@ -665,6 +665,16 @@
   color: #374151;
 }
 
+.status-badge.refund-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.refunded {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
 /* Booking Management Table Styles */
 .admin-section-card table {
   font-size: 14px;

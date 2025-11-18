@@ -100,8 +100,8 @@ const HostDashboard = () => {
         </button>
       </div>
 
-      {/* --- Conditional Booking Display --- */}
-      {showBooking === "today" ? <TodaysBooking hostId={hostId} /> : <UpcomingBookings hostId={hostId} />}
+      {/* --- Analytics Section --- */}
+      <HostAnalytics hostId={hostId} reservations={reservations} />
 
       <hr className="divider" />
 
@@ -128,8 +128,8 @@ const HostDashboard = () => {
 
       <hr className="divider" />
 
-      {/* --- Analytics Section --- */}
-      <HostAnalytics hostId={hostId} reservations={reservations} />
+      {/* --- Conditional Booking Display --- */}
+      {showBooking === "today" ? <TodaysBooking hostId={hostId} /> : <UpcomingBookings hostId={hostId} />}
     </div>
   )
 }
