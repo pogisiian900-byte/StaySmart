@@ -6,6 +6,7 @@ import money from '/static/Money.png'
 import calendar from '/static/Calendar.png'
 import UpcomingBookings from './UpcomingBookings'
 import TodaysBooking from './TodaysBooking'
+import HostAnalytics from './HostAnalytics'
 
 
 const HostDashboard = () => {
@@ -124,6 +125,11 @@ const HostDashboard = () => {
           <img src={calendar} alt="calendar" />
         </div>
       </div>
+
+      <hr className="divider" />
+
+      {/* --- Analytics Section --- */}
+      <HostAnalytics hostId={hostId} reservations={reservations} />
     </div>
   )
 }

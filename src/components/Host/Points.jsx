@@ -11,6 +11,7 @@ import {
   addDoc,
   serverTimestamp,
   getDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "../../config/firebase";
 import 'dialog-polyfill/dist/dialog-polyfill.css';
@@ -40,8 +41,68 @@ const Points = ({ hostId }) => {
   const [showConversionDialog, setShowConversionDialog] = useState(false);
   const conversionDialogRef = useRef(null);
   
+  // Reward redemption states
+  const [selectedReward, setSelectedReward] = useState(null);
+  const [redeeming, setRedeeming] = useState(false);
+  const [redemptionError, setRedemptionError] = useState(null);
+  const [redemptionSuccess, setRedemptionSuccess] = useState(null);
+  const [showRewardDialog, setShowRewardDialog] = useState(false);
+  const rewardDialogRef = useRef(null);
+  
   // Conversion rate: 50 points = 1 peso (1 point = 0.02 pesos)
   const CONVERSION_RATE = 0.02; // 50 points per 1 peso
+
+  // Available rewards
+  const AVAILABLE_REWARDS = [
+    {
+      id: 'featured_listing_7d',
+      name: 'Featured Listing (7 Days)',
+      description: 'Boost your listing visibility for 7 days. Your listing will appear at the top of search results.',
+      cost: 500,
+      icon: '⭐',
+      category: 'promotion'
+    },
+    {
+      id: 'featured_listing_30d',
+      name: 'Featured Listing (30 Days)',
+      description: 'Boost your listing visibility for 30 days. Maximum exposure for your property.',
+      cost: 2000,
+      icon: '🌟',
+      category: 'promotion'
+    },
+    {
+      id: 'premium_badge',
+      name: 'Premium Host Badge',
+      description: 'Display a premium badge on your profile and listings for 90 days. Increases trust and bookings.',
+      cost: 1500,
+      icon: '👑',
+      category: 'badge'
+    },
+    {
+      id: 'service_fee_discount_10',
+      name: '10% Service Fee Discount',
+      description: 'Get 10% off service fees on your next 5 bookings. Valid for 60 days.',
+      cost: 1000,
+      icon: '💸',
+      category: 'discount'
+    },
+    {
+      id: 'priority_support',
+      name: 'Priority Support Access',
+      description: 'Get priority customer support for 30 days. Faster response times and dedicated assistance.',
+      cost: 800,
+      icon: '🎯',
+      category: 'support'
+    },
+    {
+      id: 'analytics_boost',
+      name: 'Advanced Analytics Access',
+      description: 'Unlock advanced analytics and insights for your listings for 90 days.',
+      cost: 1200,
+      icon: '📊',
+      category: 'feature'
+    }
+  ];
 
   // Register dialog polyfill
   useEffect(() => {
@@ -49,6 +110,12 @@ const Points = ({ hostId }) => {
       dialogPolyfill.registerDialog(conversionDialogRef.current);
     }
   }, [showConversionDialog]);
+
+  useEffect(() => {
+    if (rewardDialogRef.current && !rewardDialogRef.current.showModal) {
+      dialogPolyfill.registerDialog(rewardDialogRef.current);
+    }
+  }, [showRewardDialog]);
 
   useEffect(() => {
     if (!hostId) return;
@@ -307,6 +374,180 @@ const Points = ({ hostId }) => {
       setConversionError("Failed to convert points. Please try again later.");
     } finally {
       setConverting(false);
+    }
+  };
+
+  // Show reward selection dialog
+  const handleShowRewardDialog = (reward) => {
+    if (!hostId) {
+      setRedemptionError("User ID not found");
+      return;
+    }
+
+    if (!reward) {
+      setRedemptionError("Please select a reward");
+      return;
+    }
+
+    // Check if user has enough points
+    if (computedPoints.currentPoints < reward.cost) {
+      setRedemptionError(`You need ${reward.cost} points to redeem this reward. You currently have ${computedPoints.currentPoints.toFixed(2)} points.`);
+      return;
+    }
+
+    setSelectedReward(reward);
+    setRedemptionError(null);
+    setShowRewardDialog(true);
+    if (rewardDialogRef.current) {
+      try {
+        if (typeof rewardDialogRef.current.showModal === 'function') {
+          rewardDialogRef.current.showModal();
+        } else {
+          dialogPolyfill.registerDialog(rewardDialogRef.current);
+          rewardDialogRef.current.showModal();
+        }
+      } catch (err) {
+        console.error('Error showing reward dialog:', err);
+        rewardDialogRef.current.style.display = 'block';
+      }
+    }
+  };
+
+  // Close reward dialog
+  const handleCloseRewardDialog = () => {
+    setShowRewardDialog(false);
+    setSelectedReward(null);
+    rewardDialogRef.current?.close();
+  };
+
+  // Handle reward redemption (after confirmation)
+  const handleRedeemReward = async () => {
+    if (!selectedReward) {
+      setRedemptionError("No reward selected");
+      return;
+    }
+
+    handleCloseRewardDialog();
+    
+    setRedeeming(true);
+    setRedemptionError(null);
+    setRedemptionSuccess(null);
+
+    try {
+      const userRef = doc(db, "Users", hostId);
+      const userSnap = await getDoc(userRef);
+
+      if (!userSnap.exists()) {
+        setRedemptionError("User account not found");
+        setRedeeming(false);
+        return;
+      }
+
+      const userData = userSnap.data();
+      const currentPoints = userData.loyaltyPoints || userData.points || 0;
+
+      // Double-check points availability
+      if (currentPoints < selectedReward.cost) {
+        setRedemptionError(`Insufficient points. You have ${currentPoints.toFixed(2)} points, but need ${selectedReward.cost} points.`);
+        setRedeeming(false);
+        return;
+      }
+
+      // Calculate new points balance
+      const newPoints = currentPoints - selectedReward.cost;
+
+      // Update user document
+      await updateDoc(userRef, {
+        loyaltyPoints: newPoints,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Calculate expiration date based on reward type
+      const expirationDate = new Date();
+      let expiresAt = null;
+      
+      if (selectedReward.id.includes('7d')) {
+        expirationDate.setDate(expirationDate.getDate() + 7);
+        expiresAt = Timestamp.fromDate(expirationDate);
+      } else if (selectedReward.id.includes('30d')) {
+        expirationDate.setDate(expirationDate.getDate() + 30);
+        expiresAt = Timestamp.fromDate(expirationDate);
+      } else if (selectedReward.id.includes('90d') || selectedReward.id === 'premium_badge' || selectedReward.id === 'analytics_boost') {
+        expirationDate.setDate(expirationDate.getDate() + 90);
+        expiresAt = Timestamp.fromDate(expirationDate);
+      } else if (selectedReward.id === 'service_fee_discount_10') {
+        expirationDate.setDate(expirationDate.getDate() + 60);
+        expiresAt = Timestamp.fromDate(expirationDate);
+      } else if (selectedReward.id === 'priority_support') {
+        expirationDate.setDate(expirationDate.getDate() + 30);
+        expiresAt = Timestamp.fromDate(expirationDate);
+      }
+
+      // Create redeemed reward record
+      const redeemedReward = {
+        userId: hostId,
+        hostId: hostId,
+        rewardId: selectedReward.id,
+        rewardName: selectedReward.name,
+        rewardDescription: selectedReward.description,
+        rewardCategory: selectedReward.category,
+        rewardIcon: selectedReward.icon,
+        pointsCost: selectedReward.cost,
+        status: 'active',
+        redeemedAt: serverTimestamp(),
+        expiresAt: expiresAt,
+        createdAt: serverTimestamp(),
+      };
+      await addDoc(collection(db, "RedeemedRewards"), redeemedReward);
+
+      // Create points transaction (deduction)
+      const pointsTransaction = {
+        userId: hostId,
+        hostId: hostId,
+        points: -selectedReward.cost,
+        title: "Reward Redemption",
+        reason: `Redeemed ${selectedReward.name} for ${selectedReward.cost} points`,
+        type: "reward_redemption",
+        rewardId: selectedReward.id,
+        rewardName: selectedReward.name,
+        createdAt: serverTimestamp(),
+      };
+      await addDoc(collection(db, "PointsTransactions"), pointsTransaction);
+
+      // Create notification
+      let expirationDateStr = null;
+      if (expiresAt) {
+        if (expiresAt.toDate) {
+          expirationDateStr = expiresAt.toDate().toLocaleDateString();
+        } else if (expiresAt.toMillis) {
+          expirationDateStr = new Date(expiresAt.toMillis()).toLocaleDateString();
+        }
+      }
+      await addDoc(collection(db, "Notifications"), {
+        type: "reward_redeemed",
+        recipientId: hostId,
+        hostId: hostId,
+        title: "Reward Redeemed",
+        body: `Successfully redeemed ${selectedReward.name} for ${selectedReward.cost} points`,
+        message: `Your reward "${selectedReward.name}" is now active${expirationDateStr ? ` and will expire on ${expirationDateStr}` : ''}.`,
+        read: false,
+        createdAt: serverTimestamp(),
+      });
+
+      setRedemptionSuccess(
+        `Successfully redeemed ${selectedReward.name}! Your reward is now active.`
+      );
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setRedemptionSuccess(null);
+      }, 5000);
+
+    } catch (err) {
+      console.error("Error redeeming reward:", err);
+      setRedemptionError("Failed to redeem reward. Please try again later.");
+    } finally {
+      setRedeeming(false);
     }
   };
 
@@ -866,15 +1107,24 @@ const Points = ({ hostId }) => {
           border: '1px solid rgba(49, 50, 111, 0.1)',
           position: 'relative',
           overflow: 'hidden',
-          opacity: 0.7
-        }}>
+          transition: 'all 0.3s ease'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-4px)';
+          e.currentTarget.style.boxShadow = '0 8px 30px rgba(49, 50, 111, 0.12), 0 0 0 1px rgba(49, 50, 111, 0.1)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 4px 20px rgba(49, 50, 111, 0.08), 0 0 0 1px rgba(49, 50, 111, 0.05)';
+        }}
+        >
           <div style={{
             position: 'absolute',
             top: '-30px',
             right: '-30px',
             width: '120px',
             height: '120px',
-            background: 'linear-gradient(135deg, rgba(49, 50, 111, 0.1), rgba(49, 50, 111, 0.05))',
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.05))',
             borderRadius: '50%',
             zIndex: 0
           }} />
@@ -910,44 +1160,319 @@ const Points = ({ hostId }) => {
             }}>
               Unlock exclusive benefits, promotional boosts, and premium features with your loyalty points.
             </p>
-            <div style={{
-              marginBottom: '20px',
-              padding: '16px',
-              background: 'rgba(99, 102, 241, 0.05)',
-              borderRadius: '12px',
-              border: '1px solid rgba(99, 102, 241, 0.15)',
-              textAlign: 'center'
-            }}>
-              <span style={{
-                fontSize: '0.9rem',
-                color: '#6366f1',
-                fontWeight: '600'
-              }}>
-                Coming Soon
-              </span>
-            </div>
-            <button 
-              type="button" 
-              disabled
+            <button
+              type="button"
+              onClick={() => {
+                const rewardsSection = document.getElementById('rewards-section');
+                if (rewardsSection) {
+                  rewardsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }}
               style={{
                 width: '100%',
                 padding: '14px 24px',
                 borderRadius: '12px',
-                background: 'linear-gradient(135deg, #d1d5db, #e5e7eb)',
-                color: '#9ca3af',
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                color: 'white',
                 border: 'none',
                 fontSize: '0.95rem',
                 fontWeight: '600',
-                cursor: 'not-allowed',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px'
               }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 6px 16px rgba(99, 102, 241, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.2)';
+              }}
             >
-              <span>🔒</span>
-              Unlock Soon
+              <span>🎁</span>
+              Browse Rewards
             </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Rewards Redemption Section */}
+      <section id="rewards-section" className="host-points-rewards" style={{
+        background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+        borderRadius: '20px',
+        padding: '32px',
+        boxShadow: '0 4px 20px rgba(49, 50, 111, 0.08), 0 0 0 1px rgba(49, 50, 111, 0.05)',
+        border: '1px solid rgba(49, 50, 111, 0.1)',
+        marginBottom: '32px',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Decorative background element */}
+        <div style={{
+          position: 'absolute',
+          top: '-50px',
+          left: '-50px',
+          width: '200px',
+          height: '200px',
+          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(99, 102, 241, 0.02) 100%)',
+          borderRadius: '50%',
+          zIndex: 0
+        }} />
+        
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '12px', 
+            marginBottom: '24px' 
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '24px',
+              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
+            }}>
+              🎁
+            </div>
+            <div>
+              <h2 style={{ 
+                margin: 0, 
+                fontSize: '1.5rem', 
+                fontWeight: '700', 
+                color: '#1f2937',
+                letterSpacing: '-0.02em'
+              }}>
+                Available Rewards
+              </h2>
+              <p style={{ 
+                margin: '4px 0 0', 
+                color: '#6b7280', 
+                fontSize: '0.9rem' 
+              }}>
+                Redeem your points for exclusive perks and benefits
+              </p>
+            </div>
+          </div>
+
+          {redemptionSuccess && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05))',
+              border: '2px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '24px',
+              color: '#059669',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontWeight: '500',
+              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.1)'
+            }}>
+              <span style={{ fontSize: '20px' }}>✓</span>
+              <span>{redemptionSuccess}</span>
+            </div>
+          )}
+
+          {redemptionError && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05))',
+              border: '2px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '24px',
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              fontWeight: '500',
+              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.1)'
+            }}>
+              <span style={{ fontSize: '20px' }}>⚠</span>
+              <span>{redemptionError}</span>
+            </div>
+          )}
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '20px',
+            marginTop: '24px'
+          }}>
+            {AVAILABLE_REWARDS.map((reward) => {
+              const canAfford = computedPoints.currentPoints >= reward.cost;
+              const categoryColors = {
+                promotion: { bg: 'rgba(251, 191, 36, 0.1)', border: 'rgba(251, 191, 36, 0.3)', text: '#d97706' },
+                badge: { bg: 'rgba(139, 92, 246, 0.1)', border: 'rgba(139, 92, 246, 0.3)', text: '#7c3aed' },
+                discount: { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', text: '#059669' },
+                support: { bg: 'rgba(59, 130, 246, 0.1)', border: 'rgba(59, 130, 246, 0.3)', text: '#2563eb' },
+                feature: { bg: 'rgba(236, 72, 153, 0.1)', border: 'rgba(236, 72, 153, 0.3)', text: '#db2777' }
+              };
+              const categoryStyle = categoryColors[reward.category] || categoryColors.promotion;
+
+              return (
+                <div
+                  key={reward.id}
+                  style={{
+                    background: 'white',
+                    borderRadius: '16px',
+                    padding: '24px',
+                    border: `2px solid ${canAfford ? categoryStyle.border : 'rgba(209, 213, 219, 0.5)'}`,
+                    transition: 'all 0.3s ease',
+                    boxShadow: canAfford ? '0 2px 8px rgba(0, 0, 0, 0.05)' : 'none',
+                    opacity: canAfford ? 1 : 0.7,
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (canAfford) {
+                      e.currentTarget.style.transform = 'translateY(-4px)';
+                      e.currentTarget.style.boxShadow = '0 8px 20px rgba(0, 0, 0, 0.1)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = canAfford ? '0 2px 8px rgba(0, 0, 0, 0.05)' : 'none';
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '12px',
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    background: categoryStyle.bg,
+                    border: `1px solid ${categoryStyle.border}`,
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    color: categoryStyle.text,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    {reward.category}
+                  </div>
+
+                  <div style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '16px',
+                    background: `linear-gradient(135deg, ${categoryStyle.text}, ${categoryStyle.text}dd)`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '32px',
+                    marginBottom: '16px',
+                    boxShadow: `0 4px 12px ${categoryStyle.text}40`
+                  }}>
+                    {reward.icon}
+                  </div>
+
+                  <h3 style={{
+                    margin: '0 0 8px',
+                    fontSize: '1.25rem',
+                    fontWeight: '700',
+                    color: '#1f2937'
+                  }}>
+                    {reward.name}
+                  </h3>
+
+                  <p style={{
+                    margin: '0 0 20px',
+                    color: '#6b7280',
+                    fontSize: '0.9rem',
+                    lineHeight: '1.5',
+                    minHeight: '60px'
+                  }}>
+                    {reward.description}
+                  </p>
+
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '16px',
+                    padding: '12px',
+                    background: 'rgba(49, 50, 111, 0.03)',
+                    borderRadius: '8px'
+                  }}>
+                    <span style={{ fontSize: '0.85rem', color: '#6b7280', fontWeight: '500' }}>
+                      Cost
+                    </span>
+                    <span style={{ 
+                      fontSize: '1.1rem', 
+                      fontWeight: '700', 
+                      color: '#31326f',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <span>⭐</span>
+                      {reward.cost.toLocaleString()} pts
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleShowRewardDialog(reward)}
+                    disabled={!canAfford || redeeming || loadingAccount}
+                    style={{
+                      width: '100%',
+                      padding: '12px 20px',
+                      borderRadius: '10px',
+                      background: canAfford && !redeeming && !loadingAccount
+                        ? `linear-gradient(135deg, ${categoryStyle.text}, ${categoryStyle.text}dd)`
+                        : 'linear-gradient(135deg, #d1d5db, #e5e7eb)',
+                      color: canAfford && !redeeming && !loadingAccount ? 'white' : '#9ca3af',
+                      border: 'none',
+                      fontSize: '0.95rem',
+                      fontWeight: '600',
+                      cursor: canAfford && !redeeming && !loadingAccount ? 'pointer' : 'not-allowed',
+                      transition: 'all 0.3s ease',
+                      boxShadow: canAfford && !redeeming && !loadingAccount
+                        ? `0 4px 12px ${categoryStyle.text}40`
+                        : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (canAfford && !redeeming && !loadingAccount) {
+                        e.target.style.transform = 'translateY(-2px)';
+                        e.target.style.boxShadow = `0 6px 16px ${categoryStyle.text}60`;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0)';
+                      if (canAfford && !redeeming && !loadingAccount) {
+                        e.target.style.boxShadow = `0 4px 12px ${categoryStyle.text}40`;
+                      }
+                    }}
+                  >
+                    {!canAfford ? (
+                      <>
+                        <span>🔒</span>
+                        Insufficient Points
+                      </>
+                    ) : (
+                      <>
+                        <span>🎁</span>
+                        Redeem Now
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -1112,6 +1637,139 @@ const Points = ({ hostId }) => {
                 }}
               >
                 Confirm Conversion
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
+
+      {/* Reward Redemption Confirmation Dialog */}
+      {showRewardDialog && selectedReward && (
+        <dialog 
+          ref={rewardDialogRef} 
+          className="reward-confirmation-dialog" 
+          style={{ 
+            maxWidth: '500px', 
+            width: '90%', 
+            border: 'none', 
+            borderRadius: '16px', 
+            padding: 0, 
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)' 
+          }}
+        >
+          <style>
+            {`.reward-confirmation-dialog::backdrop {
+              background: rgba(0, 0, 0, 0.5);
+              backdrop-filter: blur(4px);
+            }`}
+          </style>
+          <div style={{ padding: '30px', textAlign: 'center' }}>
+            <div style={{ fontSize: '48px', marginBottom: '20px' }}>{selectedReward.icon}</div>
+            <h2 style={{ margin: '0 0 15px 0', fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
+              Confirm Reward Redemption
+            </h2>
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(99, 102, 241, 0.02))',
+              borderRadius: '12px',
+              padding: '20px',
+              margin: '20px 0',
+              border: '2px solid rgba(99, 102, 241, 0.1)'
+            }}>
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Reward
+                </p>
+                <p style={{ margin: '0 0 4px', fontSize: '20px', fontWeight: '700', color: '#1f2937' }}>
+                  {selectedReward.name}
+                </p>
+                <p style={{ margin: 0, fontSize: '14px', color: '#6b7280', lineHeight: '1.4' }}>
+                  {selectedReward.description}
+                </p>
+              </div>
+              <div style={{
+                width: '100%',
+                height: '1px',
+                background: 'rgba(99, 102, 241, 0.2)',
+                margin: '16px 0'
+              }} />
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Points Cost
+                </p>
+                <p style={{ margin: 0, fontSize: '28px', fontWeight: '700', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <span>⭐</span>
+                  {selectedReward.cost.toLocaleString()} <span style={{ fontSize: '18px', color: '#6b7280' }}>pts</span>
+                </p>
+              </div>
+              <div style={{
+                width: '100%',
+                height: '1px',
+                background: 'rgba(99, 102, 241, 0.2)',
+                margin: '16px 0'
+              }} />
+              <div>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#6b7280', fontWeight: '500' }}>
+                  Remaining Points
+                </p>
+                <p style={{ margin: 0, fontSize: '24px', fontWeight: '700', color: '#31326f' }}>
+                  {(computedPoints.currentPoints - selectedReward.cost).toLocaleString()} <span style={{ fontSize: '16px', color: '#6b7280' }}>pts</span>
+                </p>
+              </div>
+            </div>
+            <p style={{ margin: '0 0 30px 0', fontSize: '16px', color: '#6b7280', lineHeight: '1.5' }}>
+              Are you sure you want to redeem this reward? {selectedReward.cost} points will be deducted from your account.
+            </p>
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+              <button
+                onClick={handleCloseRewardDialog}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: '2px solid #e5e7eb',
+                  background: 'white',
+                  color: '#374151',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = '#f9fafb';
+                  e.target.style.borderColor = '#d1d5db';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'white';
+                  e.target.style.borderColor = '#e5e7eb';
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRedeemReward}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.background = 'linear-gradient(135deg, #4f46e5, #7c3aed)';
+                  e.target.style.transform = 'translateY(-1px)';
+                  e.target.style.boxShadow = '0 6px 16px rgba(99, 102, 241, 0.4)';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.background = 'linear-gradient(135deg, #6366f1, #8b5cf6)';
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.3)';
+                }}
+              >
+                Confirm Redemption
               </button>
             </div>
           </div>

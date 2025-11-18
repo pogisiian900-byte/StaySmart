@@ -111,7 +111,6 @@ function App() {
                 </ProtectedRoute>
               }
             />
-
             <Route
               path="listing/:listingId/booking"
               element={<Suspense fallback={<LoadingFallback />}><SelectedListingBookingConfirmation /></Suspense>}
